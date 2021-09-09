@@ -29,7 +29,7 @@ def epg(
 
         Parameters:
             N_in  (int)                  : Number of repetitions
-            alpha ((float|np.ndarray)    : Flip angle (constant or list) [deg]
+            alpha (float|np.ndarray)     : Flip angle (constant or list) [deg]
             TR    (float)                : Repetition time               [ms]
             T1    (float)                : Longitudinal relaxation time  [ms]
             T2    (float)                : Transverse relaxation time    [ms]
@@ -114,8 +114,8 @@ def epg(
 
     # Generate state evolution matrices Xi_F and Xi_Z: Eqs.[27] in EPG-R
     # Here, they will (only) contain all post-RF states == output variables
-    Xi_F_out = np.zeros((2 * N - 1, N), dtype=complex)  # Xi_F with F+ and F- states, Eq.[27a]
-    Xi_Z_out = np.zeros((N, N), dtype=complex)          # Xi_Z with Z states, Eq.[27b]
+    Xi_F_out = np.zeros((2 * N - 1, N), dtype=complex)  # F states, Eq.[27a]
+    Xi_Z_out = np.zeros((N, N), dtype=complex)          # Z states, Eq.[27b]
 
     # Starting with equilibrium magnetization M0=1 for t<0
     # You could change that !
@@ -156,7 +156,7 @@ def epg(
 
         # T matrix operator: RF pulse acting, mixing of F+, F-, and Z states
         # Expand T matrix relations from Eq.[15] or Eq.[18] in EPG-R
-        Omega_postRF[:, k - 1] = np.matmul(T, Omega_preRF[:, k - 1])  # matrix product!
+        Omega_postRF[:, k - 1] = np.matmul(T, Omega_preRF[:, k - 1])
 
         # Store these post-RF states of the current Omega state matrix in
         # the Xi state evolution matrices
@@ -167,9 +167,12 @@ def epg(
         # E matrix operator: Experienced relaxation from the states
         # until the next TR.
         # Expand E matrix relations from Eqs.[23] and [24] in EPG-R
-        Omega_preRF[0:2, k - 1] = E2 * Omega_postRF[0:2, k - 1]       # T2 relaxation F
-        Omega_preRF[2, k[1:] - 1] = E1 * Omega_postRF[2, k[1:] - 1]   # T1 relaxation Z (k>0)
-        Omega_preRF[2, 0] = E1 * Omega_postRF[2, 0] + 1 - E1  # T1 recovery Z (k=0)
+        Omega_preRF[0:2, k - 1] = \
+            E2 * Omega_postRF[0:2, k - 1]     # T2 relaxation F
+        Omega_preRF[2, k[1:] - 1] = \
+            E1 * Omega_postRF[2, k[1:] - 1]   # T1 relaxation Z (k>0)
+        Omega_preRF[2, 0] = \
+            E1 * Omega_postRF[2, 0] + 1 - E1  # T1 recovery Z (k=0)
 
         # S operator: Further dephasing / shifting of F+ and F- states
         # to the next TR.
@@ -201,13 +204,13 @@ def example(plot: bool = True):
     """Example function for using epg()"""
 
     # Define parameters
-    T1 = .583       # T1 relaxation time of the spin [s]
-    T2 = 0.055      # T2 relaxation time of the spin [s]
-    B1 = 1          # B1 field of the spin [-]
-    fa = 20         # Flip angle of the sequence [deg] (Can also be an array)
-    Nfa = 500       # Number of flip angles to achieve a steady state [-]
-    tr = 10E-03     # Repetition time [s]
-    spoil = 1       # 0 = balanced, 1 = spoiled
+    T1 = .583           # T1 relaxation time of the spin [s]
+    T2 = 0.055          # T2 relaxation time of the spin [s]
+    fa = 20             # Flip angle of the sequence [deg] (Can also be array)
+    Nfa = 500           # Number of flip angles to achieve a steady state [-]
+    tr = 10E-03         # Repetition time [s]
+    SP = complex(1, 0)  # Slice profile (1+0j)
+    spoil = 1           # 0 = balanced, 1 = spoiled
 
     # Perform EPG Simulation
     F0, Xi_F, Xi_Z = epg(Nfa, fa, tr, T1, T2, complex(1, 0), spoil)
