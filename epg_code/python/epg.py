@@ -213,7 +213,7 @@ def example(plot: bool = True):
     spoil = 1           # 0 = balanced, 1 = spoiled
 
     # Perform EPG Simulation
-    F0, Xi_F, Xi_Z = epg(Nfa, fa, tr, T1, T2, complex(1, 0), spoil)
+    F0, Xi_F, Xi_Z = epg(Nfa, fa, tr, T1, T2, SP, spoil)
 
     # Plot results (if applicable)
     if plot:
