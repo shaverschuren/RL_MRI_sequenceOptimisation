@@ -77,13 +77,6 @@ def epg(
     else:
         raise TypeError("alpha should be either an array or float!")
 
-    # fa_arr = np.zeros((1, len(alpha) * N_in))
-    # fa_arr[:len(alpha)] = fa
-    # for pn in range(1, N_in):  # The flip angle (array) is repeated N_in times
-    #     fa_arr[len(alpha) * pn:len(alpha) * (pn + 1)] = np.array(alpha)
-
-    # fa = fa_arr
-
     N = len(fa)
     Nm1 = N - 1
     Np1 = N + 1
@@ -102,7 +95,7 @@ def epg(
     elif rf_phase_mode == +1:
         # Realize RF spoiling with dedicated RF phase angle
         pn = np.array(range(N)) + 1
-        phi = (pn - 1) * pn / 2.0 * rf_phase_inc / 180.0 * np.pi
+        phi = (pn - 1) * (pn / 2.0) * (rf_phase_inc * np.pi / 180.0)
 
     elif rf_phase_mode == 0:
         # Realize "normal" flip angles with phi=0
@@ -126,27 +119,27 @@ def epg(
 
     # Starting with equilibrium magnetization M0=1 for t<0
     # You could change that !
-    Omega_preRF[2, 0] = 1
+    Omega_preRF[2, 0] = 1 + 0j
 
     # Starting the calculation of EPG states over time
     # ,or "flow of magnetization in the EPG"
     # -------------------------------------------------------------------------------------------
-    for pn in range(N):  # Loop over RF pulse #pn
+    for pn in range(1, N + 1):  # Loop over RF pulse #pn
 
         # Generate T matrix operator elements (RF pulse representation):
         # Eq.[15] or Eq.[18] in EPG-R
         # Since this generic SSFP example may change RF flip angle and/or
         # phase, the T matrix has to be updated within the RF pulse loop:
         T = np.zeros((3, 3), dtype=complex)
-        T[0, 0] = np.cos(fa[pn] / 2) ** 2
-        T[0, 1] = np.exp(+2j * phi[pn]) * np.sin(fa[pn] / 2) ** 2
-        T[0, 2] = -1.0j * np.exp(+1j * phi[pn]) * np.sin(fa[pn])
-        T[1, 0] = np.exp(-2j * phi[pn]) * np.sin(fa[pn] / 2) ** 2
-        T[1, 1] = np.cos(fa[pn] / 2) ** 2
-        T[1, 2] = +1.0j * np.exp(-1j * phi[pn]) * np.sin(fa[pn])
-        T[2, 0] = -0.5j * np.exp(-1j * phi[pn]) * np.sin(fa[pn])
-        T[2, 1] = +0.5j * np.exp(+1j * phi[pn]) * np.sin(fa[pn])
-        T[2, 2] = np.cos(fa[pn])
+        T[0, 0] = np.cos(fa[pn - 1] / 2) ** 2
+        T[0, 1] = np.exp(+2j * phi[pn - 1]) * np.sin(fa[pn - 1] / 2) ** 2
+        T[0, 2] = -1.0j * np.exp(+1j * phi[pn - 1]) * np.sin(fa[pn - 1])
+        T[1, 0] = np.exp(-2j * phi[pn - 1]) * np.sin(fa[pn - 1] / 2) ** 2
+        T[1, 1] = np.cos(fa[pn - 1] / 2) ** 2
+        T[1, 2] = +1.0j * np.exp(-1j * phi[pn - 1]) * np.sin(fa[pn - 1])
+        T[2, 0] = -0.5j * np.exp(-1j * phi[pn - 1]) * np.sin(fa[pn - 1])
+        T[2, 1] = +0.5j * np.exp(+1j * phi[pn - 1]) * np.sin(fa[pn - 1])
+        T[2, 2] = np.cos(fa[pn - 1])
 
         # In the following, further loops over the states' dephasing k will be
         # needed to realize operators T, E, and S.
@@ -159,23 +152,23 @@ def epg(
             k = range(pn)  # "k loop index" with limit pn
         else:
             k = range(maxstate)
-        k = np.array(list(k), dtype=int)
+        k = np.array(list(k), dtype=int) + 1
 
         # T matrix operator: RF pulse acting, mixing of F+, F-, and Z states
         # Expand T matrix relations from Eq.[15] or Eq.[18] in EPG-R
-        Omega_postRF[:, k] = np.matmul(T, Omega_preRF[:, k])  # matrix product!
+        Omega_postRF[:, k - 1] = np.matmul(T, Omega_preRF[:, k - 1])  # matrix product!
 
         # Store these post-RF states of the current Omega state matrix in
         # the Xi state evolution matrices
-        Xi_F_out[Np1 - k - 2, pn] = Omega_postRF[0, k]
-        Xi_F_out[Nm1 + k[1:], pn] = np.conj(Omega_postRF[1, k[1:]])
-        Xi_Z_out[Np1 - k - 2, pn] = Omega_postRF[2, k]
+        Xi_F_out[Np1 - k - 1, pn - 1] = Omega_postRF[0, k - 1]
+        Xi_F_out[Nm1 + k[1:] - 1, pn - 1] = np.conj(Omega_postRF[1, k[1:] - 1])
+        Xi_Z_out[Np1 - k - 1, pn - 1] = Omega_postRF[2, k - 1]
 
         # E matrix operator: Experienced relaxation from the states
         # until the next TR.
         # Expand E matrix relations from Eqs.[23] and [24] in EPG-R
-        Omega_preRF[0:1, k] = E2 * Omega_postRF[0:1, k]       # T2 relaxation F
-        Omega_preRF[2, k[1:]] = E1 * Omega_postRF[2, k[1:]]   # T1 relaxation Z (k>0)
+        Omega_preRF[0:2, k - 1] = E2 * Omega_postRF[0:2, k - 1]       # T2 relaxation F
+        Omega_preRF[2, k[1:] - 1] = E1 * Omega_postRF[2, k[1:] - 1]   # T1 relaxation Z (k>0)
         Omega_preRF[2, 0] = E1 * Omega_postRF[2, 0] + 1 - E1  # T1 recovery Z (k=0)
 
         # S operator: Further dephasing / shifting of F+ and F- states
@@ -184,8 +177,8 @@ def epg(
         #   Delta(k) = +1 (unbalanced, up shifting),
         #   Delta(k) = 0 (balanced, skip S operator)
         if spoil:
-            Omega_preRF[0, k + 1] = Omega_preRF[0, k]       # dephase F+
-            Omega_preRF[1, k] = Omega_preRF[1, k + 1]       # dephase F-
+            Omega_preRF[0, k] = Omega_preRF[0, k - 1]       # dephase F+
+            Omega_preRF[1, k - 1] = Omega_preRF[1, k]       # dephase F-
             # generate conjugate pendant F+0 from F-0, see EPG-R
             Omega_preRF[0, 0] = np.conj(Omega_preRF[1, 0])
 
@@ -228,21 +221,25 @@ def example(plot: bool = True):
         plt.title("Abs(signal)")
         plt.xlabel("Pulse n")
         plt.ylabel("Signal")
+        plt.xlim((0, len(F0)))
         plt.subplot(2, 2, 2)  # Real part
         plt.plot(range(len(F0)), np.real(F0))
         plt.title("Real(signal)")
         plt.xlabel("Pulse n")
         plt.ylabel("Signal")
+        plt.xlim((0, len(F0)))
         plt.subplot(2, 2, 3)  # Imaginary part
         plt.plot(range(len(F0)), np.imag(F0))
         plt.title("Imag(signal)")
         plt.xlabel("Pulse n")
         plt.ylabel("Signal")
+        plt.xlim((0, len(F0)))
         plt.subplot(2, 2, 4)  # Angle
         plt.plot(range(len(F0)), np.angle(F0))
         plt.title("Angle(signal)")
         plt.xlabel("Pulse n")
         plt.ylabel("Angle [rad]")
+        plt.xlim((0, len(F0)))
 
         plt.show()  # Show figure
 
