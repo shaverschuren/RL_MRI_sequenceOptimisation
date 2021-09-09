@@ -60,10 +60,10 @@ def epg(
     if type(alpha) == np.ndarray:
         # Calculate phi, flip angle array
         phi = np.array([-np.angle(SP)] * len(alpha))
-        fa = np.array([abs(SP) * alpha] * len(alpha))
+        fa = np.array(abs(SP) * alpha)
         # The flip angle (array) is repeated N_in times
         for pn in range(1, N_in):
-            fa = np.concatenate(fa, alpha)
+            fa = np.concatenate((fa, alpha))
     elif type(alpha) == float:
         # Calculate phi, flip angle array
         phi = np.array(-np.angle(SP))
