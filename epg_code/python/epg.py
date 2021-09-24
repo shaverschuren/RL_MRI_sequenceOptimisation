@@ -264,7 +264,7 @@ def epg_as_torch(
             fa = torch.Tensor(abs(SP) * alpha)
         # The flip angle (array) is repeated N_in times
         for pn in range(1, N_in):
-            fa = torch.concatenate((fa, alpha))
+            fa = torch.cat([fa, alpha])
     elif type(alpha) == float:
         # Calculate phi, flip angle array
         if device.type == "cuda":
