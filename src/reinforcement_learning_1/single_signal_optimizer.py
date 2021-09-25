@@ -37,7 +37,10 @@ class SingleSignalOptimizer():
             n_episodes: int = 100,
             n_ticks: int = 50,
             batch_size: int = 64,
-            log_dir: str = os.path.join(root, "logs", "model_1"),
+            fa_initial: float = 20.,
+            fa_delta: float = 1.,
+            log_dir: Union[str, bytes, os.PathLike] =
+            os.path.join(root, "logs", "model_1"),
             verbose: int = 1,
             device: Union[torch.device, None] = None):
         """Constructs model and attributes for this optimizer
@@ -49,12 +52,16 @@ class SingleSignalOptimizer():
         self.n_episodes = n_episodes
         self.n_ticks = n_ticks
         self.batch_size = batch_size
+        self.fa_initial = fa_initial
+        self.fa_delta = fa_delta
         self.log_dir = log_dir
         self.verbose = verbose
         # Setup device
         if not device:
             self.device = \
                 torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
         # Setup model
         self.init_model()
 
