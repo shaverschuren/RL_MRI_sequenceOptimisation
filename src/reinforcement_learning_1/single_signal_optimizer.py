@@ -120,8 +120,6 @@ class SingleSignalOptimizer():
             nn.Tanh(),
             nn.Linear(24, 2)
         ).to(self.device)
-        # Setup loss
-        self.criterion = nn.L1Loss()
         # Setup optimizer
         self.optimizer = optim.Adam(
             self.policy_net.parameters(),
@@ -184,14 +182,14 @@ class SingleSignalOptimizer():
             # Exploration (random choice)
             return torch.tensor(
                 [np.random.choice(self.action_space)],
-                device=self.device, dtype=torch.float64
+                device=self.device
             )
         else:
             # Exploitation (max expected reward)
             with torch.no_grad():
                 return torch.tensor(
                     [torch.argmax(self.policy_net(state))],
-                    device=self.device, dtype=torch.float64
+                    device=self.device
                 )
 
     def get_epsilon(self, t):
@@ -223,18 +221,18 @@ class SingleSignalOptimizer():
         )
 
         # Split state, action and reward batches
-        state_batch = torch.cat(batch.state)
+        state_batch = torch.as_tensor([*batch.state], dtype=torch.double)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
         # Compute state action values
         state_action_values = \
-            self.policy_net(state_batch).gather(1, action_batch)
+            self.policy_net(state_batch).gather(0, action_batch)
 
         # Compute next state values
         next_state_values = torch.zeros(batch_size, device=self.device)
         next_state_values[non_final_mask] = \
-            self.target_net(non_final_next_states).max(1)[0].detach()
+            self.target_net(non_final_next_states).max().detach()
 
         # Compute the expected Q values
         expected_state_action_values = \
@@ -242,9 +240,10 @@ class SingleSignalOptimizer():
 
         # Optimize the model
         self.optimizer.zero_grad()
-        loss = self.criterion(
+        criterion = nn.SmoothL1Loss()
+        loss = criterion(
             state_action_values,
-            expected_state_action_values.unsqueeze(1)
+            expected_state_action_values  # .unsqueeze(1)
         )
         loss.backward()
         for param in self.policy_net.parameters():
@@ -257,7 +256,7 @@ class SingleSignalOptimizer():
         # Set initial state
         state = torch.tensor(
             [0.0, self.fa],
-            device=self.device, dtype=torch.float64
+            device=self.device
         )
 
         # Loop over episodes
