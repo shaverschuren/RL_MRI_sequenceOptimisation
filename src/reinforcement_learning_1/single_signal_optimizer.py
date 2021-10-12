@@ -22,7 +22,7 @@ import numpy as np                          # noqa: E402
 import torch                                # noqa: E402
 import torch.nn as nn                       # noqa: E402
 import torch.optim as optim                 # noqa: E402
-import torch.functional as F                # noqa: E402
+import torch.nn.functional as F             # noqa: E402
 from epg_code.python import epg             # noqa: E402
 
 
@@ -41,8 +41,8 @@ class SingleSignalOptimizer():
             n_episodes: int = 100,
             n_ticks: int = 50,
             batch_size: int = 64,
-            fa_initial: float = 20.,
-            fa_delta: float = 1.,
+            fa_initial: float = 15.,
+            fa_delta: float = 0.5,
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
@@ -51,7 +51,7 @@ class SingleSignalOptimizer():
             alpha_decay: float = 0.01,
             log_dir: Union[str, bytes, os.PathLike] =
             os.path.join(root, "logs", "model_1"),
-            verbose: int = 1,
+            verbose: bool = True,
             device: Union[torch.device, None] = None):
         """Constructs model and attributes for this optimizer
 
@@ -62,6 +62,7 @@ class SingleSignalOptimizer():
         self.n_episodes = n_episodes
         self.n_ticks = n_ticks
         self.batch_size = batch_size
+        self.fa_initial = fa_initial
         self.fa = fa_initial
         self.fa_delta = fa_delta
         self.gamma = gamma
@@ -105,20 +106,13 @@ class SingleSignalOptimizer():
         Optimizer: Adam with lr alpha and decay alpha_decay
         """
 
-        # Construct neural nets
+        # Construct policy net
         self.policy_net = nn.Sequential(
-            nn.Linear(2, 12),
+            nn.Linear(2, 4),
             nn.Tanh(),
-            nn.Linear(12, 24),
+            nn.Linear(4, 4),
             nn.Tanh(),
-            nn.Linear(24, 2)
-        ).to(self.device)
-        self.target_net = nn.Sequential(
-            nn.Linear(2, 12),
-            nn.Tanh(),
-            nn.Linear(12, 24),
-            nn.Tanh(),
-            nn.Linear(24, 2)
+            nn.Linear(4, 2)
         ).to(self.device)
         # Setup optimizer
         self.optimizer = optim.Adam(
@@ -158,7 +152,7 @@ class SingleSignalOptimizer():
         )
         # Define reward
         reward = torch.tensor(
-            [state[0]], device=self.device
+            [state[0] * 100.], device=self.device
         )
         # Define "done"
         done = False
@@ -180,12 +174,14 @@ class SingleSignalOptimizer():
 
         if np.random.random() <= epsilon:
             # Exploration (random choice)
+            if self.verbose: print("Exploration ", end="", flush=True)
             return torch.tensor(
                 [np.random.choice(self.action_space)],
                 device=self.device
             )
         else:
             # Exploitation (max expected reward)
+            if self.verbose: print("Exploitation", end="", flush=True)
             with torch.no_grad():
                 return torch.tensor(
                     [torch.argmax(self.policy_net(state))],
@@ -211,62 +207,79 @@ class SingleSignalOptimizer():
 
         batch = self.Transition(*zip(*transitions))
 
-        # Omit final states
-        non_final_mask = torch.tensor(
-            tuple(map(lambda s: s is not None, batch.next_state)),
-            device=self.device, dtype=torch.bool
-        )
-        non_final_next_states = torch.cat(
-            [s for s in batch.next_state if s is not None]
-        )
-
         # Split state, action and reward batches
-        state_batch = torch.as_tensor([*batch.state], dtype=torch.double)
+
+        # States
+        state_batch_list = []
+        for tensor_i in range(len(batch.state)):
+            state_batch_list.append(np.array(batch.state[tensor_i].cpu()))
+        state_batch_np = np.array(state_batch_list)
+        state_batch = torch.as_tensor(state_batch_np, device=self.device)
+        # Next states
+        next_state_batch_list = []
+        for tensor_i in range(len(batch.next_state)):
+            next_state_batch_list.append(
+                np.array(batch.next_state[tensor_i].cpu())
+            )
+        next_state_batch_np = np.array(next_state_batch_list)
+        next_state_batch = torch.as_tensor(
+            next_state_batch_np, device=self.device
+        )
+        # Actions and rewards
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-        # Compute state action values
-        state_action_values = \
-            self.policy_net(state_batch).gather(0, action_batch)
+        # TODO: Compute Loss
+        with torch.no_grad():
+            Q_targets = self.compute_q_targets(next_state_batch, reward_batch)
 
-        # Compute next state values
-        next_state_values = torch.zeros(batch_size, device=self.device)
-        next_state_values[non_final_mask] = \
-            self.target_net(non_final_next_states).max().detach()
-
-        # Compute the expected Q values
-        expected_state_action_values = \
-            (next_state_values * self.gamma) + reward_batch
-
-        # Optimize the model
-        self.optimizer.zero_grad()
-        criterion = nn.SmoothL1Loss()
-        loss = criterion(
-            state_action_values,
-            expected_state_action_values  # .unsqueeze(1)
+        policy_output = self.policy_net(state_batch)
+        Q_expected = torch.gather(
+            policy_output, dim=-1, index=action_batch.unsqueeze(1)
         )
+
+        loss = F.mse_loss(Q_expected, Q_targets)
+
+        # TODO: Perform optimisation step
+        self.optimizer.zero_grad()
         loss.backward()
-        for param in self.policy_net.parameters():
-            param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
+
+    def compute_q_targets(self, next_states, rewards):
+        """Computes the Q targets we will compare to the predicted Q values"""
+
+        # Calculate Q values for next states
+        Q_targets_next = \
+            self.policy_net(next_states).detach().max(1)[0].unsqueeze(1)
+
+        # Calculate Q values for current states
+        Q_targets_current = \
+            rewards.unsqueeze(1) + self.gamma * Q_targets_next
+
+        return Q_targets_current
 
     def run(self):
         """Run the training loop"""
 
-        # Set initial state
-        state = torch.tensor(
-            [0.0, self.fa],
-            device=self.device
-        )
-
         # Loop over episodes
         for episode in range(self.n_episodes):
+            # Print some info
+            if self.verbose:
+                print(f"=== Episode {episode + 1:3d}/{self.n_episodes:3d} ===")
             # Reset done and tick counter
             done = False
             tick = 0
+            # Set initial state
+            self.fa = self.fa_initial
+            state = torch.tensor(
+                [0.0, self.fa],
+                device=self.device
+            )
 
             # Loop over steps/ticks
             while tick < self.n_ticks - 1 and not done:
+                # Print some info
+                print(f"Step {tick + 1:2d}/{self.n_ticks:2d} - ", end="")
                 # Choose action
                 action = self.choose_action(state, self.get_epsilon(episode))
                 # Simulate step
@@ -278,8 +291,12 @@ class SingleSignalOptimizer():
                 # Update tick counter
                 tick += 1
 
-                # TODO: Remove. Added for debugging purposes
-                print(state, action, len(self.memory))
+                # Print some info
+                print(
+                    f" - Action: {int(action)}"
+                    f" - FA: {float(state[1]):.1f}"
+                    f" - Signal: {float(state[0]):.3f}"
+                )
 
             # Optimize model
             self.optimize_model(self.batch_size)
