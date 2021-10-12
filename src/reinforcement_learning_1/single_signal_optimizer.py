@@ -229,7 +229,7 @@ class SingleSignalOptimizer():
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-        # TODO: Compute Loss
+        # Compute Loss
         with torch.no_grad():
             Q_targets = self.compute_q_targets(next_state_batch, reward_batch)
 
@@ -240,7 +240,7 @@ class SingleSignalOptimizer():
 
         loss = F.mse_loss(Q_expected, Q_targets)
 
-        # TODO: Perform optimisation step
+        # Perform optimisation step
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -270,7 +270,7 @@ class SingleSignalOptimizer():
             done = False
             tick = 0
             # Set initial state
-            self.fa = self.fa_initial
+            self.fa = self.fa_initial + (np.random.random() * 20.0 - 10.0)
             state = torch.tensor(
                 [0.0, self.fa],
                 device=self.device
