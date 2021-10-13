@@ -38,17 +38,17 @@ class SingleSignalOptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 100,
-            n_ticks: int = 50,
-            batch_size: int = 64,
+            n_episodes: int = 1000,             # TODO: For prototyping
+            n_ticks: int = 5,                   # TODO: For prototyping
+            batch_size: int = 5,                # TODO: For prototyping
             fa_initial: float = 15.,
             fa_delta: float = 0.5,
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 0.995,
-            alpha: float = 0.01,
-            alpha_decay: float = 0.01,
+            epsilon_decay: float = 0.999,       # TODO: Was 0.995
+            alpha: float = 0.01,                # TODO: Miss te hoog? --> 1e-3 - 1e-4
+            alpha_decay: float = 0.01,          # TODO:
             log_dir: Union[str, bytes, os.PathLike] =
             os.path.join(root, "logs", "model_1"),
             verbose: bool = True,
@@ -96,12 +96,12 @@ class SingleSignalOptimizer():
         Includes action space, [...]
         """
 
-        self.action_space = np.array([0, 1])
+        self.action_space = np.array([0, 1])            # TODO: Maybe 3rd state -> keep it like this
 
     def init_model(self):
         """Constructs reinforcement learning model
 
-        Neural net: Fully connected 2-12-24-2
+        Neural net: Fully connected 2-4-2
         Loss: L1 (MAE) Loss
         Optimizer: Adam with lr alpha and decay alpha_decay
         """
@@ -109,15 +109,15 @@ class SingleSignalOptimizer():
         # Construct policy net
         self.policy_net = nn.Sequential(
             nn.Linear(2, 4),
-            nn.Tanh(),
+            nn.ReLU(),
             nn.Linear(4, 4),
-            nn.Tanh(),
+            nn.ReLU(),
             nn.Linear(4, 2)
         ).to(self.device)
         # Setup optimizer
         self.optimizer = optim.Adam(
             self.policy_net.parameters(),
-            lr=self.alpha, weight_decay=self.alpha_decay
+            lr=self.alpha  # , weight_decay=self.alpha_decay
         )
 
     def step(self, action):
@@ -138,7 +138,7 @@ class SingleSignalOptimizer():
         elif int(action) == 1:
             # Increase flip angle
             self.fa += self.fa_delta
-            if self.fa > 360.0: self.fa = 360.0
+            if self.fa > 180.0: self.fa = 180.0
 
         # Run simulation with updated parameters
         F0, _, _ = epg.epg_as_torch(
@@ -229,6 +229,9 @@ class SingleSignalOptimizer():
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
+        # Set gradients to zero
+        self.optimizer.zero_grad()
+
         # Compute Loss
         with torch.no_grad():
             Q_targets = self.compute_q_targets(next_state_batch, reward_batch)
@@ -241,7 +244,6 @@ class SingleSignalOptimizer():
         loss = F.mse_loss(Q_expected, Q_targets)
 
         # Perform optimisation step
-        self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
@@ -250,13 +252,13 @@ class SingleSignalOptimizer():
 
         # Calculate Q values for next states
         Q_targets_next = \
-            self.policy_net(next_states).detach().max(1)[0].unsqueeze(1)
+            self.policy_net(next_states).detach().max(1).values
 
         # Calculate Q values for current states
         Q_targets_current = \
-            rewards.unsqueeze(1) + self.gamma * Q_targets_next
+            rewards + self.gamma * Q_targets_next
 
-        return Q_targets_current
+        return Q_targets_current.unsqueeze(1)
 
     def run(self):
         """Run the training loop"""
@@ -269,10 +271,16 @@ class SingleSignalOptimizer():
             # Reset done and tick counter
             done = False
             tick = 0
-            # Set initial state
+
+            # Set initial flip angle
             self.fa = self.fa_initial + (np.random.random() * 20.0 - 10.0)
+            # Run initial simulation
+            F0, _, _ = epg.epg_as_torch(
+                500, self.fa, 10E-03, .583, 0.055, device=self.device
+            )
+            # Set initial state
             state = torch.tensor(
-                [0.0, self.fa],
+                [float(np.abs(F0.cpu()[-1])), self.fa],  # TODO: .abs().item()
                 device=self.device
             )
 
