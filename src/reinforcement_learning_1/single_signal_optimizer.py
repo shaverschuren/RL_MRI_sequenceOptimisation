@@ -14,16 +14,15 @@ if root not in sys.path: sys.path.append(root)
 if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
-from typing import Union                    # noqa: E402
-from collections import namedtuple, deque   # noqa: E402
-import math                                 # noqa: E402
-import random                               # noqa: E402
-import numpy as np                          # noqa: E402
-import torch                                # noqa: E402
-import torch.nn as nn                       # noqa: E402
-import torch.optim as optim                 # noqa: E402
-import torch.nn.functional as F             # noqa: E402
-from epg_code.python import epg             # noqa: E402
+from typing import Union                                    # noqa: E402
+from collections import namedtuple, OrderedDict, deque      # noqa: E402
+import random                                               # noqa: E402
+import numpy as np                                          # noqa: E402
+import torch                                                # noqa: E402
+import torch.nn as nn                                       # noqa: E402
+import torch.optim as optim                                 # noqa: E402
+import torch.nn.functional as F                             # noqa: E402
+from epg_code.python import epg                             # noqa: E402
 
 
 class SingleSignalOptimizer():
@@ -39,16 +38,17 @@ class SingleSignalOptimizer():
     def __init__(
             self,
             n_episodes: int = 1000,             # TODO: For prototyping
-            n_ticks: int = 5,                   # TODO: For prototyping
-            batch_size: int = 5,                # TODO: For prototyping
-            fa_initial: float = 15.,
-            fa_delta: float = 0.5,
+            n_ticks: int = 10,                  # TODO: For prototyping
+            batch_size: int = 8,                # TODO: For prototyping
+            fa_initial: float = 10.,
+            fa_delta: float = 1.0,
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 0.999,       # TODO: Was 0.995
-            alpha: float = 0.01,                # TODO: Miss te hoog? --> 1e-3 - 1e-4
-            alpha_decay: float = 0.01,          # TODO:
+            epsilon_decay: float = 1. - 1e-1,   # TODO: Was 0.995
+            alpha: float = 1e-3,                # TODO: Was 0.01
+            alpha_decay: float = 0.01,          # TODO: Might omit
+            target_update_period: int = 3,
             log_dir: Union[str, bytes, os.PathLike] =
             os.path.join(root, "logs", "model_1"),
             verbose: bool = True,
@@ -71,6 +71,7 @@ class SingleSignalOptimizer():
         self.epsilon_decay = epsilon_decay
         self.alpha = alpha
         self.alpha_decay = alpha_decay
+        self.target_update_period = target_update_period
         self.log_dir = log_dir
         self.verbose = verbose
         # Setup device
@@ -83,7 +84,7 @@ class SingleSignalOptimizer():
         self.memory = deque(maxlen=100000)
         self.Transition = namedtuple(
             'Transition',
-            ('state', 'action', 'next_state', 'reward')
+            ('state', 'action', 'next_state', 'reward', 'done')
         )
         # Setup environment
         self.init_env()
@@ -96,27 +97,37 @@ class SingleSignalOptimizer():
         Includes action space, [...]
         """
 
-        self.action_space = np.array([0, 1])            # TODO: Maybe 3rd state -> keep it like this
+        self.action_space = np.array([0, 1])  # TODO: Maybe 3rd state
 
     def init_model(self):
         """Constructs reinforcement learning model
 
         Neural net: Fully connected 2-4-2
         Loss: L1 (MAE) Loss
-        Optimizer: Adam with lr alpha and decay alpha_decay
+        Optimizer: Adam with lr alpha (and decay alpha_decay*)
+        * Removed for now
         """
 
         # Construct policy net
-        self.policy_net = nn.Sequential(
-            nn.Linear(2, 4),
-            nn.ReLU(),
-            nn.Linear(4, 4),
-            nn.ReLU(),
-            nn.Linear(4, 2)
-        ).to(self.device)
+        self.prediction_net = nn.Sequential(OrderedDict([
+            ('fc1', nn.Linear(2, 4)),
+            ('relu1', nn.ReLU()),
+            ('fc2', nn.Linear(4, 4)),
+            ('relu2', nn.ReLU()),
+            ('output', nn.Linear(4, 2))
+        ])).to(self.device)
+        # Construct target net
+        self.target_net = nn.Sequential(OrderedDict([
+            ('fc1', nn.Linear(2, 4)),
+            ('relu1', nn.ReLU()),
+            ('fc2', nn.Linear(4, 4)),
+            ('relu2', nn.ReLU()),
+            ('output', nn.Linear(4, 2))
+        ])).to(self.device)
+
         # Setup optimizer
         self.optimizer = optim.Adam(
-            self.policy_net.parameters(),
+            self.prediction_net.parameters(),
             lr=self.alpha  # , weight_decay=self.alpha_decay
         )
 
@@ -152,16 +163,16 @@ class SingleSignalOptimizer():
         )
         # Define reward
         reward = torch.tensor(
-            [state[0] * 100.], device=self.device
+            [state[0] * 10.], device=self.device
         )
         # Define "done"
-        done = False
+        done = torch.tensor(0, device=self.device)
 
         return state, reward, done
 
     def remember(self, state, action, reward, next_state, done):
         """Update memory for this tick"""
-        self.memory.append((state, action, next_state, reward))
+        self.memory.append((state, action, next_state, reward, done))
 
     def choose_action(self, state, epsilon):
         """Choose action
@@ -184,15 +195,20 @@ class SingleSignalOptimizer():
             if self.verbose: print("Exploitation", end="", flush=True)
             with torch.no_grad():
                 return torch.tensor(
-                    [torch.argmax(self.policy_net(state))],
+                    [torch.argmax(self.prediction_net(state))],
                     device=self.device
                 )
 
-    def get_epsilon(self, t):
-        return max(
-            self.epsilon_min,
-            min(self.epsilon, 1.0 - math.log10((t + 1) * self.epsilon_decay))
-        )
+    def update_target(self):
+        """Updates the target model weights to match the prediction model"""
+
+        # Loop over the layers of the prediction and target nets
+        for layer in range(len(self.prediction_net)):
+            # Check whether we have a layer that stores weights
+            if hasattr(self.target_net[layer], 'weight'):
+                # Update the target net weights to match the prediction net
+                self.target_net[layer].weight = \
+                    self.prediction_net[layer].weight
 
     def optimize_model(self, batch_size):
         """Optimize model based on previous episode"""
@@ -232,33 +248,50 @@ class SingleSignalOptimizer():
         # Set gradients to zero
         self.optimizer.zero_grad()
 
-        # Compute Loss
-        with torch.no_grad():
-            Q_targets = self.compute_q_targets(next_state_batch, reward_batch)
+        # Compute Q targets
+        Q_targets = self.compute_q_targets(next_state_batch, reward_batch)
+        # Compute Q predictions
+        Q_predictions = self.compute_q_predictions(state_batch, action_batch)
+        # Compute loss (=MSE(predictions, targets))
+        loss = F.mse_loss(Q_predictions, Q_targets)
 
-        policy_output = self.policy_net(state_batch)
-        Q_expected = torch.gather(
-            policy_output, dim=-1, index=action_batch.unsqueeze(1)
-        )
-
-        loss = F.mse_loss(Q_expected, Q_targets)
-
-        # Perform optimisation step
+        # Perform backwards pass and calculate gradients
         loss.backward()
+
+        # Step optimizer
         self.optimizer.step()
 
     def compute_q_targets(self, next_states, rewards):
         """Computes the Q targets we will compare to the predicted Q values"""
 
-        # Calculate Q values for next states
-        Q_targets_next = \
-            self.policy_net(next_states).detach().max(1).values
+        # Compute output of the target net for next states
+        with torch.no_grad():
+            target_output = self.target_net(next_states)
+
+        # Select appropriate Q values based on which one is higher
+        # (since this would have been the one selected in the next state)
+        Q_targets_next = target_output.max(1).values
 
         # Calculate Q values for current states
         Q_targets_current = \
             rewards + self.gamma * Q_targets_next
 
         return Q_targets_current.unsqueeze(1)
+
+    def compute_q_predictions(self, states, actions):
+        """Computes the Q predictions for a given state batch"""
+
+        # Compute output of the policy net for given states
+        # Keep the gradients for backwards loss pass: with torch.no_grad():
+        policy_output = self.prediction_net(states)
+
+        # Select appropriate Q values from output by indexing with
+        # the actual actions
+        Q_predictions = torch.gather(
+            policy_output, dim=-1, index=actions.unsqueeze(1)
+        )
+
+        return Q_predictions
 
     def run(self):
         """Run the training loop"""
@@ -280,16 +313,16 @@ class SingleSignalOptimizer():
             )
             # Set initial state
             state = torch.tensor(
-                [float(np.abs(F0.cpu()[-1])), self.fa],  # TODO: .abs().item()
+                [float(np.abs(F0.cpu()[-1])), self.fa],
                 device=self.device
             )
 
             # Loop over steps/ticks
-            while tick < self.n_ticks - 1 and not done:
+            while tick < self.n_ticks and not done:
                 # Print some info
                 print(f"Step {tick + 1:2d}/{self.n_ticks:2d} - ", end="")
                 # Choose action
-                action = self.choose_action(state, self.get_epsilon(episode))
+                action = self.choose_action(state, self.epsilon)
                 # Simulate step
                 next_state, reward, done = self.step(action)
                 # Add to memory
@@ -306,8 +339,12 @@ class SingleSignalOptimizer():
                     f" - Signal: {float(state[0]):.3f}"
                 )
 
-            # Optimize model
+            # Optimize prediction/policy model
             self.optimize_model(self.batch_size)
+
+            # Update target model
+            if episode % self.target_update_period == 0:
+                self.update_target()
 
             # Update epsilon
             if self.epsilon > self.epsilon_min:
