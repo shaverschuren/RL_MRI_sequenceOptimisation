@@ -41,13 +41,12 @@ class SingleSignalOptimizer():
             n_ticks: int = 10,                  # TODO: For prototyping
             batch_size: int = 8,                # TODO: For prototyping
             fa_initial: float = 25.,
-            fa_delta: float = 2.0,
+            fa_delta: float = 1.0,
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 1e-2,   # TODO: Was 0.995
-            alpha: float = 1e-3,                # TODO: Was 0.01
-            alpha_decay: float = 0.01,          # TODO: Might omit
+            epsilon_decay: float = 1. - 5e-2,
+            alpha: float = 0.005,
             target_update_period: int = 3,
             log_dir: Union[str, bytes, os.PathLike] =
             os.path.join(root, "logs", "model_1"),
@@ -70,7 +69,6 @@ class SingleSignalOptimizer():
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
         self.alpha = alpha
-        self.alpha_decay = alpha_decay
         self.target_update_period = target_update_period
         self.log_dir = log_dir
         self.verbose = verbose
@@ -131,7 +129,7 @@ class SingleSignalOptimizer():
             lr=self.alpha  # , weight_decay=self.alpha_decay
         )
 
-    def step(self, action):
+    def step(self, old_state, action):
         """Run step of the environment simulation
 
         - Perform selected action
@@ -162,8 +160,10 @@ class SingleSignalOptimizer():
             device=self.device
         )
         # Define reward
+        # (as either +/- 1 for an increase or decrease in signal)
+        reward_float = 1.0 if state[0] > old_state[0] else -1.0
         reward = torch.tensor(
-            [state[0] * 10.], device=self.device
+            [reward_float], device=self.device
         )
         # Define "done"
         done = torch.tensor(0, device=self.device)
@@ -184,15 +184,15 @@ class SingleSignalOptimizer():
         """
 
         if np.random.random() <= epsilon:
-            # Exploration (random choice)
-            if self.verbose: print("Exploration ", end="", flush=True)
+            # Exploration (random choice) -> *R*andom
+            if self.verbose: print("R", end="", flush=True)
             return torch.tensor(
                 [np.random.choice(self.action_space)],
                 device=self.device
             )
         else:
-            # Exploitation (max expected reward)
-            if self.verbose: print("Exploitation", end="", flush=True)
+            # Exploitation (max expected reward) -> *P*olicy
+            if self.verbose: print("P", end="", flush=True)
             with torch.no_grad():
                 return torch.tensor(
                     [torch.argmax(self.prediction_net(state))],
@@ -324,7 +324,7 @@ class SingleSignalOptimizer():
                 # Choose action
                 action = self.choose_action(state, self.epsilon)
                 # Simulate step
-                next_state, reward, done = self.step(action)
+                next_state, reward, done = self.step(state, action)
                 # Add to memory
                 self.remember(state, action, reward, next_state, done)
                 # Update state
@@ -337,6 +337,7 @@ class SingleSignalOptimizer():
                     f" - Action: {int(action):1d}"
                     f" - FA: {float(state[1]):4.1f}"
                     f" - Signal: {float(state[0]):5.3f}"
+                    f" - Reward: {float(reward):5.2f}"
                 )
 
             # Optimize prediction/policy model
