@@ -30,18 +30,20 @@ class SingleSignalOptimizer():
     A class to represent an optimizer model for
     the flip angle to maximize the signal of a single
     simulated tissue.
-
-        Parameters:
-
     """
 
     def __init__(
             self,
-            n_episodes: int = 1000,             # TODO: For prototyping
-            n_ticks: int = 10,                  # TODO: For prototyping
-            batch_size: int = 8,                # TODO: For prototyping
+            n_episodes: int = 1000,
+            n_ticks: int = 10,
+            batch_size: int = 8,
             fa_initial: float = 25.,
+            fa_initial_spread: float = 20.,
             fa_delta: float = 1.0,
+            Nfa: int = 100,
+            T1: float = 0.500,
+            T2: float = 0.025,
+            tr: float = 0.050,
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
@@ -54,7 +56,46 @@ class SingleSignalOptimizer():
             device: Union[torch.device, None] = None):
         """Constructs model and attributes for this optimizer
 
-            Parameters:
+            Parameters
+            ----------
+                n_episodes : int
+                    Number of training episodes
+                n_ticks : int
+                    Number of training steps
+                batch_size : int
+                    Batch size for training
+                fa_initial : float
+                    Initial flip angle [deg]
+                fa_initial_spread : float
+                    Spread of initial flip angle [deg] (for some randomness)
+                fa_delta : float
+                    Amount of change in flip angle done by the model [deg]
+                Nfa : int
+                    Number of pulses in epg simulation
+                T1 : float
+                    Longitudinal relaxation in epg simulation [ms]
+                T2 : float
+                    Transversal relaxation in epg simulation [ms]
+                tr : float
+                    Repetition time in epg simulation [ms]
+                gamma : float
+                    Discount factor for Q value calculation
+                epsilon : float
+                    Initial epsilon (factor used for exploration regulation)
+                epsilon_min : float
+                    Minimal epsilon
+                epsilon_decay : float
+                    Epsilon decay factor
+                alpha : float
+                    Learning rate for Adam optimizer
+                target_update_period : int
+                    Periods between target net updates
+                log_dir : str | bytes | os.PathLike
+                    Path to log directory
+                verbose : bool
+                    Whether to print info
+                device : torch.device
+                    The PyTorch device. If None, assign one.
         """
 
         # Setup attributes
@@ -63,7 +104,12 @@ class SingleSignalOptimizer():
         self.batch_size = batch_size
         self.fa_initial = fa_initial
         self.fa = fa_initial
+        self.fa_spread = fa_initial_spread
         self.fa_delta = fa_delta
+        self.Nfa = Nfa
+        self.T1 = T1
+        self.T2 = T2
+        self.tr = tr
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
@@ -100,10 +146,9 @@ class SingleSignalOptimizer():
     def init_model(self):
         """Constructs reinforcement learning model
 
-        Neural net: Fully connected 2-4-2
+        Neural nets: Fully connected 2-4-2
         Loss: L1 (MAE) Loss
-        Optimizer: Adam with lr alpha (and decay alpha_decay*)
-        * Removed for now
+        Optimizer: Adam with lr alpha
         """
 
         # Construct policy net
@@ -125,8 +170,7 @@ class SingleSignalOptimizer():
 
         # Setup optimizer
         self.optimizer = optim.Adam(
-            self.prediction_net.parameters(),
-            lr=self.alpha  # , weight_decay=self.alpha_decay
+            self.prediction_net.parameters(), lr=self.alpha
         )
 
     def step(self, old_state, action):
@@ -151,7 +195,7 @@ class SingleSignalOptimizer():
 
         # Run simulation with updated parameters
         F0, _, _ = epg.epg_as_torch(
-            100, self.fa, 50E-03, .500, 0.025, device=self.device
+            self.Nfa, self.fa, self.tr, self.T1, self.T2, device=self.device
         )
 
         # Update state
@@ -249,7 +293,7 @@ class SingleSignalOptimizer():
         Q_targets = self.compute_q_targets(next_state_batch, reward_batch)
         # Compute Q predictions
         Q_predictions = self.compute_q_predictions(state_batch, action_batch)
-        # Compute loss (=MSE(predictions, targets))
+        # Compute loss (= MSE(predictions, targets))
         loss = F.mse_loss(Q_predictions, Q_targets)
 
         # Set gradients to zero
@@ -306,10 +350,12 @@ class SingleSignalOptimizer():
             tick = 0
 
             # Set initial flip angle
-            self.fa = self.fa_initial + (np.random.random() * 40.0 - 20.0)
+            self.fa = self.fa_initial + (
+                np.random.random() * 2 * self.fa_spread - self.fa_spread)
             # Run initial simulation
             F0, _, _ = epg.epg_as_torch(
-                100, self.fa, 50E-03, .500, 0.025, device=self.device
+                self.Nfa, self.fa, self.tr,
+                self.T1, self.T2, device=self.device
             )
             # Set initial state
             state = torch.tensor(
