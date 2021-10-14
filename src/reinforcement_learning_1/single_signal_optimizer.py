@@ -40,12 +40,12 @@ class SingleSignalOptimizer():
             n_episodes: int = 1000,             # TODO: For prototyping
             n_ticks: int = 10,                  # TODO: For prototyping
             batch_size: int = 8,                # TODO: For prototyping
-            fa_initial: float = 10.,
-            fa_delta: float = 1.0,
+            fa_initial: float = 25.,
+            fa_delta: float = 2.0,
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 1e-1,   # TODO: Was 0.995
+            epsilon_decay: float = 1. - 1e-2,   # TODO: Was 0.995
             alpha: float = 1e-3,                # TODO: Was 0.01
             alpha_decay: float = 0.01,          # TODO: Might omit
             target_update_period: int = 3,
@@ -153,7 +153,7 @@ class SingleSignalOptimizer():
 
         # Run simulation with updated parameters
         F0, _, _ = epg.epg_as_torch(
-            500, self.fa, 10E-03, .583, 0.055, device=self.device
+            100, self.fa, 50E-03, .500, 0.025, device=self.device
         )
 
         # Update state
@@ -245,15 +245,15 @@ class SingleSignalOptimizer():
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-        # Set gradients to zero
-        self.optimizer.zero_grad()
-
         # Compute Q targets
         Q_targets = self.compute_q_targets(next_state_batch, reward_batch)
         # Compute Q predictions
         Q_predictions = self.compute_q_predictions(state_batch, action_batch)
         # Compute loss (=MSE(predictions, targets))
         loss = F.mse_loss(Q_predictions, Q_targets)
+
+        # Set gradients to zero
+        self.optimizer.zero_grad()
 
         # Perform backwards pass and calculate gradients
         loss.backward()
@@ -265,8 +265,8 @@ class SingleSignalOptimizer():
         """Computes the Q targets we will compare to the predicted Q values"""
 
         # Compute output of the target net for next states
-        with torch.no_grad():
-            target_output = self.target_net(next_states)
+        # Keep the gradients for backwards loss pass: with torch.no_grad():
+        target_output = self.target_net(next_states)
 
         # Select appropriate Q values based on which one is higher
         # (since this would have been the one selected in the next state)
@@ -306,10 +306,10 @@ class SingleSignalOptimizer():
             tick = 0
 
             # Set initial flip angle
-            self.fa = self.fa_initial + (np.random.random() * 20.0 - 10.0)
+            self.fa = self.fa_initial + (np.random.random() * 40.0 - 20.0)
             # Run initial simulation
             F0, _, _ = epg.epg_as_torch(
-                500, self.fa, 10E-03, .583, 0.055, device=self.device
+                100, self.fa, 50E-03, .500, 0.025, device=self.device
             )
             # Set initial state
             state = torch.tensor(
@@ -334,9 +334,9 @@ class SingleSignalOptimizer():
 
                 # Print some info
                 print(
-                    f" - Action: {int(action)}"
-                    f" - FA: {float(state[1]):.1f}"
-                    f" - Signal: {float(state[0]):.3f}"
+                    f" - Action: {int(action):1d}"
+                    f" - FA: {float(state[1]):4.1f}"
+                    f" - Signal: {float(state[0]):5.3f}"
                 )
 
             # Optimize prediction/policy model
