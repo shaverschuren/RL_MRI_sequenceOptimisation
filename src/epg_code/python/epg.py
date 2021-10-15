@@ -280,7 +280,8 @@ def epg_as_torch(
             fa_arr[pn] = alpha
         fa = fa_arr
     else:
-        raise TypeError("alpha should be either a tensor or float!")
+        raise TypeError(
+            f"alpha should be either a tensor or float! Got <{type(alpha)}>")
 
     N = len(fa)
     Nm1 = N - 1
