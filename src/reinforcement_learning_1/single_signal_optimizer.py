@@ -138,15 +138,28 @@ class SingleSignalOptimizer():
     def init_env(self):
         """Constructs the environment
 
-        Includes action space, [...]
+        Includes action space and deltas.
+        The actual simulation "environment" is already implemented
+        in the epg code.
         """
 
-        self.action_space = np.array([0, 1])  # TODO: Maybe 3rd state
+        # Define action space
+        # 0 - Decrease 1xdelta
+        # 1 - Increase 1xdelta
+        # 2 - Decrease 5xdelta
+        # 3 - Increase 5xdelta
+        self.action_space = np.array([0, 1, 2, 3])  # TODO: "Nothing" state?
+        self.deltas = np.array([
+            -1. * self.fa_delta,
+            +1. * self.fa_delta,
+            -5. * self.fa_delta,
+            +5. * self.fa_delta
+        ])
 
     def init_model(self):
         """Constructs reinforcement learning model
 
-        Neural nets: Fully connected 2-4-2
+        Neural nets: Fully connected 2-4
         Loss: L1 (MAE) Loss
         Optimizer: Adam with lr alpha
         """
@@ -157,7 +170,7 @@ class SingleSignalOptimizer():
             ('relu1', nn.ReLU()),
             ('fc2', nn.Linear(4, 4)),
             ('relu2', nn.ReLU()),
-            ('output', nn.Linear(4, 2))
+            ('output', nn.Linear(4, 4))
         ])).to(self.device)
         # Construct target net
         self.target_net = nn.Sequential(OrderedDict([
@@ -165,7 +178,7 @@ class SingleSignalOptimizer():
             ('relu1', nn.ReLU()),
             ('fc2', nn.Linear(4, 4)),
             ('relu2', nn.ReLU()),
-            ('output', nn.Linear(4, 2))
+            ('output', nn.Linear(4, 4))
         ])).to(self.device)
 
         # Setup optimizer
@@ -184,14 +197,15 @@ class SingleSignalOptimizer():
         """
 
         # Adjust flip angle according to action
-        if int(action) == 0:
-            # Decrease flip angle
-            self.fa -= self.fa_delta
+        if int(action) in self.action_space:
+            # Adjust flip angle
+            delta = float(self.deltas[int(action)])
+            self.fa += delta
+            # Correct for flip angle out of bounds
             if self.fa < 0.0: self.fa = 0.0
-        elif int(action) == 1:
-            # Increase flip angle
-            self.fa += self.fa_delta
             if self.fa > 180.0: self.fa = 180.0
+        else:
+            raise ValueError("Action not in action space")
 
         # Run simulation with updated parameters
         F0, _, _ = epg.epg_as_torch(
@@ -203,12 +217,25 @@ class SingleSignalOptimizer():
             [float(np.abs(F0.cpu()[-1])), self.fa],
             device=self.device
         )
-        # Define reward
-        # (as either +/- 1 for an increase or decrease in signal)
-        reward_float = 1.0 if state[0] > old_state[0] else -1.0
+
+        # Define reward as either +/- 1 for an increase or decrease in signal
+        if state[0] > old_state[0]:
+            reward_float = 1.0
+        else:
+            reward_float = -1.0
+        # If the difference is more than 5%, 10%, 20%, increase reward
+        signal_diff = abs(state[0] - old_state[0]) / old_state[0]
+        if 0.05 < signal_diff <= 0.10:
+            reward_float *= 2.0
+        if 0.10 < signal_diff <= 0.20:
+            reward_float *= 3.0
+        if 0.20 < signal_diff:
+            reward_float *= 4.0
+        # Store reward in tensor
         reward = torch.tensor(
             [reward_float], device=self.device
         )
+
         # Define "done"
         done = torch.tensor(0, device=self.device)
 
