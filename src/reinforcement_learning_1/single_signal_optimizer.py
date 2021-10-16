@@ -256,14 +256,14 @@ class SingleSignalOptimizer():
 
         if np.random.random() <= epsilon:
             # Exploration (random choice) -> *R*andom
-            if self.verbose: print("R", end="", flush=True)
+            if self.verbose: print("\033[93mR\033[0m", end="", flush=True)
             return torch.tensor(
                 [np.random.choice(self.action_space)],
                 device=self.device
             )
         else:
             # Exploitation (max expected reward) -> *P*olicy
-            if self.verbose: print("P", end="", flush=True)
+            if self.verbose: print("\033[94mP\033[0m", end="", flush=True)
             with torch.no_grad():
                 return torch.tensor(
                     [torch.argmax(self.prediction_net(state))],
@@ -273,6 +273,10 @@ class SingleSignalOptimizer():
     def update_target(self):
         """Updates the target model weights to match the prediction model"""
 
+        # Print some info
+        if self.verbose:
+            print("Updating target model...\t", end="", flush=True)
+
         # Loop over the layers of the prediction and target nets
         for layer in range(len(self.prediction_net)):
             # Check whether we have a layer that stores weights
@@ -281,12 +285,20 @@ class SingleSignalOptimizer():
                 self.target_net[layer].weight = \
                     self.prediction_net[layer].weight
 
+        # Print some info
+        if self.verbose:
+            print("\033[92mOK\033[0m")
+
     def optimize_model(self, batch_size):
         """Optimize model based on previous episode"""
 
         # Check whether memory is long enough
         if len(self.memory) < batch_size:
             return
+
+        # Print some info
+        if self.verbose:
+            print("Training prediction model...\t", end="", flush=True)
 
         # Create batch
         transitions = random.sample(
@@ -331,6 +343,10 @@ class SingleSignalOptimizer():
 
         # Step optimizer
         self.optimizer.step()
+
+        # Print some info
+        if self.verbose:
+            print("\033[92mOK\033[0m")
 
     def compute_q_targets(self, next_states, rewards):
         """Computes the Q targets we will compare to the predicted Q values"""
@@ -406,11 +422,14 @@ class SingleSignalOptimizer():
                 tick += 1
 
                 # Print some info
+                color_str = "\033[92m" if reward > 0. else "\033[91m"
+                end_str = "\033[0m"
                 print(
                     f" - Action: {int(action):1d}"
                     f" - FA: {float(state[1]):4.1f}"
                     f" - Signal: {float(state[0]):5.3f}"
-                    f" - Reward: {float(reward):5.2f}"
+                    " - Reward: "
+                    "" + color_str + f"{float(reward):2.0f}" + end_str
                 )
 
             # Optimize prediction/policy model
