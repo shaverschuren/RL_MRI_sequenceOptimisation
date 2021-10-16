@@ -160,7 +160,7 @@ class SingleSignalOptimizer():
         """Constructs reinforcement learning model
 
         Neural nets: Fully connected 2-4
-        Loss: L1 (MAE) Loss
+        Loss: L2 (MSE) Loss
         Optimizer: Adam with lr alpha
         """
 
