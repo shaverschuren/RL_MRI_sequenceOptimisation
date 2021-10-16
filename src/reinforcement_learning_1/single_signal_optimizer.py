@@ -35,8 +35,8 @@ class SingleSignalOptimizer():
     def __init__(
             self,
             n_episodes: int = 1000,
-            n_ticks: int = 10,
-            batch_size: int = 8,
+            n_ticks: int = 20,
+            batch_size: int = 64,
             fa_initial: float = 25.,
             fa_initial_spread: float = 20.,
             fa_delta: float = 1.0,
@@ -47,7 +47,7 @@ class SingleSignalOptimizer():
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 5e-2,
+            epsilon_decay: float = 1. - 2e-2,
             alpha: float = 0.005,
             target_update_period: int = 3,
             log_dir: Union[str, bytes, os.PathLike] =
