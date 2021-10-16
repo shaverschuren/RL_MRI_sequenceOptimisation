@@ -36,7 +36,7 @@ class SingleSignalOptimizer():
             self,
             n_episodes: int = 1000,
             n_ticks: int = 20,
-            batch_size: int = 64,
+            batch_size: int = 32,
             fa_initial: float = 25.,
             fa_initial_spread: float = 20.,
             fa_delta: float = 1.0,
@@ -47,7 +47,7 @@ class SingleSignalOptimizer():
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 2e-2,
+            epsilon_decay: float = 1. - 5e-2,
             alpha: float = 0.005,
             target_update_period: int = 3,
             log_dir: Union[str, bytes, os.PathLike] =
@@ -300,49 +300,60 @@ class SingleSignalOptimizer():
         if self.verbose:
             print("Training prediction model...\t", end="", flush=True)
 
-        # Create batch
-        transitions = random.sample(
-            self.memory, min(len(self.memory), batch_size))
+        # Copy memory to local list
+        local_memory = list(self.memory)
 
-        batch = self.Transition(*zip(*transitions))
+        while len(local_memory) >= batch_size:
+            # Create selection from remaining local memory
+            indices = list(range(len(local_memory)))
+            selection = list(random.sample(indices, batch_size))
+            selection.sort(reverse=True)
+            # Create transitions and remove items from local memory
+            transitions = []
+            for index in selection:
+                transitions.append(local_memory[index])
+                local_memory.pop(index)
+            # Create batch
+            batch = self.Transition(*zip(*transitions))
 
-        # Split state, action and reward batches
+            # Split state, action and reward batches
 
-        # States
-        state_batch_list = []
-        for tensor_i in range(len(batch.state)):
-            state_batch_list.append(np.array(batch.state[tensor_i].cpu()))
-        state_batch_np = np.array(state_batch_list)
-        state_batch = torch.as_tensor(state_batch_np, device=self.device)
-        # Next states
-        next_state_batch_list = []
-        for tensor_i in range(len(batch.next_state)):
-            next_state_batch_list.append(
-                np.array(batch.next_state[tensor_i].cpu())
+            # States
+            state_batch_list = []
+            for tensor_i in range(len(batch.state)):
+                state_batch_list.append(np.array(batch.state[tensor_i].cpu()))
+            state_batch_np = np.array(state_batch_list)
+            state_batch = torch.as_tensor(state_batch_np, device=self.device)
+            # Next states
+            next_state_batch_list = []
+            for tensor_i in range(len(batch.next_state)):
+                next_state_batch_list.append(
+                    np.array(batch.next_state[tensor_i].cpu())
+                )
+            next_state_batch_np = np.array(next_state_batch_list)
+            next_state_batch = torch.as_tensor(
+                next_state_batch_np, device=self.device
             )
-        next_state_batch_np = np.array(next_state_batch_list)
-        next_state_batch = torch.as_tensor(
-            next_state_batch_np, device=self.device
-        )
-        # Actions and rewards
-        action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
+            # Actions and rewards
+            action_batch = torch.cat(batch.action)
+            reward_batch = torch.cat(batch.reward)
 
-        # Compute Q targets
-        Q_targets = self.compute_q_targets(next_state_batch, reward_batch)
-        # Compute Q predictions
-        Q_predictions = self.compute_q_predictions(state_batch, action_batch)
-        # Compute loss (= MSE(predictions, targets))
-        loss = F.mse_loss(Q_predictions, Q_targets)
+            # Compute Q targets
+            Q_targets = self.compute_q_targets(next_state_batch, reward_batch)
+            # Compute Q predictions
+            Q_predictions = self.compute_q_predictions(
+                state_batch, action_batch)
+            # Compute loss (= MSE(predictions, targets))
+            loss = F.mse_loss(Q_predictions, Q_targets)
 
-        # Set gradients to zero
-        self.optimizer.zero_grad()
+            # Set gradients to zero
+            self.optimizer.zero_grad()
 
-        # Perform backwards pass and calculate gradients
-        loss.backward()
+            # Perform backwards pass and calculate gradients
+            loss.backward()
 
-        # Step optimizer
-        self.optimizer.step()
+            # Step optimizer
+            self.optimizer.step()
 
         # Print some info
         if self.verbose:
