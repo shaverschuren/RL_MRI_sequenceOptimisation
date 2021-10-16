@@ -34,8 +34,8 @@ class SingleSignalOptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 1000,
-            n_ticks: int = 20,
+            n_episodes: int = 100,
+            n_ticks: int = 10,
             batch_size: int = 32,
             fa_initial: float = 25.,
             fa_initial_spread: float = 20.,
