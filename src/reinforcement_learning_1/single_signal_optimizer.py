@@ -152,37 +152,39 @@ class SingleSignalOptimizer():
         # 1 - Increase 1xdelta
         # 2 - Decrease 5xdelta
         # 3 - Increase 5xdelta
-        self.action_space = np.array([0, 1, 2, 3])  # TODO: "Nothing" state?
+        # 4 - Stop episode (done=True)
+        self.action_space = np.array([0, 1, 2, 3, 4])
         self.deltas = np.array([
             -1. * self.fa_delta,
             +1. * self.fa_delta,
             -5. * self.fa_delta,
-            +5. * self.fa_delta
+            +5. * self.fa_delta,
+            0.0
         ])
 
     def init_model(self):
         """Constructs reinforcement learning model
 
-        Neural nets: Fully connected 2-4
+        Neural nets: Fully connected 2-5-5
         Loss: L2 (MSE) Loss
         Optimizer: Adam with lr alpha
         """
 
         # Construct policy net
         self.prediction_net = nn.Sequential(OrderedDict([
-            ('fc1', nn.Linear(2, 4)),
+            ('fc1', nn.Linear(2, 5)),
             ('relu1', nn.ReLU()),
-            ('fc2', nn.Linear(4, 4)),
+            ('fc2', nn.Linear(5, 5)),
             ('relu2', nn.ReLU()),
-            ('output', nn.Linear(4, 4))
+            ('output', nn.Linear(5, 5))
         ])).to(self.device)
         # Construct target net
         self.target_net = nn.Sequential(OrderedDict([
-            ('fc1', nn.Linear(2, 4)),
+            ('fc1', nn.Linear(2, 5)),
             ('relu1', nn.ReLU()),
-            ('fc2', nn.Linear(4, 4)),
+            ('fc2', nn.Linear(5, 5)),
             ('relu2', nn.ReLU()),
-            ('output', nn.Linear(4, 4))
+            ('output', nn.Linear(5, 5))
         ])).to(self.device)
 
         # Setup optimizer
@@ -200,48 +202,82 @@ class SingleSignalOptimizer():
         - Update done
         """
 
-        # Adjust flip angle according to action
-        if int(action) in self.action_space:
+        # Adjust flip angle according to action (0,1,2,3)
+        if int(action) in self.action_space[:-1]:
             # Adjust flip angle
             delta = float(self.deltas[int(action)])
             self.fa += delta
             # Correct for flip angle out of bounds
             if self.fa < 0.0: self.fa = 0.0
             if self.fa > 180.0: self.fa = 180.0
+
+            # Run simulation with updated parameters
+            F0, _, _ = epg.epg_as_torch(
+                self.Nfa, self.fa, self.tr,
+                self.T1, self.T2, device=self.device
+            )
+
+            # Update state
+            state = torch.tensor(
+                [float(np.abs(F0.cpu()[-1])), self.fa],
+                device=self.device
+            )
+
+            # Define reward as either +/- 1 for increase or decrease in signal
+            if state[0] > old_state[0]:
+                reward_float = 1.0
+            else:
+                reward_float = -1.0
+            # If the difference is more than 5%, 10%, 20%, increase reward
+            signal_diff = abs(state[0] - old_state[0]) / old_state[0]
+            if 0.05 < signal_diff <= 0.10:
+                reward_float *= 2.0
+            if 0.10 < signal_diff <= 0.20:
+                reward_float *= 3.0
+            if 0.20 < signal_diff:
+                reward_float *= 4.0
+            # Store reward in tensor
+            reward = torch.tensor(
+                [reward_float], device=self.device
+            )
+
+            # Set done
+            done = torch.tensor(0, device=self.device)
+
+        # Action = 4 ("done" action)
+        elif int(action) == 4:
+            # Set done
+            done = torch.tensor(1, device=self.device)
+
+            # Define state
+            state = old_state
+
+            # Check reward by running two simulations (higher and lower fa)
+            F0_lower, _, _ = epg.epg_as_torch(
+                self.Nfa, self.fa - self.fa_delta, self.tr,
+                self.T1, self.T2, device=self.device
+            )
+            F0_higher, _, _ = epg.epg_as_torch(
+                self.Nfa, self.fa + self.fa_delta, self.tr,
+                self.T1, self.T2, device=self.device
+            )
+            signal_lower = float(np.abs(F0_lower.cpu()[-1]))
+            signal_higher = float(np.abs(F0_higher.cpu()[-1]))
+
+            # Determine reward
+            if state[0] >= signal_lower and state[0] >= signal_higher:
+                # If fa is indeed optimal, reward = 5
+                reward = torch.tensor(
+                    [5.0], device=self.device
+                )
+            else:
+                # If fa is not optimal, reward = -5
+                reward = torch.tensor(
+                    [-5.0], device=self.device
+                )
+
         else:
             raise ValueError("Action not in action space")
-
-        # Run simulation with updated parameters
-        F0, _, _ = epg.epg_as_torch(
-            self.Nfa, self.fa, self.tr, self.T1, self.T2, device=self.device
-        )
-
-        # Update state
-        state = torch.tensor(
-            [float(np.abs(F0.cpu()[-1])), self.fa],
-            device=self.device
-        )
-
-        # Define reward as either +/- 1 for an increase or decrease in signal
-        if state[0] > old_state[0]:
-            reward_float = 1.0
-        else:
-            reward_float = -1.0
-        # If the difference is more than 5%, 10%, 20%, increase reward
-        signal_diff = abs(state[0] - old_state[0]) / old_state[0]
-        if 0.05 < signal_diff <= 0.10:
-            reward_float *= 2.0
-        if 0.10 < signal_diff <= 0.20:
-            reward_float *= 3.0
-        if 0.20 < signal_diff:
-            reward_float *= 4.0
-        # Store reward in tensor
-        reward = torch.tensor(
-            [reward_float], device=self.device
-        )
-
-        # Define "done"
-        done = torch.tensor(0, device=self.device)
 
         return state, reward, done
 
@@ -305,7 +341,7 @@ class SingleSignalOptimizer():
             print("Training prediction model...\t", end="", flush=True)
 
         # Loop over number of epochs
-        for epoch in range(self.epochs_per_episode):
+        for _ in range(self.epochs_per_episode):
             # Copy memory to local list
             local_memory = list(self.memory)
 
@@ -430,7 +466,7 @@ class SingleSignalOptimizer():
             )
 
             # Loop over steps/ticks
-            while tick < self.n_ticks and not done:
+            while tick < self.n_ticks and not bool(done):
                 # Print some info
                 print(f"Step {tick + 1:2d}/{self.n_ticks:2d} - ", end="")
                 # Choose action
