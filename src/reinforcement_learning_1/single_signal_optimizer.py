@@ -254,11 +254,11 @@ class SingleSignalOptimizer():
 
             # Check reward by running two simulations (higher and lower fa)
             F0_lower, _, _ = epg.epg_as_torch(
-                self.Nfa, self.fa - self.fa_delta, self.tr,
+                self.Nfa, self.fa - 2.0 * self.fa_delta, self.tr,
                 self.T1, self.T2, device=self.device
             )
             F0_higher, _, _ = epg.epg_as_torch(
-                self.Nfa, self.fa + self.fa_delta, self.tr,
+                self.Nfa, self.fa + 2.0 * self.fa_delta, self.tr,
                 self.T1, self.T2, device=self.device
             )
             signal_lower = float(np.abs(F0_lower.cpu()[-1]))
