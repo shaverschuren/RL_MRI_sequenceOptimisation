@@ -474,8 +474,18 @@ class MultipleSignalOptimizer():
 
         return Q_predictions
 
-    def run(self):
-        """Run the training loop"""
+    def run(self, train=True):
+        """Run the training loop
+
+        If train=False is passed, we simply test
+        the performance of a previously trained model
+        """
+
+        # Print some info
+        if train:
+            print("\n===== Running training loop =====\n")
+        else:
+            print("\n======= Running test loop =======\n")
 
         # Create lists of initial flip angles
         # (uniformly distributed around optimum)
@@ -490,7 +500,7 @@ class MultipleSignalOptimizer():
         ))
 
         # Loop over episodes
-        for episode in range(self.n_episodes):
+        for episode in range(self.n_episodes) if train else range(10):
             # Print some info
             if self.verbose:
                 print(
@@ -531,7 +541,7 @@ class MultipleSignalOptimizer():
             # Print some info
             ernst_angle = np.arccos(np.exp(-self.tr / self.T1)) * 180. / np.pi
             print(
-                f"Running episode with T1={self.T1:.4f}ms & T2={self.T2:.4f}ms"
+                f"Running episode with T1={self.T1:.4f}s & T2={self.T2:.4f}s"
                 f"\nErnst angle: {ernst_angle:4.1f} deg"
             )
 
@@ -540,7 +550,9 @@ class MultipleSignalOptimizer():
                 # Print some info
                 print(f"Step {tick + 1:3d}/{self.n_ticks:3d} - ", end="")
                 # Choose action
-                action = self.choose_action(state, self.epsilon)
+                action = self.choose_action(
+                    state, self.epsilon if train else 0.
+                )
                 # Simulate step
                 next_state, reward, done = self.step(state, action, tick)
                 # Add to memory
@@ -570,26 +582,31 @@ class MultipleSignalOptimizer():
             )
             optimal_signal = float(abs((F0_optimal.cpu())[-1]))
             actual_signal = float(state[0])
-            relative_signal_error = \
-                abs(optimal_signal - actual_signal) * 100. / actual_signal
+            if actual_signal == 0.:
+                relative_signal_error = 1000.
+            else:
+                relative_signal_error = abs(
+                    optimal_signal - actual_signal) * 100. / actual_signal
 
             print(
                 f"Actual error: (fa) {abs(self.fa - ernst_angle):4.1f} deg",
                 f"; (signal) {relative_signal_error:5.2f}%"
             )
 
-            # Optimize prediction/policy model
-            self.optimize_model(self.batch_size)
+            if train:
+                # Optimize prediction/policy model
+                self.optimize_model(self.batch_size)
 
-            # Update target model
-            if episode % self.target_update_period == 0:
-                self.update_target()
+                # Update target model
+                if episode % self.target_update_period == 0:
+                    self.update_target()
 
-            # Update epsilon
-            if self.epsilon > self.epsilon_min:
-                self.epsilon *= self.epsilon_decay
+                # Update epsilon
+                if self.epsilon > self.epsilon_min:
+                    self.epsilon *= self.epsilon_decay
 
 
 if __name__ == "__main__":
     optimizer = MultipleSignalOptimizer()
     optimizer.run()
+    optimizer.run(train=False)
