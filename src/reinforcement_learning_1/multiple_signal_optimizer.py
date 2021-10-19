@@ -45,8 +45,8 @@ class MultipleSignalOptimizer():
             fa_initial_spread: float = 20.,
             fa_delta: float = 1.0,
             Nfa: int = 100,
-            T1_mean: float = 0.800,
-            T1_spread: float = 0.600,
+            T1_mean: float = 1.000,
+            T1_spread: float = 0.900,
             T2_mean: float = 0.050,
             T2_spread: float = 0.040,
             tr: float = 0.050,
@@ -73,7 +73,7 @@ class MultipleSignalOptimizer():
                 epochs_per_episode : int
                     Number of training epochs after each episode
                 n_done_criterion : int
-                    Number of concurrent 0-1-0-1 actions needed to stop episode
+                    Number of concurrent up-down actions needed to stop episode
                 fa_initial : float
                     Initial flip angle [deg]
                 fa_initial_spread : float
