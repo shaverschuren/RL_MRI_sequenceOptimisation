@@ -153,6 +153,7 @@ class SingleSignalOptimizer():
         # 2 - Decrease 5xdelta
         # 3 - Increase 5xdelta
         # 4 - Stop episode (done=True)
+        # TODO: Scrap "done" action and hard-code "done"
         self.action_space = np.array([0, 1, 2, 3, 4])
         self.deltas = np.array([
             -1. * self.fa_delta,
@@ -229,6 +230,7 @@ class SingleSignalOptimizer():
             else:
                 reward_float = -1.0
             # If the difference is more than 5%, 10%, 20%, increase reward
+            # TODO: Non-discrete + slightly more sensitive
             signal_diff = abs(state[0] - old_state[0]) / old_state[0]
             if 0.05 < signal_diff <= 0.10:
                 reward_float *= 2.0
@@ -451,7 +453,7 @@ class SingleSignalOptimizer():
             done = False
             tick = 0
 
-            # Set initial flip angle
+            # Set initial flip angle (TODO: Uniform spread instead of random())
             self.fa = self.fa_initial + (
                 np.random.random() * 2 * self.fa_spread - self.fa_spread)
             # Run initial simulation
