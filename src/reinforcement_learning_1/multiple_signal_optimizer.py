@@ -41,14 +41,14 @@ class MultipleSignalOptimizer():
             batch_size: int = 32,
             epochs_per_episode: int = 10,
             n_done_criterion: int = 5,
-            fa_initial: float = 25.,
-            fa_initial_spread: float = 20.,
+            fa_initial_min: float = 5.,
+            fa_initial_max: float = 60.,
             fa_delta: float = 1.0,
             Nfa: int = 100,
-            T1_mean: float = 1.000,
-            T1_spread: float = 0.900,
-            T2_mean: float = 0.050,
-            T2_spread: float = 0.040,
+            T1_min: float = 0.100,
+            T1_max: float = 1.500,
+            T2_min: float = 0.010,
+            T2_max: float = 0.100,
             tr: float = 0.050,
             gamma: float = 1.,
             epsilon: float = 1.,
@@ -74,22 +74,22 @@ class MultipleSignalOptimizer():
                     Number of training epochs after each episode
                 n_done_criterion : int
                     Number of concurrent up-down actions needed to stop episode
-                fa_initial : float
-                    Initial flip angle [deg]
-                fa_initial_spread : float
-                    Spread of initial flip angle [deg] (for some randomness)
+                fa_initial_min : float
+                    Minimal initial flip angle [deg]
+                fa_initial_max : float
+                    Maximal initial flip angle [deg]
                 fa_delta : float
                     Amount of change in flip angle done by the model [deg]
                 Nfa : int
                     Number of pulses in epg simulation
-                T1_mean : float
-                    Mean longitudinal relaxation in epg simulation [ms]
-                T1_spread : float
-                    Spread of longitudinal relaxation in epg simulation [ms]
-                T2_mean : float
-                    Mean transversal relaxation in epg simulation [ms]
-                T2_spread : float
-                    Spread of longitudinal relaxation in epg simulation [ms]
+                T1_min : float
+                    Minimal longitudinal relaxation in epg simulation [ms]
+                T1_max : float
+                    Maximal longitudinal relaxation in epg simulation [ms]
+                T2_min : float
+                    Minimal transversal relaxation in epg simulation [ms]
+                T2_max : float
+                    Maximal longitudinal relaxation in epg simulation [ms]
                 tr : float
                     Repetition time in epg simulation [ms]
                 gamma : float
@@ -118,15 +118,15 @@ class MultipleSignalOptimizer():
         self.batch_size = batch_size
         self.epochs_per_episode = epochs_per_episode
         self.n_done_criterion = n_done_criterion
-        self.fa_initial = fa_initial
-        self.fa = fa_initial
-        self.fa_spread = fa_initial_spread
+        self.fa_initial_min = fa_initial_min
+        self.fa_initial_max = fa_initial_max
+        self.fa = (fa_initial_min + fa_initial_max) / 2
         self.fa_delta = fa_delta
         self.Nfa = Nfa
-        self.T1_mean = T1_mean
-        self.T1_spread = T1_spread
-        self.T2_mean = T2_mean
-        self.T2_spread = T2_spread
+        self.T1_min = T1_min
+        self.T1_max = T1_max
+        self.T2_min = T2_min
+        self.T2_max = T2_max
         self.tr = tr
         self.gamma = gamma
         self.epsilon = epsilon
@@ -490,13 +490,23 @@ class MultipleSignalOptimizer():
         # Create lists of initial flip angles
         # (uniformly distributed around optimum)
         initial_fa_low = list(np.linspace(
-            self.fa_initial - self.fa_spread, self.fa_initial,
+            self.fa_initial_min,
+            (self.fa_initial_min + self.fa_initial_max) / 2,
             self.n_episodes // 2
         ))
         initial_fa_high = list(np.linspace(
-            self.fa_initial, self.fa_initial + self.fa_spread,
+            (self.fa_initial_min + self.fa_initial_max) / 2,
+            self.fa_initial_max,
             self.n_episodes // 2 if self.n_episodes % 2 == 0
             else self.n_episodes // 2 + 1
+        ))
+        # Create lists of T1 and T2s
+        # (uniformly distributed in range)
+        T1_list = list(np.linspace(
+            self.T1_min, self.T1_max, self.n_episodes
+        ))
+        T2_list = list(np.linspace(
+            self.T2_min, self.T2_max, self.n_episodes
         ))
 
         # Loop over episodes
@@ -504,28 +514,41 @@ class MultipleSignalOptimizer():
             # Print some info
             if self.verbose:
                 print(
-                    f"\n=== Episode {episode + 1:3d}/{self.n_episodes:3d} ==="
+                    f"\n=== Episode {episode + 1:3d}/"
+                    f"{self.n_episodes if train else 10:3d} ==="
                 )
             # Reset done and tick counter
             done = False
             tick = 0
 
-            # Set initial flip angle. Here, we randomly sample from the
-            # uniformly distributed lists we created earlier.
-            if episode % 2 == 0:
-                self.fa = float(initial_fa_high.pop(
-                    random.randint(0, len(initial_fa_high) - 1)
+            # Set initial flip angle, T1 and T2 for this episode
+            # If train, take them from the uniform distributions
+            # If test (not train), take them randomly in a range
+            if train:
+                # Set initial flip angle. Here, we randomly sample from the
+                # uniformly distributed lists we created earlier.
+                if episode % 2 == 0:
+                    self.fa = float(initial_fa_high.pop(
+                        random.randint(0, len(initial_fa_high) - 1)
+                    ))
+                else:
+                    self.fa = float(initial_fa_low.pop(
+                        random.randint(0, len(initial_fa_low) - 1)
+                    ))
+                # Set T1 and T2 for this episode
+                self.T1 = float(T1_list.pop(
+                    random.randint(0, len(T1_list) - 1)
+                ))
+                self.T2 = float(T2_list.pop(
+                    random.randint(0, len(T2_list) - 1)
                 ))
             else:
-                self.fa = float(initial_fa_low.pop(
-                    random.randint(0, len(initial_fa_low) - 1)
-                ))
-
-            # Set T1 and T2 for this episode
-            self.T1 = self.T1_mean + float(
-                np.random.random() * 2.0 * self.T1_spread - self.T1_spread)
-            self.T2 = self.T2_mean + float(
-                np.random.random() * 2.0 * self.T2_spread - self.T2_spread)
+                # Take flip angle, T1, T2 randomly
+                self.fa = random.uniform(
+                    self.fa_initial_min, self.fa_initial_max
+                )
+                self.T1 = random.uniform(self.T1_min, self.T1_max)
+                self.T2 = random.uniform(self.T2_min, self.T2_max)
 
             # Run initial simulation
             F0, _, _ = epg.epg_as_torch(
