@@ -37,7 +37,7 @@ class SingleSignalOptimizer():
             n_episodes: int = 100,
             n_ticks: int = 10,
             batch_size: int = 32,
-            epochs_per_episode: int = 5,
+            epochs_per_episode: int = 10,
             n_done_criterion: int = 4,
             fa_initial: float = 25.,
             fa_initial_spread: float = 20.,
@@ -253,9 +253,16 @@ class SingleSignalOptimizer():
             # We do this to prevent blowing up rewards near the edges
             if reward_gain > 20.: reward_gain = 20.
 
+        reward_float *= reward_gain
+
+        # Scale reward with step_i (faster improvement yields bigger rewards)
+        # Only scale the positives, though.
+        if reward_float > 0.:
+            reward_float *= np.exp(-step_i / self.n_ticks)
+
         # Store reward in tensor
         reward = torch.tensor(
-            [reward_float * reward_gain], device=self.device
+            [float(reward_float)], device=self.device
         )
 
         # Set done
