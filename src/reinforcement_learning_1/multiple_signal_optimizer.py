@@ -36,7 +36,7 @@ class MultipleSignalOptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 100,
+            n_episodes: int = 50,
             n_ticks: int = 100,
             batch_size: int = 32,
             epochs_per_episode: int = 10,
@@ -562,6 +562,21 @@ class MultipleSignalOptimizer():
                 )
                 if bool(done):
                     print("Stopping criterion met")
+
+            # Print some info on theoretical optimum
+            F0_optimal, _, _ = epg.epg_as_torch(
+                self.Nfa, float(ernst_angle), self.tr,
+                self.T1, self.T2, device=self.device
+            )
+            optimal_signal = float(abs((F0_optimal.cpu())[-1]))
+            actual_signal = float(state[0])
+            relative_signal_error = \
+                abs(optimal_signal - actual_signal) * 100. / actual_signal
+
+            print(
+                f"Actual error: (fa) {abs(self.fa - ernst_angle):4.1f} deg",
+                f"; (signal) {relative_signal_error:5.2f}%"
+            )
 
             # Optimize prediction/policy model
             self.optimize_model(self.batch_size)
