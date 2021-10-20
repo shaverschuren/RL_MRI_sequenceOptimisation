@@ -225,7 +225,6 @@ class MultipleSignalOptimizer():
             # Correct for flip angle out of bounds
             if self.fa < 0.0: self.fa = 0.0
             if self.fa > 180.0: self.fa = 180.0
-
         else:
             raise ValueError("Action not in action space")
 
@@ -249,7 +248,7 @@ class MultipleSignalOptimizer():
 
         # Scale reward with signal difference
         if float(old_state[0]) < 1e-2:
-            # If old_state signal is too small, set reward gain to 10
+            # If old_state signal is too small, set reward gain to 20
             reward_gain = 20.
         else:
             # Calculate relative signal difference and derive reward gain
@@ -394,7 +393,6 @@ class MultipleSignalOptimizer():
                 batch = self.Transition(*zip(*transitions))
 
                 # Split state, action and reward batches
-
                 # States
                 state_batch_list = []
                 for tensor_i in range(len(batch.state)):
@@ -425,7 +423,8 @@ class MultipleSignalOptimizer():
                 )
                 # Compute Q predictions
                 Q_predictions = self.compute_q_predictions(
-                    state_batch, action_batch)
+                    state_batch, action_batch
+                )
                 # Compute loss (= MSE(predictions, targets))
                 loss = F.mse_loss(Q_predictions, Q_targets)
 
@@ -443,10 +442,10 @@ class MultipleSignalOptimizer():
             print("\033[92mOK\033[0m")
 
     def compute_q_targets(self, next_states, rewards):
-        """Computes the Q targets we will compare to the predicted Q values"""
+        """Computes the Q targets for given next_states and rewards batches"""
 
         # Compute output of the target net for next states
-        # Keep the gradients for backwards loss pass: with torch.no_grad():
+        # Keep the gradients for backwards loss pass
         target_output = self.target_net(next_states)
 
         # Select appropriate Q values based on which one is higher
@@ -463,7 +462,7 @@ class MultipleSignalOptimizer():
         """Computes the Q predictions for a given state batch"""
 
         # Compute output of the policy net for given states
-        # Keep the gradients for backwards loss pass: with torch.no_grad():
+        # Keep the gradients for backwards loss pass
         policy_output = self.prediction_net(states)
 
         # Select appropriate Q values from output by indexing with
@@ -477,7 +476,7 @@ class MultipleSignalOptimizer():
     def run(self, train=True):
         """Run the training loop
 
-        If train=False is passed, we simply test
+        Here, if train=False is passed, we simply test
         the performance of a previously trained model
         """
 
@@ -488,7 +487,7 @@ class MultipleSignalOptimizer():
             print("\n======= Running test loop =======\n")
 
         # Create lists of initial flip angles
-        # (uniformly distributed around optimum)
+        # (uniformly distributed in range)
         initial_fa_low = list(np.linspace(
             self.fa_initial_min,
             (self.fa_initial_min + self.fa_initial_max) / 2,
@@ -526,7 +525,8 @@ class MultipleSignalOptimizer():
             # If test (not train), take them randomly in a range
             if train:
                 # Set initial flip angle. Here, we randomly sample from the
-                # uniformly distributed lists we created earlier.
+                # uniformly distributed lists we created earlier. We alternate
+                # between high and low flip angles to aid the training process.
                 if episode % 2 == 0:
                     self.fa = float(initial_fa_high.pop(
                         random.randint(0, len(initial_fa_high) - 1)
@@ -535,7 +535,8 @@ class MultipleSignalOptimizer():
                     self.fa = float(initial_fa_low.pop(
                         random.randint(0, len(initial_fa_low) - 1)
                     ))
-                # Set T1 and T2 for this episode
+                # Set T1 and T2 for this episode. We randomly sample these
+                # from the previously definded uniform distributions.
                 self.T1 = float(T1_list.pop(
                     random.randint(0, len(T1_list) - 1)
                 ))
@@ -543,7 +544,8 @@ class MultipleSignalOptimizer():
                     random.randint(0, len(T2_list) - 1)
                 ))
             else:
-                # Take flip angle, T1, T2 randomly
+                # If in test mode, take flip angle, T1, T2 randomly.
+                # We do this to provide a novel testing environment.
                 self.fa = random.uniform(
                     self.fa_initial_min, self.fa_initial_max
                 )
@@ -561,7 +563,7 @@ class MultipleSignalOptimizer():
                 device=self.device
             )
 
-            # Print some info
+            # Print some info on the specific environment used this episode.
             ernst_angle = np.arccos(np.exp(-self.tr / self.T1)) * 180. / np.pi
             print(
                 f"Running episode with T1={self.T1:.4f}s & T2={self.T2:.4f}s"
@@ -572,6 +574,7 @@ class MultipleSignalOptimizer():
             while tick < self.n_ticks and not bool(done):
                 # Print some info
                 print(f"Step {tick + 1:3d}/{self.n_ticks:3d} - ", end="")
+
                 # Choose action
                 action = self.choose_action(
                     state, self.epsilon if train else 0.
