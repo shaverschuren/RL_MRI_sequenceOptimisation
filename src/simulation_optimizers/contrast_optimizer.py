@@ -40,7 +40,8 @@ class ContrastOptimizer():
             n_ticks: int = 100,
             batch_size: int = 32,
             epochs_per_episode: int = 10,
-            n_done_criterion: int = 5,
+            memory_done_criterion: int = 15,
+            n_done_criterion: int = 3,
             fa_initial_min: float = 0.,
             fa_initial_max: float = 90.,
             fa_delta: float = 1.0,
@@ -72,8 +73,10 @@ class ContrastOptimizer():
                     Batch size for training
                 epochs_per_episode : int
                     Number of training epochs after each episode
+                memory_done_criterion : int
+                    Max length of "recent memory", used in "done" criterion
                 n_done_criterion : int
-                    Number of concurrent up-down actions needed to stop episode
+                    Number of same flip angles in recent memory needed to end
                 fa_initial_min : float
                     Minimal initial flip angle [deg]
                 fa_initial_max : float
@@ -117,6 +120,7 @@ class ContrastOptimizer():
         self.n_ticks = n_ticks
         self.batch_size = batch_size
         self.epochs_per_episode = epochs_per_episode
+        self.memory_done_criterion = memory_done_criterion
         self.n_done_criterion = n_done_criterion
         self.fa_initial_min = fa_initial_min
         self.fa_initial_max = fa_initial_max
@@ -230,7 +234,7 @@ class ContrastOptimizer():
             self.T1_2, self.T2_2, device=self.device
         )
 
-        # Determine contrast (TODO: Maybe relative contrast?)
+        # Determine contrast
         contrast = abs(np.abs(F0_1.cpu()[-1]) - np.abs(F0_2.cpu()[-1]))
 
         return float(contrast)
@@ -322,39 +326,31 @@ class ContrastOptimizer():
         )
 
         # Set done
-        if step_i >= self.n_done_criterion:
+        if step_i + 1 >= self.n_done_criterion:
             # Check whether the "done" criterion is met
 
+            # Calculate recent memory length (max memory_done_criterion)
+            memory_len = min(step_i + 1, self.memory_done_criterion)
             # Retrieve recent memory
-            recent_memory = list(self.memory)[-self.n_done_criterion + 1:]
+            recent_memory = list(self.memory)[-memory_len + 1:]
             # Store as transitions
             recent_transitions = self.Transition(*zip(*recent_memory))
-            # Extract actions
-            recent_actions = np.array(
-                torch.cat(recent_transitions.action).cpu(),
-                dtype=int
+            # Extract flip angles
+            recent_states = np.array(torch.cat(recent_transitions.state).cpu())
+            recent_fa = np.delete(
+                recent_states,
+                np.arange(0, recent_states.size, 2)
             )
-            # Append current/last action
-            recent_actions = np.append(recent_actions, int(action))
+            # Append current/last flip angle
+            recent_fa = np.append(recent_fa, float(old_state[1]))
 
-            # Check for up-down-up-down pattern
-            action_idx = recent_actions[0] % 2  # 0 for 0;2 and 1 for 1;3
-            required_actions = [[0, 2], [1, 3]]
-            for index in range(len(recent_actions)):
-                # Check if action is ok for pattern
-                action_ok = (
-                    recent_actions[index] in required_actions[action_idx]
-                )
-                # Check action_ok and break loop if False
-                if not action_ok:
-                    done = torch.tensor(0, device=self.device)
-                    break
-                # Update action_i (so it switches between 0 and 1)
-                action_idx += 1
-                action_idx = action_idx % 2
+            # Check for returning flip angles in recent memory
+            _, counts = np.unique(recent_fa, return_counts=True)
 
-            # Set done to True if action_ok is True
-            if action_ok: done = torch.tensor(1, device=self.device)
+            if (counts >= self.n_done_criterion).any():
+                done = torch.tensor(1, device=self.device)
+            else:
+                done = torch.tensor(0, device=self.device)
 
         else:
             # Recent memory too short: We're not done yet
