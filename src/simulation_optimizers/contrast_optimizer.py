@@ -207,16 +207,22 @@ class ContrastOptimizer():
             self.prediction_net.parameters(), lr=self.alpha
         )
 
-    def calculate_contrast(self):
+    def calculate_contrast(self, fa=None):
         """Calculates the contrast using parameters stored in self"""
+
+        # Select flip angle
+        if not fa:
+            fa = self.fa
+        else:
+            fa = float(fa)
 
         # Run simulations
         F0_1, _, _ = epg.epg_as_torch(
-            self.Nfa, self.fa, self.tr,
+            self.Nfa, fa, self.tr,
             self.T1_1, self.T2_1, device=self.device
         )
         F0_2, _, _ = epg.epg_as_torch(
-            self.Nfa, self.fa, self.tr,
+            self.Nfa, fa, self.tr,
             self.T1_2, self.T2_2, device=self.device
         )
 
@@ -224,6 +230,30 @@ class ContrastOptimizer():
         contrast = abs(np.abs(F0_1.cpu()[-1]) - np.abs(F0_2.cpu()[-1]))
 
         return float(contrast)
+
+    def calculate_exact_optimum(self):
+        """Analytically determine the exact optimum for comparison."""
+
+        # Determine E1 for both tissues
+        E1a = -np.exp(-self.tr / self.T1_1)
+        E1b = -np.exp(-self.tr / self.T1_2)
+
+        # Calculate optimal flip angle analytically. Formula retrieved from:
+        # Haselhoff EH. Optimization of flip angle for T1 dependent contrast: a
+        # closed form solution. Magn Reson Med 1997;38:518 – 9.
+        optimal_fa = float(np.arccos(
+            (
+                -2 * E1a * E1b + E1a + E1b - 2 + np.sqrt(
+                    -3 * (E1a ** 2) - 3 * (E1b ** 2)
+                    + 4 * (E1a ** 2) * (E1b ** 2) - 2 * E1a * E1b + 4
+                )
+            ) /
+            (
+                2 * (E1a * E1b - E1a - E1b)
+            )
+        ) * 180. / np.pi)
+
+        return optimal_fa, self.calculate_contrast(optimal_fa)
 
     def step(self, old_state, action, step_i):
         """Run step of the environment simulation
@@ -592,11 +622,14 @@ class ContrastOptimizer():
             )
 
             # # Print some info on the specific environment used this episode.
-            # ernst_angle = np.arccos(np.exp(-self.tr / self.T1)) * 180. / np.pi
-            # print(
-            #     f"Running episode with T1={self.T1:.4f}s & T2={self.T2:.4f}s"
-            #     f"\nErnst angle: {ernst_angle:4.1f} deg"
-            # )
+            optimal_angle, optimal_contrast = self.calculate_exact_optimum()
+            print(
+                f"Running episode with "
+                f"T1a={self.T1_1:.4f}s; T2a={self.T2_1:.4f}s; "
+                f"T1b={self.T1_2:.4f}s; T2b={self.T2_2:.4f}s"
+                f"\nOptimal angle:\t\t{optimal_angle:4.1f} [deg]"
+                f"\nOptimal contrast:\t{optimal_contrast:4.3f} [-]"
+            )
 
             # Loop over steps/ticks
             while tick < self.n_ticks and not bool(done):
