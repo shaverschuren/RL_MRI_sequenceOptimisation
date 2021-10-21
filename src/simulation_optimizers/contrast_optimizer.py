@@ -36,7 +36,7 @@ class ContrastOptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 50,
+            n_episodes: int = 100,
             n_ticks: int = 100,
             batch_size: int = 32,
             epochs_per_episode: int = 10,
@@ -298,8 +298,8 @@ class ContrastOptimizer():
             reward_float = -1.0
 
         # Scale reward with signal difference
-        if float(old_state[0]) < 1e-2:
-            # If old_state signal is too small, set reward gain to 20
+        if float(old_state[0]) == 0.:
+            # If old_state signal is 0, set reward gain to 30
             reward_gain = 30.
         else:
             # Calculate relative signal difference and derive reward gain
