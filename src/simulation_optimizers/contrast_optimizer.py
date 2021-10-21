@@ -42,14 +42,14 @@ class ContrastOptimizer():
             epochs_per_episode: int = 10,
             memory_done_criterion: int = 15,
             n_done_criterion: int = 3,
-            fa_initial_min: float = 0.,
-            fa_initial_max: float = 90.,
+            fa_initial_min: float = 15.,
+            fa_initial_max: float = 60.,
             fa_delta: float = 1.0,
             Nfa: int = 100,
-            T1_range_1: list[float] = [0.100, 1.500],
-            T1_range_2: list[float] = [0.100, 1.500],
-            T2_range_1: list[float] = [0.010, 0.100],
-            T2_range_2: list[float] = [0.010, 0.100],
+            T1_range_1: list[float] = [0.100, 2.500],
+            T1_range_2: list[float] = [0.100, 2.500],
+            T2_range_1: list[float] = [0.005, 0.100],
+            T2_range_2: list[float] = [0.005, 0.100],
             tr: float = 0.050,
             gamma: float = 1.,
             epsilon: float = 1.,
@@ -291,25 +291,25 @@ class ContrastOptimizer():
             device=self.device
         )
 
-        # Define reward as either +/- 1 for increase or decrease in signal
+        # Define reward as either +/- 1 for increase or decrease in contrast
         if state[0] > old_state[0]:
             reward_float = 1.0
         else:
             reward_float = -1.0
 
-        # Scale reward with signal difference
+        # Scale reward with contrast difference
         if float(old_state[0]) == 0.:
             # If old_state signal is 0, set reward gain to 30
             reward_gain = 30.
         else:
-            # Calculate relative signal difference and derive reward gain
-            signal_diff = abs(state[0] - old_state[0]) / old_state[0]
-            reward_gain = signal_diff * 50.
+            # Calculate relative contrast difference and derive reward gain
+            contrast_diff = abs(state[0] - old_state[0]) / old_state[0]
+            reward_gain = contrast_diff * 100.
 
             # If reward gain is lower than 0.5, use 0.5
             # We do this to prevent disappearing rewards near the optimum
             if reward_gain < 0.5: reward_gain = 0.5
-            # If reward gain is higher than 20, use 20
+            # If reward gain is higher than 30, use 30
             # We do this to prevent blowing up rewards near the edges
             if reward_gain > 30.: reward_gain = 30.
 
