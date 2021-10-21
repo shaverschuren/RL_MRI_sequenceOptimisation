@@ -41,8 +41,8 @@ class ContrastOptimizer():
             batch_size: int = 32,
             epochs_per_episode: int = 10,
             n_done_criterion: int = 5,
-            fa_initial_min: float = 5.,
-            fa_initial_max: float = 60.,
+            fa_initial_min: float = 0.,
+            fa_initial_max: float = 90.,
             fa_delta: float = 1.0,
             Nfa: int = 100,
             T1_range_1: list[float] = [0.100, 1.500],
@@ -180,7 +180,7 @@ class ContrastOptimizer():
     def init_model(self):
         """Constructs reinforcement learning model
 
-        Neural nets: Fully connected 2-4-4
+        Neural nets: Fully connected 2-8-4
         Loss: L2 (MSE) Loss
         Optimizer: Adam with lr alpha
         """
@@ -189,17 +189,17 @@ class ContrastOptimizer():
         self.prediction_net = nn.Sequential(OrderedDict([
             ('fc1', nn.Linear(2, 4)),
             ('relu1', nn.ReLU()),
-            ('fc2', nn.Linear(4, 4)),
+            ('fc2', nn.Linear(4, 8)),
             ('relu2', nn.ReLU()),
-            ('output', nn.Linear(4, 4))
+            ('output', nn.Linear(8, 4))
         ])).to(self.device)
         # Construct target net
         self.target_net = nn.Sequential(OrderedDict([
             ('fc1', nn.Linear(2, 4)),
             ('relu1', nn.ReLU()),
-            ('fc2', nn.Linear(4, 4)),
+            ('fc2', nn.Linear(4, 8)),
             ('relu2', nn.ReLU()),
-            ('output', nn.Linear(4, 4))
+            ('output', nn.Linear(8, 4))
         ])).to(self.device)
 
         # Setup optimizer
@@ -292,7 +292,7 @@ class ContrastOptimizer():
         # Scale reward with signal difference
         if float(old_state[0]) < 1e-2:
             # If old_state signal is too small, set reward gain to 20
-            reward_gain = 20.
+            reward_gain = 30.
         else:
             # Calculate relative signal difference and derive reward gain
             signal_diff = abs(state[0] - old_state[0]) / old_state[0]
@@ -303,7 +303,7 @@ class ContrastOptimizer():
             if reward_gain < 0.5: reward_gain = 0.5
             # If reward gain is higher than 20, use 20
             # We do this to prevent blowing up rewards near the edges
-            if reward_gain > 20.: reward_gain = 20.
+            if reward_gain > 30.: reward_gain = 30.
 
         reward_float *= reward_gain
 
@@ -625,11 +625,13 @@ class ContrastOptimizer():
             # # Print some info on the specific environment used this episode.
             optimal_angle, optimal_contrast = self.calculate_exact_optimum()
             print(
-                f"Running episode with "
-                f"T1a={self.T1_1:.4f}s; T2a={self.T2_1:.4f}s; "
+                "\n-----------------------------------"
+                f"\nT1a={self.T1_1:.4f}s; T2a={self.T2_1:.4f}s; "
                 f"T1b={self.T1_2:.4f}s; T2b={self.T2_2:.4f}s"
-                f"\nOptimal angle:\t\t{optimal_angle:4.1f} [deg]"
+                f"\nInitial alpha:\t\t{self.fa:4.1f} [deg]"
+                f"\nOptimal alpha:\t\t{optimal_angle:4.1f} [deg]"
                 f"\nOptimal contrast:\t{optimal_contrast:4.3f} [-]"
+                "\n-----------------------------------\n"
             )
 
             # Loop over steps/ticks
