@@ -180,7 +180,7 @@ class ContrastOptimizer():
     def init_model(self):
         """Constructs reinforcement learning model
 
-        Neural nets: Fully connected 2-8-4
+        Neural nets: Fully connected 2-8-8-4
         Loss: L2 (MSE) Loss
         Optimizer: Adam with lr alpha
         """
@@ -191,6 +191,8 @@ class ContrastOptimizer():
             ('relu1', nn.ReLU()),
             ('fc2', nn.Linear(4, 8)),
             ('relu2', nn.ReLU()),
+            ('fc3', nn.Linear(8, 8)),
+            ('relu3', nn.ReLU()),
             ('output', nn.Linear(8, 4))
         ])).to(self.device)
         # Construct target net
@@ -199,6 +201,8 @@ class ContrastOptimizer():
             ('relu1', nn.ReLU()),
             ('fc2', nn.Linear(4, 8)),
             ('relu2', nn.ReLU()),
+            ('fc3', nn.Linear(8, 8)),
+            ('relu3', nn.ReLU()),
             ('output', nn.Linear(8, 4))
         ])).to(self.device)
 
