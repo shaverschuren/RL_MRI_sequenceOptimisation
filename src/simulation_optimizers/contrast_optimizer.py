@@ -264,6 +264,40 @@ class ContrastOptimizer():
         # REturn optimal flip angle and optimal contrast
         return optimal_fa, self.calculate_contrast(optimal_fa)
 
+    def find_best_output(self, step, n_memory=3):
+        """Find best solution provided by model in final n steps"""
+
+        # Calculate recent memory length
+        memory_len = min(step + 1, n_memory)
+        # Retrieve recent memory
+        recent_memory = list(self.memory)[-memory_len:]
+        # Store as transitions
+        recent_transitions = self.Transition(*zip(*recent_memory))
+        # Extract states
+        recent_states = np.array(torch.cat(recent_transitions.state).cpu())
+
+        # Extract flip angles
+        recent_fa = np.delete(
+            recent_states,
+            np.arange(0, recent_states.size, 2)
+        )
+        # Extract contrast
+        recent_contrast = np.delete(
+            recent_states,
+            np.arange(1, recent_states.size, 2)
+        )
+
+        # Find max contrast and respective flip angle
+        max_idx = np.argmax(recent_contrast)
+        best_fa = recent_fa[max_idx]
+        best_contrast = recent_contrast[max_idx]
+
+        # Find step number that gave the best contrast
+        best_step = step - memory_len + max_idx
+
+        # Return best fa and contrast + number of best step
+        return float(best_fa), float(best_contrast), int(best_step)
+
     def step(self, old_state, action, step_i):
         """Run step of the environment simulation
 
@@ -665,17 +699,19 @@ class ContrastOptimizer():
                 if bool(done):
                     print("Stopping criterion met")
 
-            # Print some info on theoretical optimum
-            actual_contrast = float(state[0])
-            if actual_contrast == 0.:
+            # Print some info on error relative to theoretical optimum
+            found_fa, found_contrast, best_step = self.find_best_output(tick)
+
+            if found_contrast == 0.:
                 relative_contrast_error = 1000.
             else:
                 relative_contrast_error = abs(
-                    optimal_contrast - actual_contrast
-                ) * 100. / actual_contrast
+                    optimal_contrast - found_contrast
+                ) * 100. / found_contrast
 
             print(
-                f"Actual error: (fa) {abs(self.fa - optimal_angle):4.1f} deg",
+                f"Actual error (step {best_step:2d}): "
+                f"(fa) {abs(found_fa - optimal_angle):4.1f} deg",
                 f"; (signal) {relative_contrast_error:5.2f}%"
             )
 
