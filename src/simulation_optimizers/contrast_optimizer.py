@@ -247,12 +247,13 @@ class ContrastOptimizer():
                     -3 * (E1a ** 2) - 3 * (E1b ** 2)
                     + 4 * (E1a ** 2) * (E1b ** 2) - 2 * E1a * E1b + 4
                 )
-            ) /
-            (
+            )
+            / (
                 2 * (E1a * E1b - E1a - E1b)
             )
         ) * 180. / np.pi)
 
+        # REturn optimal flip angle and optimal contrast
         return optimal_fa, self.calculate_contrast(optimal_fa)
 
     def step(self, old_state, action, step_i):
@@ -663,22 +664,18 @@ class ContrastOptimizer():
                     print("Stopping criterion met")
 
             # Print some info on theoretical optimum
-            # F0_optimal, _, _ = epg.epg_as_torch(
-            #     self.Nfa, float(ernst_angle), self.tr,
-            #     self.T1, self.T2, device=self.device
-            # )
-            # optimal_signal = float(abs((F0_optimal.cpu())[-1]))
-            # actual_signal = float(state[0])
-            # if actual_signal == 0.:
-            #     relative_signal_error = 1000.
-            # else:
-            #     relative_signal_error = abs(
-            #         optimal_signal - actual_signal) * 100. / actual_signal
+            actual_contrast = float(state[0])
+            if actual_contrast == 0.:
+                relative_contrast_error = 1000.
+            else:
+                relative_contrast_error = abs(
+                    optimal_contrast - actual_contrast
+                ) * 100. / actual_contrast
 
-            # print(
-            #     f"Actual error: (fa) {abs(self.fa - ernst_angle):4.1f} deg",
-            #     f"; (signal) {relative_signal_error:5.2f}%"
-            # )
+            print(
+                f"Actual error: (fa) {abs(self.fa - optimal_angle):4.1f} deg",
+                f"; (signal) {relative_contrast_error:5.2f}%"
+            )
 
             if train:
                 # Optimize prediction/policy model
