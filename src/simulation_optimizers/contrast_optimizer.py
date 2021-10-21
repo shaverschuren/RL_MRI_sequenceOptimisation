@@ -235,8 +235,8 @@ class ContrastOptimizer():
         """Analytically determine the exact optimum for comparison."""
 
         # Determine E1 for both tissues
-        E1a = -np.exp(-self.tr / self.T1_1)
-        E1b = -np.exp(-self.tr / self.T1_2)
+        E1a = np.exp(-self.tr / self.T1_1)
+        E1b = np.exp(-self.tr / self.T1_2)
 
         # Calculate optimal flip angle analytically. Formula retrieved from:
         # Haselhoff EH. Optimization of flip angle for T1 dependent contrast: a
