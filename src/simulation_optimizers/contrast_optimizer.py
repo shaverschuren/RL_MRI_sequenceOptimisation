@@ -42,8 +42,7 @@ class ContrastOptimizer():
             epochs_per_episode: int = 10,
             memory_done_criterion: int = 15,
             n_done_criterion: int = 3,
-            fa_initial_min: float = 15.,
-            fa_initial_max: float = 60.,
+            fa_range: list[float] = [15., 60.],
             fa_delta: float = 1.0,
             Nfa: int = 100,
             T1_range_1: list[float] = [0.100, 2.500],
@@ -78,10 +77,8 @@ class ContrastOptimizer():
                     Max length of "recent memory", used in "done" criterion
                 n_done_criterion : int
                     Number of same flip angles in recent memory needed to end
-                fa_initial_min : float
-                    Minimal initial flip angle [deg]
-                fa_initial_max : float
-                    Maximal initial flip angle [deg]
+                fa_range : list[float]
+                    Range of optimal and initial flip angles
                 fa_delta : float
                     Amount of change in flip angle done by the model [deg]
                 Nfa : int
@@ -125,9 +122,8 @@ class ContrastOptimizer():
         self.epochs_per_episode = epochs_per_episode
         self.memory_done_criterion = memory_done_criterion
         self.n_done_criterion = n_done_criterion
-        self.fa_initial_min = fa_initial_min
-        self.fa_initial_max = fa_initial_max
-        self.fa = (fa_initial_min + fa_initial_max) / 2
+        self.fa_range = fa_range
+        self.fa = float(np.mean(fa_range))
         self.fa_delta = fa_delta
         self.Nfa = Nfa
         self.T1_range_1 = T1_range_1
@@ -270,6 +266,71 @@ class ContrastOptimizer():
 
         # REturn optimal flip angle and optimal cnr
         return optimal_fa, self.calculate_cnr(optimal_fa)
+
+    def set_t1s_from_distributions(self, optimal_fa_list, T1_list_1):
+        """Find values for T1 of both tissues based on T1_1 and fa_optimal"""
+
+        # Loop until we find a proper match
+        loop = 0
+        done = False
+        while not done:
+            # Check whether we have surpassed the max count
+            if loop >= 199:
+                raise UserWarning("This won't work...")
+
+            # Sample a T1_1 and optimal_fa from the list
+            T1_idx = random.randint(0, len(T1_list_1) - 1)
+            fa_idx = random.randint(0, len(optimal_fa_list) - 1)
+
+            T1_1 = T1_list_1[T1_idx]
+            optimal_fa = optimal_fa_list[fa_idx]
+
+            # Calculate T1_2 based on these parameters.
+            T1_2 = self.calculate_2nd_T1(optimal_fa, T1_1)
+
+            # If T1_2 calculation was succesful, remove T1_1 and optimal_fa
+            # from the lists and stop loop
+            if T1_2:
+                # Remove these indices from lists
+                T1_list_1.pop(T1_idx)
+                optimal_fa_list.pop(fa_idx)
+                # Set T1_1 and T1_2
+                self.T1_1 = T1_1
+                self.T1_2 = T1_2
+                # Set done
+                done = True
+
+            # Update loop counter
+            loop += 1
+
+        return optimal_fa_list, T1_list_1
+
+    def calculate_2nd_T1(self, optimal_fa, T1_1):
+        """Calculates T1 of 2nd tissue based on optimal fa and T1_1"""
+
+        # This function is based on some algebra performed on the formula
+        # given in calculate_exact_optimum()
+
+        # Define E1a
+        E1a = np.exp(-self.tr / T1_1)
+        # Define factor C
+        C = (np.cos(optimal_fa) + 1) * (2 * E1a - 1)
+
+        # Define terms of quadratic formula
+        a = C ** 2 + 3 - 4 * E1a ** 2
+        b = 2 * E1a - (E1a + 2) * C
+        c = 3 * E1a ** 2 + (E1a + 2) ** 2 - 4
+
+        # Define E1b (using quadratic formula)
+        if (b ** 2 - 4 * a * c) > 0.:
+            E1b = (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+        else:
+            return None
+
+        # Calculate T1_2
+        T1_2 = -self.tr / np.log(E1b)
+
+        return T1_2
 
     def find_best_output(self, step, n_memory=3):
         """Find best solution provided by model in final n steps"""
@@ -576,29 +637,29 @@ class ContrastOptimizer():
         else:
             print("\n======= Running test loop =======\n")
 
-        # Create lists of initial flip angles
+        # Create list of initial and optimal flip angles
         # (uniformly distributed in range)
-        initial_fa_low = list(np.linspace(
-            self.fa_initial_min,
-            (self.fa_initial_min + self.fa_initial_max) / 2,
-            self.n_episodes // 2
+        initial_fa = list(np.linspace(
+            self.fa_range[0], self.fa_range[1],
+            self.n_episodes
         ))
-        initial_fa_high = list(np.linspace(
-            (self.fa_initial_min + self.fa_initial_max) / 2,
-            self.fa_initial_max,
-            self.n_episodes // 2 if self.n_episodes % 2 == 0
-            else self.n_episodes // 2 + 1
+
+        optimal_fa = list(np.linspace(
+            self.fa_range[0], self.fa_range[1],
+            self.n_episodes
         ))
-        # Create lists of T1 and T2s for both tissues
-        # (uniformly distributed in range)
+
+        # Create list of T1s for tissue 1.
+        # For each episode, we will calculate T1 for tissue 2
+        # based on the optimal flip angle we want.
         T1_list_1 = list(np.linspace(
             self.T1_range_1[0], self.T1_range_1[1], self.n_episodes
         ))
+
+        # Create lists of T2s for both tissues
+        # (uniformly distributed in range)
         T2_list_1 = list(np.linspace(
             self.T2_range_1[0], self.T2_range_1[1], self.n_episodes
-        ))
-        T1_list_2 = list(np.linspace(
-            self.T1_range_2[0], self.T1_range_2[1], self.n_episodes
         ))
         T2_list_2 = list(np.linspace(
             self.T2_range_2[0], self.T2_range_2[1], self.n_episodes
@@ -621,27 +682,21 @@ class ContrastOptimizer():
             # If test (not train), take them randomly in a range
             if train:
                 # Set initial flip angle. Here, we randomly sample from the
-                # uniformly distributed lists we created earlier. We alternate
-                # between high and low flip angles to aid the training process.
-                if episode % 2 == 0:
-                    self.fa = float(initial_fa_high.pop(
-                        random.randint(0, len(initial_fa_high) - 1)
-                    ))
-                else:
-                    self.fa = float(initial_fa_low.pop(
-                        random.randint(0, len(initial_fa_low) - 1)
-                    ))
-                # Set T1 and T2 for this episode. We randomly sample these
+                # uniformly distributed list we created earlier.
+                self.fa = float(initial_fa.pop(
+                    random.randint(0, len(initial_fa) - 1)
+                ))
+                # Set the T1s for this episode. Here, we randomly sample
+                # T1_1 from the uniform distribution and then calculate T1_2
+                # based on the desired optimum flip angle
+                optimal_fa, T1_list_1 = \
+                    self.set_t1s_from_distributions(optimal_fa, T1_list_1)
+
+                # Set T2s for this episode. We randomly sample these
                 # from the previously definded uniform distributions for both
                 # tissues.
-                self.T1_1 = float(T1_list_1.pop(
-                    random.randint(0, len(T1_list_1) - 1)
-                ))
                 self.T2_1 = float(T2_list_1.pop(
                     random.randint(0, len(T2_list_1) - 1)
-                ))
-                self.T1_2 = float(T1_list_2.pop(
-                    random.randint(0, len(T1_list_2) - 1)
                 ))
                 self.T2_2 = float(T2_list_2.pop(
                     random.randint(0, len(T2_list_2) - 1)
@@ -650,7 +705,7 @@ class ContrastOptimizer():
                 # If in test mode, take flip angle, T1, T2 randomly.
                 # We do this to provide a novel testing environment.
                 self.fa = random.uniform(
-                    self.fa_initial_min, self.fa_initial_max
+                    self.fa_range[0], self.fa_range[1]
                 )
                 self.T1_1 = random.uniform(
                     self.T1_range_1[0], self.T1_range_1[1])
