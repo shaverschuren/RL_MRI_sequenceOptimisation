@@ -51,6 +51,7 @@ class ContrastOptimizer():
             T2_range_1: list[float] = [0.005, 0.100],
             T2_range_2: list[float] = [0.005, 0.100],
             tr: float = 0.050,
+            noise_level: float = 0.05,
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
@@ -95,6 +96,8 @@ class ContrastOptimizer():
                     Range for T2 relaxation for tissue 2 in epg simulation [s]
                 tr : float
                     Repetition time in epg simulation [ms]
+                noise_level : float
+                    Noise level for CNR calculation
                 gamma : float
                     Discount factor for Q value calculation
                 epsilon : float
@@ -132,6 +135,7 @@ class ContrastOptimizer():
         self.T2_range_1 = T2_range_1
         self.T2_range_2 = T2_range_2
         self.tr = tr
+        self.noise_level = noise_level
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
@@ -215,8 +219,8 @@ class ContrastOptimizer():
             self.prediction_net.parameters(), lr=self.alpha
         )
 
-    def calculate_contrast(self, fa=None):
-        """Calculates the contrast using parameters stored in self"""
+    def calculate_cnr(self, fa=None):
+        """Calculates the CNR using parameters stored in self"""
 
         # Select flip angle
         if not fa:
@@ -234,10 +238,13 @@ class ContrastOptimizer():
             self.T1_2, self.T2_2, device=self.device
         )
 
-        # Determine contrast
-        contrast = abs(np.abs(F0_1.cpu()[-1]) - np.abs(F0_2.cpu()[-1]))
+        # Determine CNR
+        cnr = (
+            abs(np.abs(F0_1.cpu()[-1]) - np.abs(F0_2.cpu()[-1]))
+            / self.noise_level
+        )
 
-        return float(contrast)
+        return float(cnr)
 
     def calculate_exact_optimum(self):
         """Analytically determine the exact optimum for comparison."""
@@ -247,7 +254,7 @@ class ContrastOptimizer():
         E1b = np.exp(-self.tr / self.T1_2)
 
         # Calculate optimal flip angle analytically. Formula retrieved from:
-        # Haselhoff EH. Optimization of flip angle for T1 dependent contrast: a
+        # Haselhoff EH. Optimization of flip angle for T1 dependent cnr: a
         # closed form solution. Magn Reson Med 1997;38:518 – 9.
         optimal_fa = float(np.arccos(
             (
@@ -261,8 +268,8 @@ class ContrastOptimizer():
             )
         ) * 180. / np.pi)
 
-        # REturn optimal flip angle and optimal contrast
-        return optimal_fa, self.calculate_contrast(optimal_fa)
+        # REturn optimal flip angle and optimal cnr
+        return optimal_fa, self.calculate_cnr(optimal_fa)
 
     def find_best_output(self, step, n_memory=3):
         """Find best solution provided by model in final n steps"""
@@ -281,22 +288,22 @@ class ContrastOptimizer():
             recent_states,
             np.arange(0, recent_states.size, 2)
         )
-        # Extract contrast
-        recent_contrast = np.delete(
+        # Extract cnr
+        recent_cnr = np.delete(
             recent_states,
             np.arange(1, recent_states.size, 2)
         )
 
-        # Find max contrast and respective flip angle
-        max_idx = np.argmax(recent_contrast)
+        # Find max cnr and respective flip angle
+        max_idx = np.argmax(recent_cnr)
         best_fa = recent_fa[max_idx]
-        best_contrast = recent_contrast[max_idx]
+        best_cnr = recent_cnr[max_idx]
 
-        # Find step number that gave the best contrast
+        # Find step number that gave the best cnr
         best_step = step - memory_len + max_idx
 
-        # Return best fa and contrast + number of best step
-        return float(best_fa), float(best_contrast), int(best_step)
+        # Return best fa and cnr + number of best step
+        return float(best_fa), float(best_cnr), int(best_step)
 
     def step(self, old_state, action, step_i):
         """Run step of the environment simulation
@@ -321,24 +328,24 @@ class ContrastOptimizer():
 
         # Run simulations and uppdate state
         state = torch.tensor(
-            [self.calculate_contrast(), self.fa],
+            [self.calculate_cnr(), self.fa],
             device=self.device
         )
 
-        # Define reward as either +/- 1 for increase or decrease in contrast
+        # Define reward as either +/- 1 for increase or decrease in cnr
         if state[0] > old_state[0]:
             reward_float = 1.0
         else:
             reward_float = -1.0
 
-        # Scale reward with contrast difference
+        # Scale reward with cnr difference
         if float(old_state[0]) == 0.:
             # If old_state signal is 0, set reward gain to 30
             reward_gain = 30.
         else:
-            # Calculate relative contrast difference and derive reward gain
-            contrast_diff = abs(state[0] - old_state[0]) / old_state[0]
-            reward_gain = contrast_diff * 100.
+            # Calculate relative cnr difference and derive reward gain
+            cnr_diff = abs(state[0] - old_state[0]) / old_state[0]
+            reward_gain = cnr_diff * 100.
 
             # If reward gain is lower than 0.5, use 0.5
             # We do this to prevent disappearing rewards near the optimum
@@ -649,22 +656,22 @@ class ContrastOptimizer():
                     self.T2_range_2[0], self.T2_range_2[1])
 
             # Run initial simulations
-            contrast = self.calculate_contrast()
+            cnr = self.calculate_cnr()
             # Set initial state
             state = torch.tensor(
-                [contrast, self.fa],
+                [cnr, self.fa],
                 device=self.device
             )
 
             # # Print some info on the specific environment used this episode.
-            optimal_angle, optimal_contrast = self.calculate_exact_optimum()
+            optimal_angle, optimal_cnr = self.calculate_exact_optimum()
             print(
                 "\n-----------------------------------"
                 f"\nT1a={self.T1_1:.4f}s; T2a={self.T2_1:.4f}s; "
                 f"T1b={self.T1_2:.4f}s; T2b={self.T2_2:.4f}s"
                 f"\nInitial alpha:\t\t{self.fa:4.1f} [deg]"
                 f"\nOptimal alpha:\t\t{optimal_angle:4.1f} [deg]"
-                f"\nOptimal contrast:\t{optimal_contrast:4.3f} [-]"
+                f"\nOptimal CNR:\t\t{optimal_cnr:4.3f} [-]"
                 "\n-----------------------------------\n"
             )
 
@@ -692,7 +699,7 @@ class ContrastOptimizer():
                 print(
                     f" - Action: {int(action):1d}"
                     f" - FA: {float(state[1]):4.1f}"
-                    f" - Contrast: {float(state[0]):5.3f}"
+                    f" - CNR: {float(state[0]):5.3f}"
                     " - Reward: "
                     "" + color_str + f"{float(reward):5.1f}" + end_str
                 )
@@ -700,19 +707,19 @@ class ContrastOptimizer():
                     print("Stopping criterion met")
 
             # Print some info on error relative to theoretical optimum
-            found_fa, found_contrast, best_step = self.find_best_output(tick)
+            found_fa, found_cnr, best_step = self.find_best_output(tick)
 
-            if found_contrast == 0.:
-                relative_contrast_error = 1000.
+            if found_cnr == 0.:
+                relative_cnr_error = 1000.
             else:
-                relative_contrast_error = abs(
-                    optimal_contrast - found_contrast
-                ) * 100. / found_contrast
+                relative_cnr_error = abs(
+                    optimal_cnr - found_cnr
+                ) * 100. / found_cnr
 
             print(
                 f"Actual error (step {best_step:2d}): "
                 f"(fa) {abs(found_fa - optimal_angle):4.1f} deg",
-                f"; (signal) {relative_contrast_error:5.2f}%"
+                f"; (signal) {relative_cnr_error:5.2f}%"
             )
 
             if train:
