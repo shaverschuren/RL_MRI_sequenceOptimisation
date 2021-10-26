@@ -188,14 +188,14 @@ class ContrastOptimizer():
     def init_model(self):
         """Constructs reinforcement learning model
 
-        Neural nets: Fully connected 2-8-8-4
+        Neural nets: Fully connected 4-8-8-4
         Loss: L2 (MSE) Loss
         Optimizer: Adam with lr alpha
         """
 
         # Construct policy net
         self.prediction_net = nn.Sequential(OrderedDict([
-            ('fc1', nn.Linear(2, 4)),
+            ('fc1', nn.Linear(4, 4)),
             ('relu1', nn.ReLU()),
             ('fc2', nn.Linear(4, 8)),
             ('relu2', nn.ReLU()),
@@ -205,7 +205,7 @@ class ContrastOptimizer():
         ])).to(self.device)
         # Construct target net
         self.target_net = nn.Sequential(OrderedDict([
-            ('fc1', nn.Linear(2, 4)),
+            ('fc1', nn.Linear(4, 4)),
             ('relu1', nn.ReLU()),
             ('fc2', nn.Linear(4, 8)),
             ('relu2', nn.ReLU()),
@@ -326,9 +326,12 @@ class ContrastOptimizer():
         else:
             raise ValueError("Action not in action space")
 
-        # Run simulations and uppdate state
+        # Run simulations and update state
         state = torch.tensor(
-            [self.calculate_cnr(), self.fa],
+            [
+                self.calculate_cnr(), self.fa,            # New cnr, fa
+                float(old_state[0]), float(old_state[1])  # Old cnr, fa
+            ],
             device=self.device
         )
 
@@ -379,8 +382,11 @@ class ContrastOptimizer():
             # Extract flip angles
             recent_states = np.array(torch.cat(recent_transitions.state).cpu())
             recent_fa = np.delete(
-                recent_states,
-                np.arange(0, recent_states.size, 2)
+                np.delete(
+                    recent_states,
+                    np.arange(0, recent_states.size, 2)
+                ),
+                np.arange(0, recent_states.size // 2, 2)
             )
             # Append current/last flip angle
             recent_fa = np.append(recent_fa, float(old_state[1]))
@@ -657,9 +663,9 @@ class ContrastOptimizer():
 
             # Run initial simulations
             cnr = self.calculate_cnr()
-            # Set initial state
+            # Set initial state (cnr, fa, previous cnr, previous fa)
             state = torch.tensor(
-                [cnr, self.fa],
+                [cnr, self.fa, 0., 0.],
                 device=self.device
             )
 
