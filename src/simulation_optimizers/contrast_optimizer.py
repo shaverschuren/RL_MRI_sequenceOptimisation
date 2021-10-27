@@ -275,7 +275,7 @@ class ContrastOptimizer():
         done = False
         while not done:
             # Check whether we have surpassed the max count
-            if loop >= 199:
+            if loop >= 499:
                 raise UserWarning("This won't work...")
 
             # Sample a T1_1 and optimal_fa from the list
@@ -290,7 +290,7 @@ class ContrastOptimizer():
 
             # If T1_2 calculation was succesful, remove T1_1 and optimal_fa
             # from the lists and stop loop
-            if T1_2:
+            if T1_2 and T1_2 != float('NaN'):
                 # Remove these indices from lists
                 T1_list_1.pop(T1_idx)
                 optimal_fa_list.pop(fa_idx)
@@ -311,26 +311,60 @@ class ContrastOptimizer():
         # This function is based on some algebra performed on the formula
         # given in calculate_exact_optimum()
 
+        # Calculate optimal_fa in radians
+        alpha = optimal_fa * np.pi / 180.
+
         # Define E1a
         E1a = np.exp(-self.tr / T1_1)
-        # Define factor C
-        C = (np.cos(optimal_fa) + 1) * (2 * E1a - 1)
+        # Define factors C_1 and C_2
+        C_1 = 2 * np.cos(alpha) * (E1a - 1) + 2 * E1a - 1
+        C_2 = 2 - (2 * np.cos(alpha) + 1) * E1a
 
         # Define terms of quadratic formula
-        a = C ** 2 + 3 - 4 * E1a ** 2
-        b = 2 * E1a - (E1a + 2) * C
-        c = 3 * E1a ** 2 + (E1a + 2) ** 2 - 4
+        a = C_1 ** 2 - 4 * E1a + 3
+        b = 2 * (C_1 * C_2 + E1a)
+        c = C_2 ** 2 + 3 * E1a ** 2 - 4
 
         # Define E1b (using quadratic formula)
         if (b ** 2 - 4 * a * c) > 0.:
-            E1b = (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+            E1b = min(
+                (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a),
+                (-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+            )
         else:
             return None
 
-        # Calculate T1_2
-        T1_2 = -self.tr / np.log(E1b)
+        # Calculate T1_2 if E1b is valid
+        if E1b > 0.:
+            T1_2 = -self.tr / np.log(E1b)
+        else:
+            return None
 
-        return T1_2
+        # Return T1_2 if in proper range
+        if self.T1_range_2[0] < T1_2 < self.T1_range_2[1]:
+            # TODO: Remove this bit
+            # ----------------------------------------------------
+            # Determine E1 for both tissues
+            E1a = np.exp(-self.tr / T1_1)
+            E1b = np.exp(-self.tr / T1_2)
+
+            # Calculate optimal flip angle analytically.
+            fa = float(np.arccos(
+                (
+                    -2 * E1a * E1b + E1a + E1b - 2 + np.sqrt(
+                        -3 * (E1a ** 2) - 3 * (E1b ** 2)
+                        + 4 * (E1a ** 2) * (E1b ** 2) - 2 * E1a * E1b + 4
+                    )
+                )
+                / (
+                    2 * (E1a * E1b - E1a - E1b)
+                )
+            ) * 180. / np.pi)
+            print(f"Target: {optimal_fa:.4f}, Actual: {fa:.4f}")
+            # ----------------------------------------------------
+            return T1_2
+        else:
+            return None
 
     def find_best_output(self, step, n_memory=3):
         """Find best solution provided by model in final n steps"""
