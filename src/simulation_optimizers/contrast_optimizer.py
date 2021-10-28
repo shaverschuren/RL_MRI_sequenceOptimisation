@@ -37,10 +37,10 @@ class ContrastOptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 100,
+            n_episodes: int = 150,
             n_ticks: int = 100,
             batch_size: int = 32,
-            epochs_per_episode: int = 10,
+            epochs_per_episode: int = 5,
             memory_done_criterion: int = 15,
             n_done_criterion: int = 3,
             fa_range: list[float] = [20., 60.],
@@ -55,7 +55,7 @@ class ContrastOptimizer():
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 5e-2,
+            epsilon_decay: float = 1. - 2e-2,
             alpha: float = 0.005,
             target_update_period: int = 3,
             log_dir: Union[str, bytes, os.PathLike] =
