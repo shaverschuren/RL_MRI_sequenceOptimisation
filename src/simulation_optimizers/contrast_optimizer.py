@@ -264,11 +264,11 @@ class ContrastOptimizer():
             )
         ) * 180. / np.pi)
 
-        # REturn optimal flip angle and optimal cnr
+        # Return optimal flip angle and optimal cnr
         return optimal_fa, self.calculate_cnr(optimal_fa)
 
-    def set_t1s_from_distributions(self, optimal_fa_list, T1_list_1):
-        """Find values for T1 of both tissues based on T1_1 and fa_optimal"""
+    def set_t1s_from_distributions(self, optimal_fa_list):
+        """Find values for T1 of both tissues based on fa_optimal"""
 
         # Loop until we find a proper match
         loop = 0
@@ -278,12 +278,13 @@ class ContrastOptimizer():
             if loop >= 499:
                 raise UserWarning("This won't work...")
 
-            # Sample a T1_1 and optimal_fa from the list
-            T1_idx = random.randint(0, len(T1_list_1) - 1)
+            # Sample an optimal_fa from the list
             fa_idx = random.randint(0, len(optimal_fa_list) - 1)
-
-            T1_1 = T1_list_1[T1_idx]
             optimal_fa = optimal_fa_list[fa_idx]
+
+            # Set T1_1
+            T1_1 = random.uniform(
+                self.T1_range_1[0], self.T1_range_1[1])
 
             # Calculate T1_2 based on these parameters.
             T1_2 = self.calculate_2nd_T1(optimal_fa, T1_1)
@@ -291,8 +292,7 @@ class ContrastOptimizer():
             # If T1_2 calculation was succesful, remove T1_1 and optimal_fa
             # from the lists and stop loop
             if T1_2 and T1_2 != float('NaN'):
-                # Remove these indices from lists
-                T1_list_1.pop(T1_idx)
+                # Remove value at chosen index from list
                 optimal_fa_list.pop(fa_idx)
                 # Set T1_1 and T1_2
                 self.T1_1 = T1_1
@@ -303,7 +303,7 @@ class ContrastOptimizer():
             # Update loop counter
             loop += 1
 
-        return optimal_fa_list, T1_list_1
+        return optimal_fa_list
 
     def calculate_2nd_T1(self, optimal_fa, T1_1):
         """Calculates T1 of 2nd tissue based on optimal fa and T1_1"""
@@ -316,52 +316,60 @@ class ContrastOptimizer():
 
         # Define E1a
         E1a = np.exp(-self.tr / T1_1)
-        # Define factors C_1 and C_2
-        C_1 = 2 * np.cos(alpha) * (E1a - 1) + 2 * E1a - 1
-        C_2 = 2 - (2 * np.cos(alpha) + 1) * E1a
 
         # Define terms of quadratic formula
-        a = C_1 ** 2 - 4 * E1a + 3
-        b = 2 * (C_1 * C_2 + E1a)
-        c = C_2 ** 2 + 3 * E1a ** 2 - 4
+        a = (
+            4 * np.cos(alpha) ** 2 * E1a ** 2
+            + 8 * np.cos(alpha) * E1a ** 2
+            - 4 * E1a
+            - 8 * np.cos(alpha) ** 2 * E1a
+            - 12 * np.cos(alpha) * E1a
+            + 4
+            + 4 * np.cos(alpha) ** 2
+            + 4 * np.cos(alpha)
+        )
+        b = (
+            -4 * E1a ** 2
+            - 8 * np.cos(alpha) ** 2 * E1a ** 2
+            - 12 * np.cos(alpha) * E1a ** 2
+            + 12 * E1a
+            + 8 * np.cos(alpha) ** 2 * E1a
+            + 16 * np.cos(alpha) * E1a
+            - 4
+            - 8 * np.cos(alpha)
+        )
+        c = (
+            4 * np.cos(alpha) ** 2 * E1a ** 2
+            + 4 * np.cos(alpha) * E1a ** 2
+            + 4 * E1a ** 2
+            - 8 * np.cos(alpha) * E1a
+            - 4 * E1a
+        )
 
         # Define E1b (using quadratic formula)
         if (b ** 2 - 4 * a * c) > 0.:
-            E1b = min(
+            E1b = np.array([
                 (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a),
                 (-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
-            )
+            ])
         else:
             return None
 
         # Calculate T1_2 if E1b is valid
-        if E1b > 0.:
+        if (E1b > 0.).all():
+            T1_2 = -self.tr / np.log(E1b)
+        elif (E1b > 0.).any() and not (E1b > 0.).all():
+            E1b = E1b[E1b > 0.]
             T1_2 = -self.tr / np.log(E1b)
         else:
             return None
 
         # Return T1_2 if in proper range
-        if self.T1_range_2[0] < T1_2 < self.T1_range_2[1]:
-            # TODO: Remove this bit
-            # ----------------------------------------------------
-            # Determine E1 for both tissues
-            E1a = np.exp(-self.tr / T1_1)
-            E1b = np.exp(-self.tr / T1_2)
-
-            # Calculate optimal flip angle analytically.
-            fa = float(np.arccos(
-                (
-                    -2 * E1a * E1b + E1a + E1b - 2 + np.sqrt(
-                        -3 * (E1a ** 2) - 3 * (E1b ** 2)
-                        + 4 * (E1a ** 2) * (E1b ** 2) - 2 * E1a * E1b + 4
-                    )
-                )
-                / (
-                    2 * (E1a * E1b - E1a - E1b)
-                )
-            ) * 180. / np.pi)
-            print(f"Target: {optimal_fa:.4f}, Actual: {fa:.4f}")
-            # ----------------------------------------------------
+        if (self.T1_range_2[0] < T1_2 < self.T1_range_2[1]).any():
+            # Remove non-valid T1_2 values
+            T1_2 = T1_2[self.T1_range_2[0] < T1_2 < self.T1_range_2[1]]
+            T1_2 = float(T1_2[0])
+            # REturn T1_2
             return T1_2
         else:
             return None
@@ -683,13 +691,6 @@ class ContrastOptimizer():
             self.n_episodes
         ))
 
-        # Create list of T1s for tissue 1.
-        # For each episode, we will calculate T1 for tissue 2
-        # based on the optimal flip angle we want.
-        T1_list_1 = list(np.linspace(
-            self.T1_range_1[0], self.T1_range_1[1], self.n_episodes
-        ))
-
         # Create lists of T2s for both tissues
         # (uniformly distributed in range)
         T2_list_1 = list(np.linspace(
@@ -723,8 +724,8 @@ class ContrastOptimizer():
                 # Set the T1s for this episode. Here, we randomly sample
                 # T1_1 from the uniform distribution and then calculate T1_2
                 # based on the desired optimum flip angle
-                optimal_fa, T1_list_1 = \
-                    self.set_t1s_from_distributions(optimal_fa, T1_list_1)
+                optimal_fa = \
+                    self.set_t1s_from_distributions(optimal_fa)
 
                 # Set T2s for this episode. We randomly sample these
                 # from the previously definded uniform distributions for both
@@ -766,7 +767,7 @@ class ContrastOptimizer():
                 f"T1b={self.T1_2:.4f}s; T2b={self.T2_2:.4f}s"
                 f"\nInitial alpha:\t\t{self.fa:4.1f} [deg]"
                 f"\nOptimal alpha:\t\t{optimal_angle:4.1f} [deg]"
-                f"\nOptimal CNR:\t\t{optimal_cnr:4.3f} [-]"
+                f"\nOptimal CNR:\t\t{optimal_cnr:4.2f} [-]"
                 "\n-----------------------------------\n"
             )
 
