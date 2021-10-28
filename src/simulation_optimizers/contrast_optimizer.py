@@ -16,6 +16,7 @@ if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
 from typing import Union                                    # noqa: E402
+import warnings                                             # noqa: E402
 from collections import namedtuple, OrderedDict, deque      # noqa: E402
 import random                                               # noqa: E402
 import numpy as np                                          # noqa: E402
@@ -42,7 +43,7 @@ class ContrastOptimizer():
             epochs_per_episode: int = 10,
             memory_done_criterion: int = 15,
             n_done_criterion: int = 3,
-            fa_range: list[float] = [15., 60.],
+            fa_range: list[float] = [20., 60.],
             fa_delta: float = 1.0,
             Nfa: int = 100,
             T1_range_1: list[float] = [0.100, 2.500],
@@ -270,17 +271,27 @@ class ContrastOptimizer():
     def set_t1s_from_distributions(self, optimal_fa_list):
         """Find values for T1 of both tissues based on fa_optimal"""
 
+        # Sample an optimal_fa from the list
+        fa_idx = random.randint(0, len(optimal_fa_list) - 1)
+        optimal_fa = optimal_fa_list[fa_idx]
+
         # Loop until we find a proper match
         loop = 0
         done = False
         while not done:
             # Check whether we have surpassed the max count
-            if loop >= 499:
-                raise UserWarning("This won't work...")
-
-            # Sample an optimal_fa from the list
-            fa_idx = random.randint(0, len(optimal_fa_list) - 1)
-            optimal_fa = optimal_fa_list[fa_idx]
+            if loop >= 9999:
+                # Display warning
+                warnings.warn(
+                    "\nT1a/T1b combination for flip angle "
+                    f"of {optimal_fa:.2f} [deg] not found!"
+                    "\nWe're skipping this flip angle."
+                )
+                # Replace non-viable flip angle
+                optimal_fa_list.pop(fa_idx)
+                optimal_fa_list.append(optimal_fa_list[0])
+                # Break loop
+                break
 
             # Set T1_1
             T1_1 = random.uniform(
