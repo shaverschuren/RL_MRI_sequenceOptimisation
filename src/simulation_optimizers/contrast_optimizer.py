@@ -723,7 +723,7 @@ class ContrastOptimizer():
             if self.verbose:
                 print(
                     f"\n=== Episode {episode + 1:3d}/"
-                    f"{self.n_episodes if train else 10:3d} ==="
+                    f"{self.n_episodes if train else 20:3d} ==="
                 )
             # Reset done and tick counter
             done = False
