@@ -37,7 +37,7 @@ class ContrastOptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 150,
+            n_episodes: int = 250,
             n_ticks: int = 100,
             batch_size: int = 32,
             epochs_per_episode: int = 5,
@@ -712,7 +712,7 @@ class ContrastOptimizer():
         ))
 
         # Loop over episodes
-        for episode in range(self.n_episodes) if train else range(10):
+        for episode in range(self.n_episodes) if train else range(20):
             # Print some info
             if self.verbose:
                 print(
@@ -826,7 +826,7 @@ class ContrastOptimizer():
             print(
                 f"Actual error (step {best_step:2d}): "
                 f"(fa) {abs(found_fa - optimal_angle):4.1f} deg",
-                f"; (signal) {relative_cnr_error:5.2f}%"
+                f"; (cnr) {relative_cnr_error:5.2f}%"
             )
 
             if train:
