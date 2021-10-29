@@ -399,13 +399,19 @@ class ContrastOptimizer():
 
         # Extract flip angles
         recent_fa = np.delete(
-            recent_states,
-            np.arange(0, recent_states.size, 2)
+            np.delete(
+                recent_states,
+                np.arange(0, recent_states.size, 2)
+            ),
+            np.arange(1, recent_states.size // 2, 2)
         )
         # Extract cnr
         recent_cnr = np.delete(
-            recent_states,
-            np.arange(1, recent_states.size, 2)
+            np.delete(
+                recent_states,
+                np.arange(1, recent_states.size, 2)
+            ),
+            np.arange(1, recent_states.size // 2, 2)
         )
 
         # Find max cnr and respective flip angle
