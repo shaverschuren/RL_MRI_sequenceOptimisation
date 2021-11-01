@@ -157,7 +157,7 @@ class SNROptimizer():
             '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt'
         self.lck_path = \
             '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt.lck'
-        self.data_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/img.h5'
+        self.data_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5'
 
     def init_model(self):
         """Constructs reinforcement learning model
@@ -258,7 +258,7 @@ class SNROptimizer():
 
         # When the image is returned, load it and store the results
         with h5py.File(self.data_path, "r") as f:
-            img = np.asarray(f['img'])
+            img = np.asarray(f['/img'])
 
         return img
 
