@@ -157,6 +157,7 @@ class SNROptimizer():
             '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt'
         self.lck_path = \
             '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt.lck'
+        self.signal_path = '/nfs/rtsan01/RT- Temp/TomBruijnen/data_ready.txt'
         self.data_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5'
 
     def init_model(self):
@@ -253,8 +254,9 @@ class SNROptimizer():
         os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back
-        while os.path.isfile(self.txt_path):
+        while not os.path.isfile(self.signal_path):
             time.sleep(0.1)
+        os.remove(self.signal_path)
 
         # When the image is returned, load it and store the results
         with h5py.File(self.data_path, "r") as f:

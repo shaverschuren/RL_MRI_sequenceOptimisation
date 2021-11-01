@@ -9,6 +9,7 @@ cd('/nfs/arch11/researchData/USER/tbruijne/Projects_Main/ReconSocket/recon-socke
 % par = check_default_values(par);
 N = 64;
 text_file_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt';
+signal_file_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/data_ready.txt';
 data_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5';
 
 % Create database (if applicable)
@@ -18,13 +19,14 @@ end
 
 % While loop which takes and proccesses an image
 while 1    
-    if exist(text_file_loc)
+    if ~exist(text_file_loc)
 	% Generate random image
         img = rand(1)*ones(N,N) + 0.05*rand(N,N);
 	% Write image to data drop
         h5write(data_loc,'/img',img);
-	% Remove text file to signal completion
-	delete(text_file_loc)
+	% Create file to signal completion to Python
+	fid = fopen(signal_file_loc, 'w');
+	disp(['RMI: Passed image...']);
 
     else
         disp(['RMI: waiting...']);pause(0.1);
