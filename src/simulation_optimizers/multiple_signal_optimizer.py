@@ -23,7 +23,7 @@ import torch                                                # noqa: E402
 import torch.nn as nn                                       # noqa: E402
 import torch.optim as optim                                 # noqa: E402
 import torch.nn.functional as F                             # noqa: E402
-from epg_code.python import epg                             # noqa: E402
+from epg_simulator.python import epg                        # noqa: E402
 
 
 class MultipleSignalOptimizer():
