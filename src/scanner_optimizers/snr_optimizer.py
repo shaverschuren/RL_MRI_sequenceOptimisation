@@ -239,13 +239,21 @@ class SNROptimizer():
         if not fa:
             fa = self.fa
 
+        # Check whether communication file already exists
+        if os.path.isfile(self.txt_path):
+            warnings.warn(
+                "Flip angle file already exists! "
+                "Removing it..."
+            )
+            os.remove(self.txt_path)
+
         # Write new flip angle to appropriate location
         with open(self.lck_path, 'w') as txt_file:
             txt_file.write(f"{int(fa)}")
         os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back
-        while os.path.isfile(self.txt_file):
+        while os.path.isfile(self.txt_path):
             time.sleep(1.)
 
         # When the image is returned, load it and store the results
