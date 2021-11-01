@@ -292,7 +292,7 @@ class SNROptimizer():
         # Update state
         state = torch.tensor(
             [
-                snr, self.fa,                             # New snr, fa
+                float(snr), float(self.fa),               # New snr, fa
                 float(old_state[0]), float(old_state[1])  # Old snr, fa
             ],
             device=self.device
@@ -583,7 +583,7 @@ class SNROptimizer():
             # Update state
             state = torch.tensor(
                 [
-                    snr, self.fa, 0., 0.
+                    float(snr), float(self.fa), 0., 0.
                 ],
                 device=self.device
             )
