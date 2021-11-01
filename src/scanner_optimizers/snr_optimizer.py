@@ -254,7 +254,7 @@ class SNROptimizer():
 
         # Wait for image to come back
         while os.path.isfile(self.txt_path):
-            time.sleep(1.)
+            time.sleep(0.1)
 
         # When the image is returned, load it and store the results
         with h5py.File(self.data_path, "r") as f:
