@@ -9,19 +9,21 @@ run caspr_machine_setup.m
 par = check_default_values(par);
 par.machine_id = "rtrabbit";
 text_file_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt';
-img_file_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/img.h5';
+global signal_prev;
+global fa_prev;
+global dfa;
+global iter;
 
 % Establish connection with server
 ReconSocketWrapper();
 ReconSocketWrapper(par.machine_id);
 
-% Create database (if applicable)
-if ~exist(data_loc)
-    h5create(data_loc,'/img')
-end
-
 % While loop which takes and proccesses an image
-
+%rmi_maximize_snr(); % Initialize database setup
+signal_prev = 0;
+fa_prev = 40;
+dfa = -1;
+iter = 0;
 img_store = [];
 while 1
     % Read current image
@@ -33,8 +35,8 @@ while 1
         else
             img_store(:,:,end+1) = img;
         end
-        % Store image (ready for python RL model)
-        h5write(data_loc,'/img',img_store);
+        % Do something
+        rmi_maximize_snr(img,text_file_loc)
     end
 
     disp(['RMI: waiting...']);pause(1);
