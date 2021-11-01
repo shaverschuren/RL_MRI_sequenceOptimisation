@@ -5,9 +5,9 @@
 % Some setup parameters
 clearvars;clc;
 cd('/nfs/arch11/researchData/USER/tbruijne/Projects_Main/ReconSocket/recon-socket-repo/recon-socket/matlab_scripts/caspr/utils')
-run caspr_machine_setup.m
-par = check_default_values(par);
-par.machine_id = "rtrabbit";
+% run caspr_machine_setup.m
+% par = check_default_values(par);
+% par.machine_id = "rtrabbit";
 text_file_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt';
 img_file_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/img.h5';
 
