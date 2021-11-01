@@ -26,7 +26,12 @@ while 1
         h5write(data_loc,'/img',img);
 	% Create file to signal completion to Python
 	fid = fopen(signal_file_loc, 'w');
+	fclose(fid);
 	disp(['RMI: Passed image...']);
+	% Wait for Python to respond
+	while exist(signal_file_loc)
+	    pause(0.1);
+	end
 
     else
         disp(['RMI: waiting...']);pause(0.1);

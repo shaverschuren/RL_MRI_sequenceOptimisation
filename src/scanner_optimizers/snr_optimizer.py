@@ -157,7 +157,7 @@ class SNROptimizer():
             '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt'
         self.lck_path = \
             '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt.lck'
-        self.signal_path = '/nfs/rtsan01/RT- Temp/TomBruijnen/data_ready.txt'
+        self.signal_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/data_ready.txt'
         self.data_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5'
 
     def init_model(self):
@@ -237,23 +237,16 @@ class SNROptimizer():
     def perform_scan(self, fa=None):
         """Perform scan by passing parameters to scanner"""
 
+        # Set flip angle we'll communicate to the scanner
         if not fa:
             fa = self.fa
-
-        # Check whether communication file already exists
-        if os.path.isfile(self.txt_path):
-            warnings.warn(
-                "Flip angle file already exists! "
-                "Removing it..."
-            )
-            os.remove(self.txt_path)
 
         # Write new flip angle to appropriate location
         with open(self.lck_path, 'w') as txt_file:
             txt_file.write(f"{int(fa)}")
         os.system(f"mv {self.lck_path} {self.txt_path}")
 
-        # Wait for image to come back
+        # Wait for image to come back by checking the signal file
         while not os.path.isfile(self.signal_path):
             time.sleep(0.1)
         os.remove(self.signal_path)
