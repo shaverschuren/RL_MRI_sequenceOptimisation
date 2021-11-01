@@ -14,6 +14,8 @@ if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
 from typing import Union                                    # noqa: E402
+import time                                                 # noqa: E402
+import h5py                                                 # noqa: E402
 import warnings                                             # noqa: E402
 from collections import namedtuple, OrderedDict, deque      # noqa: E402
 import random                                               # noqa: E402
@@ -191,175 +193,6 @@ class SNROptimizer():
             self.prediction_net.parameters(), lr=self.alpha
         )
 
-    def calculate_cnr(self, fa=None):
-        """Calculates the CNR using parameters stored in self"""
-
-        # Select flip angle
-        if not fa:
-            fa = self.fa
-        else:
-            fa = float(fa)
-
-        # Run simulations
-        F0_1, _, _ = epg.epg_as_torch(
-            self.Nfa, fa, self.tr,
-            self.T1_1, self.T2_1, device=self.device
-        )
-        F0_2, _, _ = epg.epg_as_torch(
-            self.Nfa, fa, self.tr,
-            self.T1_2, self.T2_2, device=self.device
-        )
-
-        # Determine CNR
-        cnr = (
-            abs(np.abs(F0_1.cpu()[-1]) - np.abs(F0_2.cpu()[-1]))
-            / self.noise_level
-        )
-
-        return float(cnr)
-
-    def calculate_exact_optimum(self):
-        """Analytically determine the exact optimum for comparison."""
-
-        # Determine E1 for both tissues
-        E1a = np.exp(-self.tr / self.T1_1)
-        E1b = np.exp(-self.tr / self.T1_2)
-
-        # Calculate optimal flip angle analytically. Formula retrieved from:
-        # Haselhoff EH. Optimization of flip angle for T1 dependent cnr: a
-        # closed form solution. Magn Reson Med 1997;38:518 – 9.
-        optimal_fa = float(np.arccos(
-            (
-                -2 * E1a * E1b + E1a + E1b - 2 + np.sqrt(
-                    -3 * (E1a ** 2) - 3 * (E1b ** 2)
-                    + 4 * (E1a ** 2) * (E1b ** 2) - 2 * E1a * E1b + 4
-                )
-            )
-            / (
-                2 * (E1a * E1b - E1a - E1b)
-            )
-        ) * 180. / np.pi)
-
-        # Return optimal flip angle and optimal cnr
-        return optimal_fa, self.calculate_cnr(optimal_fa)
-
-    def set_t1s_from_distributions(self, optimal_fa_list):
-        """Find values for T1 of both tissues based on fa_optimal"""
-
-        # Sample an optimal_fa from the list
-        fa_idx = random.randint(0, len(optimal_fa_list) - 1)
-        optimal_fa = optimal_fa_list[fa_idx]
-
-        # Loop until we find a proper match
-        loop = 0
-        done = False
-        while not done:
-            # Check whether we have surpassed the max count
-            if loop >= 9999:
-                # Display warning
-                warnings.warn(
-                    "\nT1a/T1b combination for flip angle "
-                    f"of {optimal_fa:.2f} [deg] not found!"
-                    "\nWe're skipping this flip angle."
-                )
-                # Replace non-viable flip angle
-                optimal_fa_list.pop(fa_idx)
-                optimal_fa_list.append(optimal_fa_list[0])
-                # Break loop
-                break
-
-            # Set T1_1
-            T1_1 = random.uniform(
-                self.T1_range_1[0], self.T1_range_1[1])
-
-            # Calculate T1_2 based on these parameters.
-            T1_2 = self.calculate_2nd_T1(optimal_fa, T1_1)
-
-            # If T1_2 calculation was succesful, remove T1_1 and optimal_fa
-            # from the lists and stop loop
-            if T1_2 and T1_2 != float('NaN'):
-                # Remove value at chosen index from list
-                optimal_fa_list.pop(fa_idx)
-                # Set T1_1 and T1_2
-                self.T1_1 = T1_1
-                self.T1_2 = T1_2
-                # Set done
-                done = True
-
-            # Update loop counter
-            loop += 1
-
-        return optimal_fa_list
-
-    def calculate_2nd_T1(self, optimal_fa, T1_1):
-        """Calculates T1 of 2nd tissue based on optimal fa and T1_1"""
-
-        # This function is based on some algebra performed on the formula
-        # given in calculate_exact_optimum()
-
-        # Calculate optimal_fa in radians
-        alpha = optimal_fa * np.pi / 180.
-
-        # Define E1a
-        E1a = np.exp(-self.tr / T1_1)
-
-        # Define terms of quadratic formula
-        a = (
-            4 * np.cos(alpha) ** 2 * E1a ** 2
-            + 8 * np.cos(alpha) * E1a ** 2
-            - 4 * E1a
-            - 8 * np.cos(alpha) ** 2 * E1a
-            - 12 * np.cos(alpha) * E1a
-            + 4
-            + 4 * np.cos(alpha) ** 2
-            + 4 * np.cos(alpha)
-        )
-        b = (
-            -4 * E1a ** 2
-            - 8 * np.cos(alpha) ** 2 * E1a ** 2
-            - 12 * np.cos(alpha) * E1a ** 2
-            + 12 * E1a
-            + 8 * np.cos(alpha) ** 2 * E1a
-            + 16 * np.cos(alpha) * E1a
-            - 4
-            - 8 * np.cos(alpha)
-        )
-        c = (
-            4 * np.cos(alpha) ** 2 * E1a ** 2
-            + 4 * np.cos(alpha) * E1a ** 2
-            + 4 * E1a ** 2
-            - 8 * np.cos(alpha) * E1a
-            - 4 * E1a
-        )
-
-        # Define E1b (using quadratic formula)
-        if (b ** 2 - 4 * a * c) > 0.:
-            E1b = np.array([
-                (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a),
-                (-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
-            ])
-        else:
-            return None
-
-        # Calculate T1_2 if E1b is valid
-        if (E1b > 0.).all():
-            T1_2 = -self.tr / np.log(E1b)
-        elif (E1b > 0.).any() and not (E1b > 0.).all():
-            E1b = E1b[E1b > 0.]
-            T1_2 = -self.tr / np.log(E1b)
-        else:
-            return None
-
-        # Return T1_2 if in proper range
-        if (self.T1_range_2[0] < T1_2 < self.T1_range_2[1]).any():
-            # Remove non-valid T1_2 values
-            T1_2 = T1_2[self.T1_range_2[0] < T1_2 < self.T1_range_2[1]]
-            T1_2 = float(T1_2[0])
-            # REturn T1_2
-            return T1_2
-        else:
-            return None
-
     def find_best_output(self, step, n_memory=3):
         """Find best solution provided by model in final n steps"""
 
@@ -380,8 +213,8 @@ class SNROptimizer():
             ),
             np.arange(1, recent_states.size // 2, 2)
         )
-        # Extract cnr
-        recent_cnr = np.delete(
+        # Extract snr
+        recent_snr = np.delete(
             np.delete(
                 recent_states,
                 np.arange(1, recent_states.size, 2)
@@ -389,22 +222,43 @@ class SNROptimizer():
             np.arange(1, recent_states.size // 2, 2)
         )
 
-        # Find max cnr and respective flip angle
-        max_idx = np.argmax(recent_cnr)
+        # Find max snr and respective flip angle
+        max_idx = np.argmax(recent_snr)
         best_fa = recent_fa[max_idx]
-        best_cnr = recent_cnr[max_idx]
+        best_snr = recent_snr[max_idx]
 
-        # Find step number that gave the best cnr
+        # Find step number that gave the best snr
         best_step = step - memory_len + max_idx
 
-        # Return best fa and cnr + number of best step
-        return float(best_fa), float(best_cnr), int(best_step)
+        # Return best fa and snr + number of best step
+        return float(best_fa), float(best_snr), int(best_step)
+
+    def perform_scan(self, fa=None):
+        """Perform scan by passing parameters to scanner"""
+
+        if not fa:
+            fa = self.fa
+
+        # Write new flip angle to appropriate location
+        with open(self.lck_path, 'w') as txt_file:
+            txt_file.write(f"{int(fa)}")
+        os.system(f"mv {self.lck_path} {self.txt_path}")
+
+        # Wait for image to come back
+        while os.path.isfile(self.txt_file):
+            time.sleep(1.)
+
+        # When the image is returned, load it and store the results
+        with h5py.File(self.data_path, "r") as f:
+            img = np.asarray(f['img'])
+
+        return img
 
     def step(self, old_state, action, step_i):
         """Run step of the environment simulation
 
         - Perform selected action
-        - Run EPG simulation
+        - Wait for image to come back
         - Update state
         - Update reward
         - Update done
@@ -421,29 +275,35 @@ class SNROptimizer():
         else:
             raise ValueError("Action not in action space")
 
-        # Run simulations and update state
+        # Scan and read image
+        img = self.perform_scan()
+
+        # Calculate SNR
+        snr = np.mean(img) / np.std(img)
+
+        # Update state
         state = torch.tensor(
             [
-                self.calculate_cnr(), self.fa,            # New cnr, fa
-                float(old_state[0]), float(old_state[1])  # Old cnr, fa
+                snr, self.fa,                             # New snr, fa
+                float(old_state[0]), float(old_state[1])  # Old snr, fa
             ],
             device=self.device
         )
 
-        # Define reward as either +/- 1 for increase or decrease in cnr
+        # Define reward as either +/- 1 for increase or decrease in snr
         if state[0] > old_state[0]:
             reward_float = 1.0
         else:
             reward_float = -1.0
 
-        # Scale reward with cnr difference
+        # Scale reward with snr difference
         if float(old_state[0]) == 0.:
             # If old_state signal is 0, set reward gain to 30
             reward_gain = 30.
         else:
-            # Calculate relative cnr difference and derive reward gain
-            cnr_diff = abs(state[0] - old_state[0]) / old_state[0]
-            reward_gain = cnr_diff * 100.
+            # Calculate relative snr difference and derive reward gain
+            snr_diff = abs(state[0] - old_state[0]) / old_state[0]
+            reward_gain = snr_diff * 100.
 
             # If reward gain is lower than 0.5, use 0.5
             # We do this to prevent disappearing rewards near the optimum
@@ -706,11 +566,17 @@ class SNROptimizer():
                     self.fa_range[0], self.fa_range[1]
                 )
 
-            # Run initial simulations TODO: Fix this!!
-            cnr = self.calculate_cnr()
-            # Set initial state (cnr, fa, previous cnr, previous fa)
+            # Scan and read initial image
+            img = self.perform_scan()
+
+            # Calculate SNR
+            snr = np.mean(img) / np.std(img)
+
+            # Update state
             state = torch.tensor(
-                [cnr, self.fa, 0., 0.],
+                [
+                    snr, self.fa, 0., 0.
+                ],
                 device=self.device
             )
 
@@ -745,7 +611,7 @@ class SNROptimizer():
                 print(
                     f" - Action: {int(action):1d}"
                     f" - FA: {float(state[1]):4.1f}"
-                    f" - CNR: {float(state[0]):5.3f}"
+                    f" - snr: {float(state[0]):5.3f}"
                     " - Reward: "
                     "" + color_str + f"{float(reward):5.1f}" + end_str
                 )
@@ -753,12 +619,12 @@ class SNROptimizer():
                     print("Stopping criterion met")
 
             # Print some info on error relative to theoretical optimum
-            found_fa, found_cnr, best_step = self.find_best_output(tick)
+            found_fa, found_snr, best_step = self.find_best_output(tick)
 
             print(
                 f"Optimal results (step {best_step:2d}): "
                 f"(fa) {found_fa:4.1f} deg",
-                f"; (cnr) {found_cnr:5.2f}%"
+                f"; (snr) {found_snr:5.2f}%"
             )
 
             if train:
