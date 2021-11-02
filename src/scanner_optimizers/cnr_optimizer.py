@@ -1,7 +1,7 @@
-"""SNR Optimizer
+"""CNR Optimizer
 
 This module implements a reinforcement model that
-optimizes the flip angle for SNR in a single phantom."""
+optimizes the flip angle for CNR in a single phantom."""
 
 # Path setup
 import os
@@ -25,10 +25,10 @@ import torch.optim as optim                                 # noqa: E402
 import torch.nn.functional as F                             # noqa: E402
 
 
-class SNROptimizer():
+class CNROptimizer():
     """
     A class to represent a reinforcement model that
-    optimizes the flip angle for SNR in a single phantom.
+    optimizes the flip angle for CNR in a single phantom.
     """
 
     def __init__(
@@ -211,8 +211,8 @@ class SNROptimizer():
             ),
             np.arange(1, recent_states.size // 2, 2)
         )
-        # Extract snr
-        recent_snr = np.delete(
+        # Extract CNR
+        recent_cnr = np.delete(
             np.delete(
                 recent_states,
                 np.arange(1, recent_states.size, 2)
@@ -220,16 +220,16 @@ class SNROptimizer():
             np.arange(1, recent_states.size // 2, 2)
         )
 
-        # Find max snr and respective flip angle
-        max_idx = np.argmax(recent_snr)
+        # Find max cnr and respective flip angle
+        max_idx = np.argmax(recent_cnr)
         best_fa = recent_fa[max_idx]
-        best_snr = recent_snr[max_idx]
+        best_cnr = recent_cnr[max_idx]
 
-        # Find step number that gave the best snr
+        # Find step number that gave the best cnr
         best_step = step - memory_len + max_idx
 
-        # Return best fa and snr + number of best step
-        return float(best_fa), float(best_snr), int(best_step)
+        # Return best fa and cnr + number of best step
+        return float(best_fa), float(best_cnr), int(best_step)
 
     def perform_scan(self, fa=None):
         """Perform scan by passing parameters to scanner"""
@@ -280,32 +280,32 @@ class SNROptimizer():
         # Scan and read image
         img = self.perform_scan()
 
-        # Calculate SNR
-        snr = np.mean(img) / np.std(img)
+        # Calculate cnr
+        cnr = self.calculate_cnr(img)
 
         # Update state
         state = torch.tensor(
             [
-                float(snr), float(self.fa),               # New snr, fa
-                float(old_state[0]), float(old_state[1])  # Old snr, fa
+                float(cnr), float(self.fa),               # New cnr, fa
+                float(old_state[0]), float(old_state[1])  # Old cnr, fa
             ],
             device=self.device
         )
 
-        # Define reward as either +/- 1 for increase or decrease in snr
+        # Define reward as either +/- 1 for increase or decrease in cnr
         if state[0] > old_state[0]:
             reward_float = 1.0
         else:
             reward_float = -1.0
 
-        # Scale reward with snr difference
+        # Scale reward with cnr difference
         if float(old_state[0]) == 0.:
             # If old_state signal is 0, set reward gain to 30
             reward_gain = 30.
         else:
-            # Calculate relative snr difference and derive reward gain
-            snr_diff = abs(state[0] - old_state[0]) / old_state[0]
-            reward_gain = snr_diff * 100.
+            # Calculate relative cnr difference and derive reward gain
+            cnr_diff = abs(state[0] - old_state[0]) / old_state[0]
+            reward_gain = cnr_diff * 100.
 
             # If reward gain is lower than 0.5, use 0.5
             # We do this to prevent disappearing rewards near the optimum
@@ -520,6 +520,44 @@ class SNROptimizer():
 
         return Q_predictions
 
+    def calculate_cnr(self, image: np.ndarray):
+        """Calculate CNR of a given image (np array)
+
+        Here, we assume that the left side of the FOV is tissue 1, while
+        the right side is tissue 2. The shape of the image is assumed
+        to be `(N,N)` or `(N,N,1)` with axes `[x,y]` or `[x,y,z]`"""
+
+        # Check image shape
+        shape = np.shape(image)
+
+        if len(shape) == 2:
+            pass
+        elif len(shape) == 3:
+            # Check shape
+            if shape[-1] != 1:
+                raise ValueError(
+                    "\nExpected shape of image to be either (N,N) or (1,N,N)."
+                    f"\nFound {shape} instead.")
+            else:
+                # Squeeze image (if applicable)
+                image = np.squeeze(image, -1)
+                shape = shape[:-1]
+        else:
+            raise ValueError(
+                "\nExpected shape of image to be either (N,N) or (1,N,N)."
+                f"\nFound {shape} instead.")
+
+        # Extract number of voxels in x direction
+        N_x = shape[1]
+        # Extract left and right parts of image
+        img_left = image[:N_x // 2, :]
+        img_right = image[N_x // 2:, :]
+
+        # Calculate and return CNR
+        cnr = abs(np.mean(img_left) - np.mean(img_right)) / np.std(image)
+
+        return float(cnr)
+
     def run(self, train=True):
         """Run the training loop
 
@@ -571,13 +609,13 @@ class SNROptimizer():
             # Scan and read initial image
             img = self.perform_scan()
 
-            # Calculate SNR
-            snr = np.mean(img) / np.std(img)
+            # Calculate cnr
+            cnr = self.calculate_cnr(img)
 
             # Update state
             state = torch.tensor(
                 [
-                    float(snr), float(self.fa), 0., 0.
+                    float(cnr), float(self.fa), 0., 0.
                 ],
                 device=self.device
             )
@@ -613,7 +651,7 @@ class SNROptimizer():
                 print(
                     f" - Action: {int(action):1d}"
                     f" - FA: {float(state[1]):4.1f}"
-                    f" - snr: {float(state[0]):5.2f}"
+                    f" - cnr: {float(state[0]):5.2f}"
                     " - Reward: "
                     "" + color_str + f"{float(reward):5.1f}" + end_str
                 )
@@ -621,12 +659,12 @@ class SNROptimizer():
                     print("Stopping criterion met")
 
             # Print some info on error relative to theoretical optimum
-            found_fa, found_snr, best_step = self.find_best_output(tick)
+            found_fa, found_cnr, best_step = self.find_best_output(tick)
 
             print(
                 f"Optimal results (step {best_step:2d}): "
                 f"(fa) {found_fa:4.1f} deg",
-                f"; (snr) {found_snr:5.2f}"
+                f"; (cnr) {found_cnr:5.2f}"
             )
 
             if train:
@@ -643,5 +681,5 @@ class SNROptimizer():
 
 
 if __name__ == "__main__":
-    optimizer = SNROptimizer()
+    optimizer = CNROptimizer()
     optimizer.run()
