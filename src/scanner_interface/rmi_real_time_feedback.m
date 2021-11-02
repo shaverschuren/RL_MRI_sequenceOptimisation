@@ -9,16 +9,11 @@ run caspr_machine_setup.m
 par = check_default_values(par);
 par.machine_id = "rtrabbit";
 text_file_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt';
-img_file_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/img.h5';
+data_loc = '/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5';
 
 % Establish connection with server
 ReconSocketWrapper();
 ReconSocketWrapper(par.machine_id);
-
-% Create database (if applicable)
-if ~exist(data_loc)
-    h5create(data_loc,'/img')
-end
 
 % While loop which takes and proccesses an image
 
@@ -36,14 +31,26 @@ while 1
             img_store(:,:,end+1) = img;
         end
 
-        % Write image to data drop (for Python pickup)
-        h5write(data_loc,'/img',img);
-        % Create file to signal completion to Python
-        fid = fopen(signal_file_loc, 'w');
-        fclose(fid);
+        % (if applicable remove locked data file)
+        if exist([data_loc,'.lck'])
+            delete([data_loc,'.lck'])
+        end
+        % Create new (locked) datafile
+        if ~exist(data_loc)
+            h5create([data_loc,'.lck'],'/img',[N N])
+        else
+            system(['mv ',data_loc,' ',[data_loc,'.lck']])
+        end
+        % Write image to data file
+        h5write([data_loc,'.lck'],'/img',img);
+        % Unlock data file
+        system(['mv ',[data_loc,'.lck'],' ',data_loc]);
+
+        % Display info
         disp(['RMI: Passed image...']);
+
         % Wait for Python to respond
-        while exist(signal_file_loc)
+        while exist(data_loc)
             pause(0.1);
         end
     end
