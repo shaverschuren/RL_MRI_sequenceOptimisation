@@ -16,7 +16,6 @@ if src not in sys.path: sys.path.append(src)
 from typing import Union                                    # noqa: E402
 import time                                                 # noqa: E402
 import h5py                                                 # noqa: E402
-import warnings                                             # noqa: E402
 from collections import namedtuple, OrderedDict, deque      # noqa: E402
 import random                                               # noqa: E402
 import numpy as np                                          # noqa: E402
@@ -24,7 +23,6 @@ import torch                                                # noqa: E402
 import torch.nn as nn                                       # noqa: E402
 import torch.optim as optim                                 # noqa: E402
 import torch.nn.functional as F                             # noqa: E402
-from epg_simulator.python import epg                        # noqa: E402
 
 
 class SNROptimizer():
@@ -157,7 +155,6 @@ class SNROptimizer():
             '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt'
         self.lck_path = \
             '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt.lck'
-        self.signal_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/data_ready.txt'
         self.data_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5'
 
     def init_model(self):
@@ -246,14 +243,16 @@ class SNROptimizer():
             txt_file.write(f"{int(fa)}")
         os.system(f"mv {self.lck_path} {self.txt_path}")
 
-        # Wait for image to come back by checking the signal file
-        while not os.path.isfile(self.signal_path):
+        # Wait for image to come back by checking the data file
+        while not os.path.isfile(self.data_path):
             time.sleep(0.1)
-        os.remove(self.signal_path)
 
         # When the image is returned, load it and store the results
         with h5py.File(self.data_path, "r") as f:
             img = np.asarray(f['/img'])
+
+        # Remove the data file
+        os.remove(self.data_path)
 
         return img
 
@@ -614,7 +613,7 @@ class SNROptimizer():
                 print(
                     f" - Action: {int(action):1d}"
                     f" - FA: {float(state[1]):4.1f}"
-                    f" - snr: {float(state[0]):5.3f}"
+                    f" - snr: {float(state[0]):5.2f}"
                     " - Reward: "
                     "" + color_str + f"{float(reward):5.1f}" + end_str
                 )
