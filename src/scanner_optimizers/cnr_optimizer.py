@@ -15,6 +15,7 @@ if src not in sys.path: sys.path.append(src)
 # File-specific imports
 from typing import Union                                    # noqa: E402
 import time                                                 # noqa: E402
+from datetime import datetime                               # noqa: E402
 import h5py                                                 # noqa: E402
 from collections import namedtuple, OrderedDict, deque      # noqa: E402
 import random                                               # noqa: E402
@@ -23,6 +24,7 @@ import torch                                                # noqa: E402
 import torch.nn as nn                                       # noqa: E402
 import torch.optim as optim                                 # noqa: E402
 import torch.nn.functional as F                             # noqa: E402
+from util import loggers                                    # noqa: E402
 
 
 class CNROptimizer():
@@ -47,8 +49,7 @@ class CNROptimizer():
             epsilon_decay: float = 1. - 2e-2,
             alpha: float = 0.005,
             target_update_period: int = 3,
-            log_dir: Union[str, bytes, os.PathLike] =
-            os.path.join(root, "logs", "model_1"),
+            log_dir=os.path.join(root, "logs", "cnr_optimizer"),
             verbose: bool = True,
             device: Union[torch.device, None] = None):
         """Constructs model and attributes for this optimizer
@@ -157,6 +158,9 @@ class CNROptimizer():
             '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt.lck'
         self.data_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5'
 
+        # Setup logger
+        self.setup_logger()
+
     def init_model(self):
         """Constructs reinforcement learning model
 
@@ -189,6 +193,24 @@ class CNROptimizer():
         # Setup optimizer
         self.optimizer = optim.Adam(
             self.prediction_net.parameters(), lr=self.alpha
+        )
+
+    def setup_logger(self):
+        """Sets up logger and appropriate directories"""
+
+        # Create logs dir if not already there
+        if not os.path.isdir(self.log_dir):
+            os.mkdir(self.log_dir)
+
+        # Generate logs file path
+        now = datetime.now()
+        logs_filename = str(now.strftime("%Y_%m_%d-%H_%M_%S")) + ".csv"
+        self.logs_path = os.path.join(self.log_dir, logs_filename)
+
+        # Setup logger object
+        self.logger = loggers.TrainingLogger(
+            self.logs_path,
+            columns=["episode", "step", "cnr", "fa"]
         )
 
     def find_best_output(self, step, n_memory=3):
@@ -657,6 +679,11 @@ class CNROptimizer():
                 )
                 if bool(done):
                     print("Stopping criterion met")
+
+                # Log results of this step (episode, step, cnr, fa)
+                self.logger.push(
+                    [episode, tick, float(state[0]), float(state[1])]
+                )
 
             # Print some info on error relative to theoretical optimum
             found_fa, found_cnr, best_step = self.find_best_output(tick)
