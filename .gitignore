@@ -1,5 +1,6 @@
 ## Project-specific (custom)
 .vscode/
+*.m~
 
 ## Python-specific (https://github.com/github/gitignore/blob/master/Python.gitignore)
 
