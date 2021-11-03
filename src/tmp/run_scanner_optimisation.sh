@@ -20,10 +20,10 @@ between our two types of optimisers.
 The options given below may be used to change this script's behaviour.
 
 Available options:
--m, --mode			(required) snr|cnr - Choose snr/cnr optimisation
+-m, --mode		(required) snr|cnr - Choose snr/cnr optimisation
 -h, --help      	Print this help and exit
 -s, --simulation	Use the MATLAB simulator instead of scanner interface
--vm, --simulate_vm  Simulate the interface VM in Python, only available with -s
+-vm, --simulate_vm  	Simulate the interface VM in Python, only available with -s
 -v, --validation	Run the validation program instead of optimisation
 EOF
 	exit
