@@ -126,5 +126,3 @@ fi
 
 # Exit program
 die "Finished!" 0
-
-
