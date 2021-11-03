@@ -11,7 +11,7 @@ cd $root
 
 usage() {
 	cat<<EOF
-Usage: $(basename "${BASH_SOURCE[0]}") -m snr|cnr [-h] [-v] [-s] [-vm]
+Usage: $(basename "${BASH_SOURCE[0]}") -m snr|cnr [-h] [-s] [-vm] [-v]
 
 This script runs the entire protocol for a flip angle optimisation
 via our reinfocement learning model and MATLAB-based scanner interface.
@@ -24,6 +24,7 @@ Available options:
 -h, --help      	Print this help and exit
 -s, --simulation	Use the MATLAB simulator instead of scanner interface
 -vm, --simulate_vm  Simulate the interface VM in Python, only available with -s
+-v, --validation	Run the validation program instead of optimisation
 EOF
 	exit
 }
@@ -33,6 +34,7 @@ parse_params() {
   	mode=''
   	simulation=0
   	vm=0
+	validation=0
 
 	# Parse passed options
   	while :; do
@@ -40,6 +42,7 @@ parse_params() {
     	-h | --help) usage ;;
     	-s | --simulation) simulation=1 ;;
 		-vm | --simulate_vm) vm=1 ;;
+		-v | --validation) validation=1 ;;
     	-m | --mode)
       	mode="${2-}"
       	shift
@@ -69,8 +72,15 @@ die() {
   	local msg=$1
   	local code=${2-1} # default exit status 1
   	msg "$msg"
+
+	# Kill all subprocesses
+	pkill -P $$
+	# Exit
   	exit "$code"
 }
+
+# Setup interrupt management
+trap 'die "User interruption"' INT
 
 # Setup parameters
 parse_params "$@"
@@ -103,8 +113,18 @@ then
 	matlab -nodisplay -nosplash -r "run('$src/scanner_interface/rmi_real_time_feedback_simulator.m')" >/dev/null &
 fi
 
-# Run reinforcement learning program
-msg "Running RL loop..."
-python "$src/scanner_optimizers/"$mode"_optimizer.py"
+# Run reinforcement learning program (or validation)
+if [ $validation -eq 0 ]
+then
+	msg "Running RL loop..."
+	python "$src/scanner_optimizers/"$mode"_optimizer.py"
+elif [ $validation -eq 1 ]
+then
+	msg "Running validation loop..."
+	python "$src/validators/scanner_"$mode"_validator.py"
+fi
+
+# Exit program
+die "Finished!" 0
 
 
