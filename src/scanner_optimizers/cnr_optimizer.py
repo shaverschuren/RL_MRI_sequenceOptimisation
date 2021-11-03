@@ -208,7 +208,7 @@ class CNROptimizer():
         self.logs_path = os.path.join(self.log_dir, logs_filename)
 
         # Setup logger object
-        self.logger = loggers.TrainingLogger(
+        self.logger = loggers.GeneralLogger(
             self.logs_path,
             columns=["episode", "step", "cnr", "fa"]
         )
