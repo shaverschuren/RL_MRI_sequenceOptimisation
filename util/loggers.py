@@ -9,11 +9,11 @@ import csv
 import numpy as np
 
 
-class TrainingLogger():
-    """Class used to represent a logger for training processes
+class GeneralLogger():
+    """Class used to represent a logger for general processes
 
-    We use this logger to log the results during training.
-    This data may e.g. be used to make some graphs at a later point.
+    We use this logger to e.g. log the results during training.
+    This data may be used to make some graphs at a later point.
     """
 
     def __init__(
