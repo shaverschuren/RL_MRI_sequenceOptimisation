@@ -1,7 +1,8 @@
 """Module used to store some data loggers
 
 They are used to e.g. store some results or to save
-model weights."""
+model weights.
+"""
 
 import os
 from typing import Union
