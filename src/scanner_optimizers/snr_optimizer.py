@@ -14,6 +14,7 @@ if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
 from typing import Union                                    # noqa: E402
+import json                                                 # noqa: E402
 import time                                                 # noqa: E402
 from datetime import datetime                               # noqa: E402
 import h5py                                                 # noqa: E402
@@ -50,6 +51,7 @@ class SNROptimizer():
             alpha: float = 0.005,
             target_update_period: int = 3,
             log_dir=os.path.join(root, "logs", "snr_optimizer"),
+            config_path=os.path.join(root, "config.json"),
             verbose: bool = True,
             device: Union[torch.device, None] = None):
         """Constructs model and attributes for this optimizer
@@ -86,6 +88,8 @@ class SNROptimizer():
                     Periods between target net updates
                 log_dir : str | bytes | os.PathLike
                     Path to log directory
+                config_path : str | bytes | os.PathLike
+                    Path to config file
                 verbose : bool
                     Whether to print info
                 device : torch.device
@@ -109,6 +113,7 @@ class SNROptimizer():
         self.alpha = alpha
         self.target_update_period = target_update_period
         self.log_dir = log_dir
+        self.config_path = config_path
         self.verbose = verbose
 
         # Setup device
@@ -151,12 +156,14 @@ class SNROptimizer():
             +5. * self.fa_delta
         ])
 
+        # Read config file
+        with open(self.config_path, 'r') as f:
+            self.config = json.load(f)
+
         # Define communication paths
-        self.txt_path = \
-            '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt'
-        self.lck_path = \
-            '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt.lck'
-        self.data_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5'
+        self.txt_path = self.config["param_loc"]
+        self.lck_path = self.txt_path + ".lck"
+        self.data_path = self.config["data_loc"]
 
         # Setup logger
         self.setup_logger()
