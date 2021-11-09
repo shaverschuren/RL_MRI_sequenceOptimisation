@@ -71,15 +71,18 @@ class SNRValidator():
         if not os.path.isdir(self.log_dir):
             os.mkdir(self.log_dir)
 
-        # Generate logs file path
+        # Generate logs file path and store tag
         now = datetime.now()
-        logs_filename = str(now.strftime("%Y_%m_%d-%H_%M_%S")) + ".csv"
-        self.logs_path = os.path.join(self.log_dir, logs_filename)
+        logs_dirname = str(now.strftime("%Y_%m_%d-%H_%M_%S"))
+        self.logs_tag = logs_dirname
+        self.logs_path = os.path.join(self.log_dir, logs_dirname)
+
+        # Define datafields
+        self.logs_fields = ["fa", "snr", "img"]
 
         # Setup logger object
-        self.logger = loggers.GeneralLogger(
-            self.logs_path,
-            columns=["step", "snr", "fa"]
+        self.logger = loggers.TensorBoardLogger(
+            self.logs_path, self.logs_fields
         )
 
     def perform_scan(self, fa=None):
@@ -139,8 +142,25 @@ class SNRValidator():
             img = self.perform_scan(fa=fa)
             # Calculate SNR
             snr = np.mean(img) / np.std(img)
-            # Log results
-            self.logger.push([int(step), float(snr), float(fa)])
+            # Log this step (scalars + image)
+            self.logger.log_scalar(
+                field="fa",
+                tag=f"{self.logs_tag}_fa_step_{step + 1}",
+                value=float(fa),
+                step=step + 1
+            )
+            self.logger.log_scalar(
+                field="snr",
+                tag=f"{self.logs_tag}_snr_step_{step + 1}",
+                value=float(snr),
+                step=step + 1
+            )
+            self.logger.log_image(
+                field="img",
+                tag=f"{self.logs_tag}_img_step_{step + 1}",
+                image=np.array(img),
+                step=step + 1
+            )
 
             # If applicable, print some info
             if self.verbose:

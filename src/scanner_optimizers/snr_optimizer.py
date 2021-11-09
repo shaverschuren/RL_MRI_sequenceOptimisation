@@ -209,15 +209,18 @@ class SNROptimizer():
         if not os.path.isdir(self.log_dir):
             os.mkdir(self.log_dir)
 
-        # Generate logs file path
+        # Generate logs file path and store tag
         now = datetime.now()
-        logs_filename = str(now.strftime("%Y_%m_%d-%H_%M_%S")) + ".csv"
-        self.logs_path = os.path.join(self.log_dir, logs_filename)
+        logs_dirname = str(now.strftime("%Y_%m_%d-%H_%M_%S"))
+        self.logs_tag = logs_dirname
+        self.logs_path = os.path.join(self.log_dir, logs_dirname)
+
+        # Define datafields
+        self.logs_fields = ["fa", "snr", "img"]
 
         # Setup logger object
-        self.logger = loggers.GeneralLogger(
-            self.logs_path,
-            columns=["episode", "step", "snr", "fa"]
+        self.logger = loggers.TensorBoardLogger(
+            self.logs_path, self.logs_fields
         )
 
     def find_best_output(self, step, n_memory=3):
@@ -388,6 +391,26 @@ class SNROptimizer():
         else:
             # Recent memory too short: We're not done yet
             done = torch.tensor(0, device=self.device)
+
+        # Log this step (scalars + image)
+        self.logger.log_scalar(
+            field="fa",
+            tag=f"{self.logs_tag}_fa_step_{step_i + 1}",
+            value=float(self.fa),
+            step=step_i + 1
+        )
+        self.logger.log_scalar(
+            field="snr",
+            tag=f"{self.logs_tag}_snr_step_{step_i + 1}",
+            value=float(snr),
+            step=step_i + 1
+        )
+        self.logger.log_image(
+            field="img",
+            tag=f"{self.logs_tag}_img_step_{step_i + 1}",
+            image=np.array(img),
+            step=step_i + 1
+        )
 
         return state, reward, done
 
@@ -648,11 +671,6 @@ class SNROptimizer():
                 )
                 if bool(done):
                     print("Stopping criterion met")
-
-                # Log results of this step (episode, step, cnr, fa)
-                self.logger.push(
-                    [episode, tick, float(state[0]), float(state[1])]
-                )
 
             # Print some info on error relative to theoretical optimum
             found_fa, found_snr, best_step = self.find_best_output(tick)
