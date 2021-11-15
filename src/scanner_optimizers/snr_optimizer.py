@@ -37,9 +37,9 @@ class SNROptimizer():
     def __init__(
             self,
             n_episodes: int = 50,
-            n_ticks: int = 50,
+            n_ticks: int = 30,
             batch_size: int = 32,
-            epochs_per_episode: int = 5,
+            epochs_per_episode: int = 10,
             memory_done_criterion: int = 15,
             n_done_criterion: int = 3,
             fa_range: list[float] = [20., 60.],
@@ -47,7 +47,7 @@ class SNROptimizer():
             gamma: float = 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 2e-2,
+            epsilon_decay: float = 1. - 5e-2,
             alpha: float = 0.005,
             target_update_period: int = 3,
             log_dir=os.path.join(root, "logs", "snr_optimizer"),
@@ -598,12 +598,12 @@ class SNROptimizer():
         ))
 
         # Loop over episodes
-        for episode in range(self.n_episodes) if train else range(20):
+        for episode in range(self.n_episodes) if train else range(10):
             # Print some info
             if self.verbose:
                 print(
                     f"\n=== Episode {episode + 1:3d}/"
-                    f"{self.n_episodes if train else 20:3d} ==="
+                    f"{self.n_episodes if train else 10:3d} ==="
                 )
             # Reset done and tick counter
             done = False
@@ -718,3 +718,4 @@ class SNROptimizer():
 if __name__ == "__main__":
     optimizer = SNROptimizer()
     optimizer.run()
+    optimizer.run(train=False)
