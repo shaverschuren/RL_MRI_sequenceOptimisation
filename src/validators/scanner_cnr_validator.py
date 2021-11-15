@@ -15,6 +15,7 @@ if root not in sys.path: sys.path.append(root)
 if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
+import json                                                 # noqa: E402
 import time                                                 # noqa: E402
 from datetime import datetime                               # noqa: E402
 import h5py                                                 # noqa: E402
@@ -33,7 +34,8 @@ class CNRValidator():
             fa_range: list[float] = [1., 90.],
             n_steps: int = 50,
             verbose: bool = True,
-            log_dir=os.path.join(root, "logs", "cnr_validator")):
+            log_dir=os.path.join(root, "logs", "cnr_validator"),
+            config_path=os.path.join(root, "config.json")):
         """Constructs attributes for this validator"""
 
         # Setup attributes
@@ -41,6 +43,7 @@ class CNRValidator():
         self.n_steps = n_steps
         self.verbose = verbose
         self.log_dir = log_dir
+        self.config_path = config_path
 
         self.fa = fa_range[0]
 
@@ -57,12 +60,14 @@ class CNRValidator():
         we use to communicate to the scanner.
         """
 
+        # Read config file
+        with open(self.config_path, 'r') as f:
+            self.config = json.load(f)
+
         # Define communication paths
-        self.txt_path = \
-            '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt'
-        self.lck_path = \
-            '/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt.lck'
-        self.data_path = '/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5'
+        self.txt_path = self.config["param_loc"]
+        self.lck_path = self.txt_path + ".lck"
+        self.data_path = self.config["data_loc"]
 
     def init_logger(self):
         """Sets up logger and appropriate directories"""
