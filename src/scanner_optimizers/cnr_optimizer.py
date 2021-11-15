@@ -751,8 +751,8 @@ class CNROptimizer():
 
                 # Backup model
                 torch.save({
-                    'modelA_state_dict': self.prediction_net.state_dict(),
-                    'modelB_state_dict': self.target_net.state_dict(),
+                    'prediction_state_dict': self.prediction_net.state_dict(),
+                    'target_state_dict': self.target_net.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict()
                 }, self.model_path)
 
