@@ -36,8 +36,8 @@ class SNROptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 250,
-            n_ticks: int = 100,
+            n_episodes: int = 50,
+            n_ticks: int = 50,
             batch_size: int = 32,
             epochs_per_episode: int = 5,
             memory_done_criterion: int = 15,
