@@ -211,7 +211,7 @@ class CNROptimizer():
 
         # Generate logs file path and store tag
         now = datetime.now()
-        logs_dirname = str(now.strftime("%Y_%m_%d-%H_%M_%S"))
+        logs_dirname = str(now.strftime("%Y-%m-%d_%H-%M-%S"))
         self.logs_tag = logs_dirname
         self.logs_path = os.path.join(self.log_dir, logs_dirname)
 
@@ -288,7 +288,7 @@ class CNROptimizer():
 
         return img
 
-    def step(self, old_state, action, step_i):
+    def step(self, old_state, action, episode_i, step_i):
         """Run step of the environment simulation
 
         - Perform selected action
@@ -393,23 +393,25 @@ class CNROptimizer():
             done = torch.tensor(0, device=self.device)
 
         # Log this step (scalars + image)
+        loop_type = 'train' if self.train else 'test'
+
         self.logger.log_scalar(
             field="fa",
-            tag=f"{self.logs_tag}_fa_step_{step_i + 1}",
+            tag=f"{self.logs_tag}_{loop_type}_episode_{episode_i + 1}",
             value=float(self.fa),
-            step=step_i + 1
+            step=step_i
         )
         self.logger.log_scalar(
             field="cnr",
-            tag=f"{self.logs_tag}_cnr_step_{step_i + 1}",
+            tag=f"{self.logs_tag}_{loop_type}_episode_{episode_i + 1}",
             value=float(cnr),
-            step=step_i + 1
+            step=step_i
         )
         self.logger.log_image(
             field="img",
-            tag=f"{self.logs_tag}_img_step_{step_i + 1}",
+            tag=f"{self.logs_tag}_{loop_type}_episode_{episode_i + 1}",
             image=np.array(img),
-            step=step_i + 1
+            step=step_i
         )
 
         return state, reward, done
@@ -617,6 +619,9 @@ class CNROptimizer():
         the performance of a previously trained model
         """
 
+        # Set 'train' attribute
+        self.train = train
+
         # Print some info
         if train:
             print("\n===== Running training loop =====\n")
@@ -689,7 +694,9 @@ class CNROptimizer():
                     state, self.epsilon if train else 0.
                 )
                 # Simulate step
-                next_state, reward, done = self.step(state, action, tick)
+                next_state, reward, done = self.step(
+                    state, action, episode, tick
+                )
                 # Add to memory
                 self.remember(state, action, reward, next_state, done)
                 # Update state
@@ -720,6 +727,20 @@ class CNROptimizer():
             )
 
             if train:
+                # Log episode
+                self.logger.log_scalar(
+                    field="fa",
+                    tag=f"{self.logs_tag}_train_episodes",
+                    value=float(found_fa),
+                    step=episode
+                )
+                self.logger.log_scalar(
+                    field="cnr",
+                    tag=f"{self.logs_tag}_train_episodes",
+                    value=float(found_cnr),
+                    step=episode
+                )
+
                 # Optimize prediction/policy model
                 self.optimize_model(self.batch_size)
 

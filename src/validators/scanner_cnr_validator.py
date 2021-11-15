@@ -73,7 +73,7 @@ class CNRValidator():
 
         # Generate logs file path and store tag
         now = datetime.now()
-        logs_dirname = str(now.strftime("%Y_%m_%d-%H_%M_%S"))
+        logs_dirname = str(now.strftime("%Y-%m-%d_%H-%M-%S"))
         self.logs_tag = logs_dirname
         self.logs_path = os.path.join(self.log_dir, logs_dirname)
 
@@ -183,21 +183,21 @@ class CNRValidator():
             # Log this step (scalars + image)
             self.logger.log_scalar(
                 field="fa",
-                tag=f"{self.logs_tag}_fa_step_{step + 1}",
+                tag=f"{self.logs_tag}_validation",
                 value=float(fa),
-                step=step + 1
+                step=step
             )
             self.logger.log_scalar(
                 field="cnr",
-                tag=f"{self.logs_tag}_cnr_step_{step + 1}",
+                tag=f"{self.logs_tag}_validation",
                 value=float(cnr),
-                step=step + 1
+                step=step
             )
             self.logger.log_image(
                 field="img",
-                tag=f"{self.logs_tag}_img_step_{step + 1}",
+                tag=f"{self.logs_tag}_validation",
                 image=np.array(img),
-                step=step + 1
+                step=step
             )
 
             # If applicable, print some info

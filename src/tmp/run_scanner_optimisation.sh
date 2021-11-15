@@ -74,7 +74,7 @@ die() {
   	msg "$msg"
 
 	# Kill all subprocesses
-	pkill -P $$
+	pkill -P >/dev/null $$
 	# Exit
   	exit "$code"
 }
