@@ -215,9 +215,11 @@ class CNROptimizer():
         self.logs_tag = logs_dirname
         self.logs_path = os.path.join(self.log_dir, logs_dirname)
 
+        # Setup model checkpoint path
+        self.model_path = os.path.join(self.logs_path, "model.pt")
+
         # Define datafields
         self.logs_fields = ["fa", "cnr", "img"]
-
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
             self.logs_path, self.logs_fields
@@ -743,10 +745,16 @@ class CNROptimizer():
 
                 # Optimize prediction/policy model
                 self.optimize_model(self.batch_size)
-
                 # Update target model
                 if episode % self.target_update_period == 0:
                     self.update_target()
+
+                # Backup model
+                torch.save({
+                    'modelA_state_dict': self.prediction_net.state_dict(),
+                    'modelB_state_dict': self.target_net.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict()
+                }, self.model_path)
 
                 # Update epsilon
                 if self.epsilon > self.epsilon_min:
