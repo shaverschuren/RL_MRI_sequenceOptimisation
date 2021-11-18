@@ -99,7 +99,7 @@ class CNRValidator():
 
         # Write new flip angle to appropriate location
         with open(self.lck_path, 'w') as txt_file:
-            txt_file.write(f"{int(fa)}")
+            txt_file.write(f"{fa:.2f}")
         os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back by checking the data file
