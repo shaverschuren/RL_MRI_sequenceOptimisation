@@ -103,7 +103,7 @@ class CNRValidator():
         os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back by checking the data file
-        while not os.path.isfile(self.data_path):
+        while not os.path.exists(self.data_path):
             # Refresh file table
             os.system(f"ls {os.path.dirname(self.data_path)} > /dev/null")
             # Wait for a while
