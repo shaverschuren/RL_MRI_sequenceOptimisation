@@ -104,7 +104,10 @@ class CNRValidator():
 
         # Wait for image to come back by checking the data file
         while not os.path.isfile(self.data_path):
-            time.sleep(0.1)
+            # Refresh file table
+            os.system(f"ls {os.path.dirname(self.data_path)} > /dev/null")
+            # Wait for a while
+            time.sleep(0.05)
 
         # When the image is returned, load it and store the results
         with h5py.File(self.data_path, "r") as f:
