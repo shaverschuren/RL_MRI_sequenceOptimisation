@@ -31,7 +31,7 @@ class SNRValidator():
 
     def __init__(
             self,
-            fa_range: list[float] = [1., 90.],
+            fa_range: list[float] = [1., 50.],
             n_steps: int = 50,
             verbose: bool = True,
             log_dir=os.path.join(root, "logs", "snr_validator"),
@@ -99,7 +99,7 @@ class SNRValidator():
 
         # Write new flip angle to appropriate location
         with open(self.lck_path, 'w') as txt_file:
-            txt_file.write(f"{fa:.2f}")
+            txt_file.write(f"{fa:.2f}")  # txt_file.write(f"{int(fa)}")
         os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back by checking the data file

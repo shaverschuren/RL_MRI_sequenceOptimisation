@@ -31,7 +31,7 @@ class CNRValidator():
 
     def __init__(
             self,
-            fa_range: list[float] = [1., 90.],
+            fa_range: list[float] = [1., 50.],
             n_steps: int = 50,
             verbose: bool = True,
             log_dir=os.path.join(root, "logs", "cnr_validator"),
