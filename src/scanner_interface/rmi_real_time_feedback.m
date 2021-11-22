@@ -46,12 +46,12 @@ while 1
         end
         % Create new (locked) datafile
         if ~exist(data_loc)
-            h5create([data_loc,'.lck'],'/img',[N N]);
+            h5create([data_loc,'.lck'],'/img',size(img));
         else
             system(['mv ',data_loc,' ',[data_loc,'.lck']]);
         end
         % Write image to data file
-        h5write([data_loc,'.lck'],'/img',img);
+        h5write([data_loc,'.lck'],'/img',rescale(img));
         % Unlock data file
         system(['mv ',[data_loc,'.lck'],' ',data_loc]);
 
