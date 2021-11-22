@@ -632,8 +632,16 @@ class CNROptimizer():
         img_left = image[:N_x // 2, :]
         img_right = image[N_x // 2:, :]
 
+        # Extract foreground for both parts of the image and whole image
+        img_left_foreground = \
+            img_left[img_left > 0.01 * np.percentile(img_left, 95)]
+        img_right_foreground = \
+            img_right[img_right > 0.01 * np.percentile(img_right, 95)]
+
         # Calculate and return CNR
-        cnr = abs(np.mean(img_left) - np.mean(img_right)) / np.std(image)
+        cnr = abs(
+            np.mean(img_left_foreground) - np.mean(img_right_foreground)
+        ) / np.std(np.concatenate((img_left_foreground, img_right_foreground)))
 
         return float(cnr)
 

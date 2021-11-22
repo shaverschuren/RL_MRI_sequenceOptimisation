@@ -338,7 +338,8 @@ class SNROptimizer():
         img = self.perform_scan()
 
         # Calculate SNR
-        snr = np.mean(img) / np.std(img)
+        img_foreground = img[img > 0.01 * np.percentile(img, 95)]
+        snr = np.mean(img_foreground) / np.std(img_foreground)
 
         # Update state
         state = torch.tensor(
@@ -654,7 +655,8 @@ class SNROptimizer():
             img = self.perform_scan()
 
             # Calculate SNR
-            snr = np.mean(img) / np.std(img)
+            img_foreground = img[img > 0.01 * np.percentile(img, 95)]
+            snr = np.mean(img_foreground) / np.std(img_foreground)
 
             # Update state
             state = torch.tensor(
