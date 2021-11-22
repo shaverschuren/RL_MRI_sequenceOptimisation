@@ -50,6 +50,7 @@ class CNROptimizer():
             epsilon_decay: float = 1. - 5e-2,
             alpha: float = 0.005,
             target_update_period: int = 3,
+            pretrained_path: Union[str, bytes, os.PathLike, None] = None,
             log_dir=os.path.join(root, "logs", "scan_cnr_optimizer"),
             config_path=os.path.join(root, "config.json"),
             verbose: bool = True,
@@ -86,6 +87,8 @@ class CNROptimizer():
                     Learning rate for Adam optimizer
                 target_update_period : int
                     Periods between target net updates
+                pretrained_path : str | bytes | os.PathLike | None
+                    Optional path to pretrained model
                 log_dir : str | bytes | os.PathLike
                     Path to log directory
                 config_path : str | bytes | os.PathLike
@@ -112,6 +115,7 @@ class CNROptimizer():
         self.epsilon_decay = epsilon_decay
         self.alpha = alpha
         self.target_update_period = target_update_period
+        self.pretrained_path = pretrained_path
         self.log_dir = log_dir
         self.config_path = config_path
         self.verbose = verbose
@@ -201,6 +205,22 @@ class CNROptimizer():
         self.optimizer = optim.Adam(
             self.prediction_net.parameters(), lr=self.alpha
         )
+
+        # If applicable, load pretrained model
+        if self.pretrained_path:
+            # Load stored dict
+            pretrained_dict = torch.load(self.pretrained_path)
+
+            # Set model states
+            self.prediction_net.load_state_dict(
+                pretrained_dict["prediction_state_dict"]
+            )
+            self.target_net.load_state_dict(
+                pretrained_dict["target_state_dict"]
+            )
+            self.optimizer.load_state_dict(
+                pretrained_dict["optimizer_state_dict"]
+            )
 
     def setup_logger(self):
         """Sets up logger and appropriate directories"""
@@ -765,6 +785,9 @@ class CNROptimizer():
 
 
 if __name__ == "__main__":
-    optimizer = CNROptimizer()
+    optimizer = CNROptimizer(
+        n_episodes=10,
+        pretrained_path=os.path.join(root, "models", "epg_cnr.pt")
+    )
     optimizer.run()
     optimizer.run(train=False)
