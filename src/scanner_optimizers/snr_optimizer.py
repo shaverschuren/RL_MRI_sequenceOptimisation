@@ -50,7 +50,7 @@ class SNROptimizer():
             epsilon_decay: float = 1. - 5e-2,
             alpha: float = 0.005,
             target_update_period: int = 3,
-            log_dir=os.path.join(root, "logs", "snr_optimizer"),
+            log_dir=os.path.join(root, "logs", "scan_snr_optimizer"),
             config_path=os.path.join(root, "config.json"),
             verbose: bool = True,
             device: Union[torch.device, None] = None):

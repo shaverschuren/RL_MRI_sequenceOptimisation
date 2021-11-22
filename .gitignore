@@ -5,6 +5,9 @@
 logs/*
 !logs/README.txt
 
+models/*
+!models/README.txt
+
 ## Python-specific (https://github.com/github/gitignore/blob/master/Python.gitignore)
 
 # Byte-compiled / optimized / DLL files
