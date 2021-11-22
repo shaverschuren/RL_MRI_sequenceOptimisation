@@ -149,7 +149,8 @@ class SNRValidator():
             # Perform scan
             img = self.perform_scan(fa=fa)
             # Calculate SNR
-            snr = np.mean(img) / np.std(img)
+            img_foreground = img[img > 0.01 * np.percentile(img, 95)]
+            snr = np.mean(img_foreground) / np.std(img_foreground)
             # Log this step (scalars + image)
             self.logger.log_scalar(
                 field="fa",
