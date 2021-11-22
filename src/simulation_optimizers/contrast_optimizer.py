@@ -17,6 +17,7 @@ if src not in sys.path: sys.path.append(src)
 # File-specific imports
 from typing import Union                                    # noqa: E402
 import warnings                                             # noqa: E402
+from datetime import datetime                               # noqa: E402
 from collections import namedtuple, OrderedDict, deque      # noqa: E402
 import random                                               # noqa: E402
 import numpy as np                                          # noqa: E402
@@ -25,6 +26,7 @@ import torch.nn as nn                                       # noqa: E402
 import torch.optim as optim                                 # noqa: E402
 import torch.nn.functional as F                             # noqa: E402
 from epg_simulator.python import epg                        # noqa: E402
+from util import loggers                                    # noqa: E402
 
 
 class ContrastOptimizer():
@@ -58,8 +60,8 @@ class ContrastOptimizer():
             epsilon_decay: float = 1. - 2e-2,
             alpha: float = 0.005,
             target_update_period: int = 3,
-            log_dir: Union[str, bytes, os.PathLike] =
-            os.path.join(root, "logs", "model_1"),
+            log_dir=os.path.join(root, "logs", "epg_cnr_optimizer"),
+            config_path=os.path.join(root, "config.json"),
             verbose: bool = True,
             device: Union[torch.device, None] = None):
         """Constructs model and attributes for this optimizer
@@ -110,6 +112,8 @@ class ContrastOptimizer():
                     Periods between target net updates
                 log_dir : str | bytes | os.PathLike
                     Path to log directory
+                config_path : str | bytes | os.PathLike
+                    Path to config file
                 verbose : bool
                     Whether to print info
                 device : torch.device
@@ -140,6 +144,7 @@ class ContrastOptimizer():
         self.alpha = alpha
         self.target_update_period = target_update_period
         self.log_dir = log_dir
+        self.config_path = config_path
         self.verbose = verbose
 
         # Setup device
@@ -182,6 +187,9 @@ class ContrastOptimizer():
             +5. * self.fa_delta
         ])
 
+        # Setup logger
+        self.setup_logger()
+
     def init_model(self):
         """Constructs reinforcement learning model
 
@@ -214,6 +222,29 @@ class ContrastOptimizer():
         # Setup optimizer
         self.optimizer = optim.Adam(
             self.prediction_net.parameters(), lr=self.alpha
+        )
+
+    def setup_logger(self):
+        """Sets up logger and appropriate directories"""
+
+        # Create logs dir if not already there
+        if not os.path.isdir(self.log_dir):
+            os.mkdir(self.log_dir)
+
+        # Generate logs file path and store tag
+        now = datetime.now()
+        logs_dirname = str(now.strftime("%Y-%m-%d_%H-%M-%S"))
+        self.logs_tag = logs_dirname
+        self.logs_path = os.path.join(self.log_dir, logs_dirname)
+
+        # Setup model checkpoint path
+        self.model_path = os.path.join(self.logs_path, "model.pt")
+
+        # Define datafields
+        self.logs_fields = ["fa", "cnr", "error"]
+        # Setup logger object
+        self.logger = loggers.TensorBoardLogger(
+            self.logs_path, self.logs_fields
         )
 
     def calculate_cnr(self, fa=None):
@@ -425,7 +456,7 @@ class ContrastOptimizer():
         # Return best fa and cnr + number of best step
         return float(best_fa), float(best_cnr), int(best_step)
 
-    def step(self, old_state, action, step_i):
+    def step(self, old_state, action, episode_i, step_i):
         """Run step of the environment simulation
 
         - Perform selected action
@@ -522,6 +553,22 @@ class ContrastOptimizer():
         else:
             # Recent memory too short: We're not done yet
             done = torch.tensor(0, device=self.device)
+
+        # Log this step (scalars)
+        loop_type = 'train' if self.train else 'test'
+
+        self.logger.log_scalar(
+            field="fa",
+            tag=f"{self.logs_tag}_{loop_type}_episode_{episode_i + 1}",
+            value=float(state[1]),
+            step=step_i
+        )
+        self.logger.log_scalar(
+            field="cnr",
+            tag=f"{self.logs_tag}_{loop_type}_episode_{episode_i + 1}",
+            value=float(state[0]),
+            step=step_i
+        )
 
         return state, reward, done
 
@@ -690,6 +737,9 @@ class ContrastOptimizer():
         the performance of a previously trained model
         """
 
+        # Set 'train' attribute
+        self.train = train
+
         # Print some info
         if train:
             print("\n===== Running training loop =====\n")
@@ -798,7 +848,9 @@ class ContrastOptimizer():
                     state, self.epsilon if train else 0.
                 )
                 # Simulate step
-                next_state, reward, done = self.step(state, action, tick)
+                next_state, reward, done = self.step(
+                    state, action, episode, tick
+                )
                 # Add to memory
                 self.remember(state, action, reward, next_state, done)
                 # Update state
@@ -823,7 +875,7 @@ class ContrastOptimizer():
             found_fa, found_cnr, best_step = self.find_best_output(tick)
 
             if found_cnr == 0.:
-                relative_cnr_error = 1000.
+                relative_cnr_error = 100.
             else:
                 relative_cnr_error = abs(
                     optimal_cnr - found_cnr
@@ -836,12 +888,39 @@ class ContrastOptimizer():
             )
 
             if train:
+                # Log episode
+                self.logger.log_scalar(
+                    field="fa",
+                    tag=f"{self.logs_tag}_train_episodes",
+                    value=float(found_fa),
+                    step=episode
+                )
+                self.logger.log_scalar(
+                    field="cnr",
+                    tag=f"{self.logs_tag}_train_episodes",
+                    value=float(found_cnr),
+                    step=episode
+                )
+                self.logger.log_scalar(
+                    field="error",
+                    tag=f"{self.logs_tag}_train_episodes",
+                    value=min(float(relative_cnr_error) / 100., 1.),
+                    step=episode
+                )
+
                 # Optimize prediction/policy model
                 self.optimize_model(self.batch_size)
 
                 # Update target model
                 if episode % self.target_update_period == 0:
                     self.update_target()
+
+                # Backup model
+                torch.save({
+                    'prediction_state_dict': self.prediction_net.state_dict(),
+                    'target_state_dict': self.target_net.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict()
+                }, self.model_path)
 
                 # Update epsilon
                 if self.epsilon > self.epsilon_min:
