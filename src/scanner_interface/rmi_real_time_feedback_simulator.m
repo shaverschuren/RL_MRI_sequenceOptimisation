@@ -19,6 +19,7 @@ cd(json_val.matlab_util_loc)
 N = 64;
 text_file_loc = json_val.param_loc;
 data_loc = json_val.data_loc;
+calibration_image = 1;
 
 % While loop which takes and proccesses an image
 while 1    
@@ -48,7 +49,30 @@ while 1
         while exist(data_loc)
             pause(0.1);
         end
+    elif calibration_image
+        % Generate and pass calibration image
+        img = rand(1)*ones(N,N) + 0.05*rand(N,N);
 
+        % (if applicable remove locked file)
+        if exist([data_loc,'.lck'])
+            delete([data_loc,'.lck']);
+        end
+        % Create new (locked) datafile
+        if ~exist(data_loc)
+            h5create([data_loc,'.lck'],'/img',size(img));
+        else
+            system(['mv ',data_loc,' ',[data_loc,'.lck']]);
+        end
+        % Write image to data file
+        h5write([data_loc,'.lck'],'/img',rescale(img));
+        % Unlock data file
+        system(['mv ',[data_loc,'.lck'],' ',data_loc]);
+
+        % Display info
+        disp(['RMI: Passed calibration image...']);
+
+        % Set calibration_mode to 0
+        calibration_image = 0;
     else
         disp(['RMI: waiting...']);pause(0.1);
     end

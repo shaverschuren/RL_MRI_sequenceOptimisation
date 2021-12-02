@@ -25,7 +25,7 @@ import torch                                                # noqa: E402
 import torch.nn as nn                                       # noqa: E402
 import torch.optim as optim                                 # noqa: E402
 import torch.nn.functional as F                             # noqa: E402
-from util import loggers                                    # noqa: E402
+from util import loggers, roi                               # noqa: E402
 
 
 class CNROptimizer():
@@ -50,6 +50,7 @@ class CNROptimizer():
             epsilon_decay: float = 1. - 5e-2,
             alpha: float = 0.005,
             target_update_period: int = 3,
+            overwrite_roi: bool = False,
             pretrained_path: Union[str, bytes, os.PathLike, None] = None,
             log_dir=os.path.join(root, "logs", "scan_cnr_optimizer"),
             config_path=os.path.join(root, "config.json"),
@@ -87,6 +88,8 @@ class CNROptimizer():
                     Learning rate for Adam optimizer
                 target_update_period : int
                     Periods between target net updates
+                overwrite_roi : bool
+                    Whether to overwrite the ROI file
                 pretrained_path : str | bytes | os.PathLike | None
                     Optional path to pretrained model
                 log_dir : str | bytes | os.PathLike
@@ -115,6 +118,7 @@ class CNROptimizer():
         self.epsilon_decay = epsilon_decay
         self.alpha = alpha
         self.target_update_period = target_update_period
+        self.overwrite_roi = overwrite_roi
         self.pretrained_path = pretrained_path
         self.log_dir = log_dir
         self.config_path = config_path
@@ -171,6 +175,9 @@ class CNROptimizer():
 
         # Setup logger
         self.setup_logger()
+
+        # Setup ROIs
+        self.setup_roi()
 
     def init_model(self):
         """Constructs reinforcement learning model
@@ -245,6 +252,29 @@ class CNROptimizer():
             self.logs_path, self.logs_fields
         )
 
+    def setup_roi(self):
+        """Setup ROI for this SNR optimizer"""
+
+        # Generate ROI path
+        self.roi_path = os.path.join(self.log_dir, "roi.npy")
+
+        # Check for existence of ROI file
+        if not self.overwrite_roi and os.path.exists(self.roi_path):
+            # Load ROI data
+            self.roi = np.load(self.roi_path)
+        else:
+            # Generate new ROI data
+            calibration_image = self.perform_scan(pass_fa=False)
+            self.roi = roi.generate_rois(calibration_image, self.roi_path)
+
+        # Check whether number of ROIs is appropriate
+        if not np.shape(self.roi)[0] == 2:
+            raise UserWarning(
+                f"Expected a single ROI to be selected but got "
+                f"{np.shape(self.roi)[0]}.\n"
+                f"ROIs are stored in {self.roi_path}"
+            )
+
     def find_best_output(self, step, n_memory=3):
         """Find best solution provided by model in final n steps"""
 
@@ -285,17 +315,19 @@ class CNROptimizer():
         # Return best fa and cnr + number of best step
         return float(best_fa), float(best_cnr), int(best_step)
 
-    def perform_scan(self, fa=None):
+    def perform_scan(self, fa=None, pass_fa=True):
         """Perform scan by passing parameters to scanner"""
 
-        # Set flip angle we'll communicate to the scanner
-        if not fa:
-            fa = self.fa
+        # If pass_fa, generate a flip angle file
+        if pass_fa:
+            # Set flip angle we'll communicate to the scanner
+            if not fa:
+                fa = self.fa
 
-        # Write new flip angle to appropriate location
-        with open(self.lck_path, 'w') as txt_file:
-            txt_file.write(f"{fa:.2f}")
-        os.system(f"mv {self.lck_path} {self.txt_path}")
+            # Write new flip angle to appropriate location
+            with open(self.lck_path, 'w') as txt_file:
+                txt_file.write(f"{fa:.2f}")
+            os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back by checking the data file
         while not os.path.exists(self.data_path):
@@ -626,22 +658,20 @@ class CNROptimizer():
                 "\nExpected shape of image to be either (N,N) or (1,N,N)."
                 f"\nFound {shape} instead.")
 
-        # Extract number of voxels in x direction
-        N_x = shape[1]
         # Extract left and right parts of image
-        img_left = image[:N_x // 2, :]
-        img_right = image[N_x // 2:, :]
-
-        # Extract foreground for both parts of the image and whole image
-        img_left_foreground = \
-            img_left[img_left > 0.01 * np.percentile(img_left, 95)]
-        img_right_foreground = \
-            img_right[img_right > 0.01 * np.percentile(img_right, 95)]
+        img_roi_1 = image[
+            int(self.roi[0][0]):int(self.roi[0][1]),
+            int(self.roi[0][2]):int(self.roi[0][3])
+        ]
+        img_roi_2 = image[
+            int(self.roi[1][0]):int(self.roi[1][1]),
+            int(self.roi[1][2]):int(self.roi[1][3])
+        ]
 
         # Calculate and return CNR
         cnr = abs(
-            np.mean(img_left_foreground) - np.mean(img_right_foreground)
-        ) / np.std(np.concatenate((img_left_foreground, img_right_foreground)))
+            np.mean(img_roi_1) - np.mean(img_roi_2)
+        ) / np.std(np.concatenate((img_roi_1, img_roi_1)))
 
         return float(cnr)
 
