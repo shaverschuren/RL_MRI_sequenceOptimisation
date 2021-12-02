@@ -5,9 +5,106 @@ and extraction.
 """
 
 import os
-import cv2
+import matplotlib
+import matplotlib.pyplot as plt
+from matplotlib.widgets import RectangleSelector
 from typing import Union
 import numpy as np
+
+# Using TkAgg framework for SSH funcitonality.
+# If this gives errors, reset the terminal.
+matplotlib.use('TkAgg')
+
+
+class ROISelector(object):
+    def __init__(self, image: np.ndarray):
+        """Construct object and attributes"""
+
+        # Load image and construct roi list
+        self.image = image
+        self.roi_list = []
+        self.patch_list = []
+
+        # Plot image and setup selector
+        self.init_selector()
+
+    def init_selector(self):
+        """Constructs the figure and selector"""
+
+        # Construct figure
+        self.fig, self.ax = plt.subplots(num='ROI selector')
+
+        # Setup figure name and decoration
+        self.ax.set_title(
+            'Add ROI: [Enter | Space]; Remove ROI: Backspace; Finalize: Esc'
+        )
+        self.ax.set_xlabel(
+            'Number of ROIs: 0'
+        )
+        # Setup events
+        self.fig.canvas.mpl_connect('key_press_event', self.on_press)
+
+        # Setup selector
+        rs = RectangleSelector(
+            self.ax, self.line_select_callback,
+            drawtype='box', useblit=False, button=[1],
+            minspanx=5, minspany=5, spancoords='pixels',
+            interactive=True)
+
+        # Display image
+        self.ax.set_xticks([])
+        self.ax.set_yticks([])
+        self.ax.imshow(self.image, cmap='gray')
+
+        # Show figure
+        plt.show()
+
+    def line_select_callback(self, eclick, erelease):
+        """Handle dragging behaviour"""
+        self.x1, self.y1 = eclick.xdata, eclick.ydata
+        self.x2, self.y2 = erelease.xdata, erelease.ydata
+
+    def on_press(self, event):
+        """Handle key-press"""
+
+        # Store current selection in ROI list
+        if event.key in [' ', 'enter']:
+            # Draw ROI
+            self.patch_list.append(plt.Rectangle(
+                (min(self.x1, self.x2), min(self.y1, self.y2)),
+                np.abs(self.x1 - self.x2), np.abs(self.y1 - self.y2),
+                linewidth=1, edgecolor='r', facecolor='none'))
+            self.ax.add_patch(self.patch_list[-1])
+            # Add ROI to list
+            self.roi_list.append(np.array(
+                [self.x1, self.x2, self.y1, self.y2]
+            ))
+            # Update label
+            self.ax.set_xlabel(
+                f'Number of ROIs: {len(self.roi_list)}'
+            )
+            # Update plot
+            self.fig.canvas.draw()
+        # Remove previous selection from ROI list
+        elif event.key == 'backspace':
+            # Check whether roi_list isn't empty
+            if len(self.roi_list) > 0:
+                # Remove patch from image
+                self.patch_list[-1].remove()
+                # Remove ROI from lists
+                self.roi_list.pop(-1)
+                self.patch_list.pop(-1)
+                # Update label
+                self.ax.set_xlabel(
+                    f'Number of ROIs: {len(self.roi_list)}'
+                )
+                # Update plot
+                self.fig.canvas.draw()
+        # Close window and return ROIs
+        elif event.key == 'escape':
+            plt.close(self.fig)
+        else:
+            pass
 
 
 def generate_rois(
@@ -44,20 +141,15 @@ def generate_rois(
     else:
         # Print short explanation message
         print(
-            "Please draw the required ROI(s) on the open window\n"
-            "-----------------------------------"
+            "Please draw the required ROI(s) on the open window"
         )
 
         # define ROIs
-        image_rgb = np.moveaxis(np.array([image] * 3), 0, -1)
-        rois = cv2.selectROIs(
-            "ROI selection", image_rgb,
-            showCrosshair=True, fromCenter=False
-        )
+        roi_selector = ROISelector(image)
+        rois = np.array(roi_selector.roi_list)
 
         # Print some info
         print(
-            "-----------------------------------\n"
             f"Defined {np.size(rois) // 4} ROIs succesfully!"
         )
 
