@@ -36,6 +36,9 @@ while 1
         % Store image in img_store
         if isempty(img_store)
             img_store = img;
+            % For this first pass, determine rescale factors
+            rescale_min = double(min(img, 'all'));
+            rescale_max = double(max(img, 'all'));
         else
             img_store(:,:,end+1) = img;
         end
@@ -50,8 +53,9 @@ while 1
         else
             system(['mv ',data_loc,' ',[data_loc,'.lck']]);
         end
-        % Write image to data file
-        h5write([data_loc,'.lck'],'/img',rescale(img));
+        % Rescale image and write to data file
+        img_rescale = (double(img) - rescale_min) / (rescale_max - rescale_min);
+        h5write([data_loc,'.lck'],'/img',img_rescale);
         % Unlock data file
         system(['mv ',[data_loc,'.lck'],' ',data_loc]);
 
