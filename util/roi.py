@@ -49,8 +49,9 @@ def generate_rois(
         )
 
         # define ROIs
+        image_rgb = np.moveaxis(np.array([image] * 3), 0, -1)
         rois = cv2.selectROIs(
-            "ROI selection", image,
+            "ROI selection", image_rgb,
             showCrosshair=True, fromCenter=False
         )
 
