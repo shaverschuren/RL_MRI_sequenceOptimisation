@@ -4,8 +4,78 @@ For now, only a short term memory class is implemented.
 Might implement some other stuff here at a later stage.
 """
 
+from typing import Union
 from collections import namedtuple, OrderedDict, deque
+import numpy as np
 import random
+
+
+class OUNoise(object):
+    """Class representing Ornstein-Ulhenbeck process
+
+    This strategy implements the Ornstein-Uhlenbeck process, which adds
+    time-correlated noise to the actions taken by the deterministic policy.
+    The OU process satisfies the following stochastic differential equation:
+    dxt = theta*(mu - xt)*dt + sigma*dWt
+    where Wt denotes the Wiener process
+
+    Adapted from:
+    https://github.com/vitchyr/rlkit/blob/master/rlkit/exploration_strategies/ou_strategy.py
+    """
+
+    def __init__(
+            self,
+            action_space: np.ndarray,
+            mu: float = 0.0,
+            theta: float = 0.15,
+            max_sigma: float = 0.3,
+            min_sigma: Union[None, float] = None,
+            decay_period: int = 100000):
+        """Builds OUNoise attributes
+
+        Parameters
+        ----------
+        action_space : np.ndarray
+            Numpy array with action space - shape (n_actions by 2)
+        mu : float
+        theta : float
+        max_sigma : float
+        min_sigma : float
+        decay_period : int
+        """
+
+        self.mu = mu
+        self.theta = theta
+        self.sigma = max_sigma
+        self.max_sigma = max_sigma
+        self.min_sigma = min_sigma if min_sigma else max_sigma
+        self.decay_period = decay_period
+        self.action_dim = np.shape(action_space)[0]
+        self.low = np.min(action_space, axis=0)
+        self.high = np.max(action_space, axis=0)
+        self.reset()
+
+    def reset(self):
+        self.state = np.ones(self.action_dim) * self.mu
+
+    def evolve_state(self):
+        x = self.state
+        dx = (
+            self.theta * (self.mu - x)
+            + self.sigma * np.random.randn(self.action_dim)
+        )
+        self.state = x + dx
+        return self.state
+
+    def get_action(self, action, t=0):
+        action = action.detach().numpy()
+        ou_state = self.evolve_state()
+        self.sigma = (
+            self.max_sigma
+            - (self.max_sigma - self.min_sigma)
+            * min(1.0, t / self.decay_period)
+        )
+        return np.clip(action + ou_state, self.low, self.high)
 
 
 class LongTermMemory(object):
@@ -75,7 +145,17 @@ class LongTermMemory(object):
         # Return seperate batches (so e.g. state_batch, action_batch etc.)
         return tuple([batch for _, batch in list(batches.items())])
 
+    def get_recent_memory(self, length):
+        """Extract recent memory"""
+
+        return self.memory[-length + 1:]
+
     def __len__(self):
         """Return length"""
 
         return len(self.memory)
+
+    def __iter__(self):
+        """Return iterator"""
+
+        return list(self.memory)
