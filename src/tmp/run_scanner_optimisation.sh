@@ -74,7 +74,9 @@ die() {
   	msg "$msg"
 
 	# Kill all subprocesses
-	pkill -P >/dev/null $$
+	pkill -P > /dev/null $$
+	killall MATLAB > /dev/null
+	killall python > /dev/null
 	# Exit
   	exit "$code"
 }
