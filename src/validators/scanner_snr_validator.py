@@ -20,7 +20,7 @@ import time                                                 # noqa: E402
 from datetime import datetime                               # noqa: E402
 import h5py                                                 # noqa: E402
 import numpy as np                                          # noqa: E402
-from util import loggers                                    # noqa: E402
+from util import loggers, roi                               # noqa: E402
 
 
 class SNRValidator():
@@ -34,6 +34,7 @@ class SNRValidator():
             fa_range: list[float] = [1., 50.],
             n_steps: int = 50,
             verbose: bool = True,
+            overwrite_roi: bool = False,
             log_dir=os.path.join(root, "logs", "snr_validator"),
             config_path=os.path.join(root, "config.json")):
         """Constructs attributes for this validator"""
@@ -42,6 +43,7 @@ class SNRValidator():
         self.fa_range = fa_range
         self.n_steps = n_steps
         self.verbose = verbose
+        self.overwrite_roi = overwrite_roi
         self.log_dir = log_dir
         self.config_path = config_path
 
@@ -52,6 +54,9 @@ class SNRValidator():
 
         # Setup logger
         self.init_logger()
+
+        # Setup ROI
+        self.init_roi()
 
     def init_env(self):
         """Constructs the interaction environment
@@ -90,17 +95,42 @@ class SNRValidator():
             self.logs_path, self.logs_fields
         )
 
-    def perform_scan(self, fa=None):
+    def init_roi(self):
+        """Setup ROI for this SNR optimizer"""
+
+        # Generate ROI path and calibration image
+        self.roi_path = os.path.join(self.log_dir, "roi.npy")
+        calibration_image = self.perform_scan(pass_fa=False)
+
+        # Check for existence of ROI file
+        if not self.overwrite_roi and os.path.exists(self.roi_path):
+            # Load ROI data
+            self.roi = np.load(self.roi_path)
+        else:
+            # Generate new ROI data
+            self.roi = roi.generate_rois(calibration_image, self.roi_path)
+
+        # Check whether number of ROIs is appropriate
+        if not np.shape(self.roi)[0] == 1:
+            raise UserWarning(
+                f"Expected a single ROI to be selected but got "
+                f"{np.shape(self.roi)[0]}.\n"
+                f"ROIs are stored in {self.roi_path}"
+            )
+
+    def perform_scan(self, fa=None, pass_fa=True):
         """Perform scan by passing parameters to scanner"""
 
-        # Set flip angle we'll communicate to the scanner
-        if not fa:
-            fa = self.fa
+        # If pass_fa, generate a flip angle file
+        if pass_fa:
+            # Set flip angle we'll communicate to the scanner
+            if not fa:
+                fa = self.fa
 
-        # Write new flip angle to appropriate location
-        with open(self.lck_path, 'w') as txt_file:
-            txt_file.write(f"{fa:.2f}")  # txt_file.write(f"{int(fa)}")
-        os.system(f"mv {self.lck_path} {self.txt_path}")
+            # Write new flip angle to appropriate location
+            with open(self.lck_path, 'w') as txt_file:
+                txt_file.write(f"{fa:.2f}")
+            os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back by checking the data file
         while not os.path.exists(self.data_path):
@@ -149,8 +179,11 @@ class SNRValidator():
             # Perform scan
             img = self.perform_scan(fa=fa)
             # Calculate SNR
-            img_foreground = img[img > 0.01 * np.percentile(img, 95)]
-            snr = np.mean(img_foreground) / np.std(img_foreground)
+            img_roi = img[
+                int(self.roi[0][0]):int(self.roi[0][1]),
+                int(self.roi[0][2]):int(self.roi[0][3])
+            ]
+            snr = np.mean(img_roi) / np.std(img_roi)
             # Log this step (scalars + image)
             self.logger.log_scalar(
                 field="fa",
