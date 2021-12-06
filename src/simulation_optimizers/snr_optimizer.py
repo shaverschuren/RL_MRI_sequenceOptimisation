@@ -17,7 +17,7 @@ if src not in sys.path: sys.path.append(src)
 # File-specific imports
 from typing import Union                                    # noqa: E402
 from datetime import datetime                               # noqa: E402
-from collections import namedtuple, OrderedDict, deque      # noqa: E402
+from collections import namedtuple, deque                   # noqa: E402
 import random                                               # noqa: E402
 import numpy as np                                          # noqa: E402
 import torch                                                # noqa: E402
