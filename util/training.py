@@ -30,7 +30,7 @@ class OUNoise(object):
             theta: float = 0.15,
             max_sigma: float = 0.3,
             min_sigma: Union[None, float] = None,
-            decay_period: int = 100000):
+            decay_period: int = 10000):
         """Builds OUNoise attributes
 
         Parameters
@@ -51,8 +51,8 @@ class OUNoise(object):
         self.min_sigma = min_sigma if min_sigma else max_sigma
         self.decay_period = decay_period
         self.action_dim = np.shape(action_space)[0]
-        self.low = np.min(action_space, axis=0)
-        self.high = np.max(action_space, axis=0)
+        self.low = np.min(action_space, axis=1)
+        self.high = np.max(action_space, axis=1)
         self.reset()
 
     def reset(self):
@@ -129,6 +129,13 @@ class LongTermMemory(object):
     def sample(self, batch_size):
         """Sample a random batch of samples from the memory"""
 
+        # Check whether batch size isn't larger than memory
+        if self.__len__() < batch_size:
+            raise ValueError(
+                "Batch size is larger then memory size!\n"
+                f"Batch size: {batch_size}\nMemory size: {self.__len__()}"
+            )
+
         # Initialize batches
         batches = OrderedDict([
             (batch_name, []) for batch_name in self.transition_contents
@@ -139,16 +146,16 @@ class LongTermMemory(object):
 
         # Split batches
         for transition in batch:
-            for batch_name, _ in batches:
-                batches[batch_name].append(transition[batch_name])
+            for batch_name, _ in batches.items():
+                batches[batch_name].append(getattr(transition, batch_name))
 
         # Return seperate batches (so e.g. state_batch, action_batch etc.)
         return tuple([batch for _, batch in list(batches.items())])
 
-    def get_recent_memory(self, length):
+    def get_recent_memory(self, length: int):
         """Extract recent memory"""
 
-        return self.memory[-length + 1:]
+        return list(self.memory)[-length + 1:]
 
     def __len__(self):
         """Return length"""

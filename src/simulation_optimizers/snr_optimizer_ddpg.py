@@ -270,7 +270,7 @@ class SNROptimizer():
         self.model_path = os.path.join(self.logs_path, "model.pt")
 
         # Define datafields
-        self.logs_fields = ["fa", "snr", "error"]
+        self.logs_fields = ["fa", "snr", "error", "critic_loss", "policy_loss"]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
             self.logs_path, self.logs_fields
@@ -329,7 +329,7 @@ class SNROptimizer():
         # Calculate recent memory length
         memory_len = min(step + 1, n_memory)
         # Retrieve recent memory
-        recent_memory = self.memory.memory[-memory_len:]
+        recent_memory = self.memory.get_recent_memory(memory_len)
         # Store as transitions
         recent_transitions = self.Transition(*zip(*recent_memory))
         # Extract states
@@ -374,7 +374,11 @@ class SNROptimizer():
         """
 
         # Adjust flip angle according to action
-        if (min(self.action_space) < action < max(self.action_space)).all():
+        if (
+            np.min(self.action_space, axis=1)
+            <= action.detach().numpy()
+            <= np.max(self.action_space, axis=1)
+        ).all():
             # Adjust flip angle
             delta = float(action[0]) * self.fa
             self.fa += delta
@@ -491,19 +495,27 @@ class SNROptimizer():
         # Pass through noise function
         noisy_action = self.noise.get_action(pure_action, step)
 
-        return noisy_action
+        return torch.FloatTensor(noisy_action, device=self.device)
 
-    def update(self):
+    def update(self, episode_i, step_i):
         """Update model"""
 
         # Sample batch from memory
-        states, actions, rewards, next_states = \
+        states, actions, rewards, next_states, _ = \
             self.memory.sample(self.batch_size)
         # Cast to tensors
-        states = torch.FloatTensor(states)
-        actions = torch.FloatTensor(actions)
-        rewards = torch.FloatTensor(rewards)
-        next_states = torch.FloatTensor(next_states)
+        states = torch.cat(
+            [state.unsqueeze(0) for state in states]
+        ).to(self.device)
+        actions = torch.cat(
+            [action.unsqueeze(0) for action in actions]
+        ).to(self.device)
+        rewards = torch.cat(
+            [reward.unsqueeze(0) for reward in rewards]
+        ).to(self.device)
+        next_states = torch.cat(
+            [next_state.unsqueeze(0) for next_state in next_states]
+        ).to(self.device)
 
         # Determine critic loss
         Qvals = self.critic(torch.cat([states, actions], 1))
@@ -538,6 +550,21 @@ class SNROptimizer():
                 self.critic_target.parameters(), self.critic.parameters()):
             target_param.data.copy_(
                 param.data * self.tau + target_param.data * (1.0 - self.tau)
+            )
+
+        # Log losses for this step (if train)
+        if self.train:
+            self.logger.log_scalar(
+                field="critic_loss",
+                tag=f"{self.logs_tag}_train_episode_{episode_i + 1}",
+                value=float(critic_loss),
+                step=step_i
+            )
+            self.logger.log_scalar(
+                field="policy_loss",
+                tag=f"{self.logs_tag}_train_episode_{episode_i + 1}",
+                value=float(policy_loss),
+                step=step_i
             )
 
     def run(self, train=True):
@@ -657,14 +684,14 @@ class SNROptimizer():
                 tick += 1
 
                 # Update model
-                if train:
-                    self.update()
+                if train and len(self.memory) >= self.batch_size:
+                    self.update(episode, tick)
 
                 # Print some info
                 color_str = "\033[92m" if reward > 0. else "\033[91m"
                 end_str = "\033[0m"
                 print(
-                    f" - Action: {float:4.1f}"
+                    f" - Action: {float(action):4.1f}"
                     f" - FA: {float(state[1]):4.1f}"
                     f" - SNR: {float(state[0]):5.2f}"
                     " - Reward: "
