@@ -4,7 +4,7 @@ For now, only a short term memory class is implemented.
 Might implement some other stuff here at a later stage.
 """
 
-from collections import namedtuple, deque
+from collections import namedtuple, OrderedDict, deque
 import random
 
 
@@ -19,12 +19,11 @@ class LongTermMemory(object):
             self,
             capacity: int,
             transition_contents: tuple[str, ...] =
-            ('state', 'action', 'next_state', 'reward')):
+            ('state', 'action', 'reward', 'next_state', 'done')):
         """Constructs this memory object
 
         Parameters
         ----------
-
             capacity : int
                 Maximum capacity of the memory object.
                 If full, overflow.
@@ -53,14 +52,28 @@ class LongTermMemory(object):
                 f" is incorrect. Got {len(args)} but expected"
                 f" {len(self.transition_contents)}."
             )
-
-        # If OK, append transition to memory
-        self.memory.append(self.Transition(*args))
+        else:
+            # If OK, append transition to memory
+            self.memory.append(self.Transition(*args))
 
     def sample(self, batch_size):
         """Sample a random batch of samples from the memory"""
 
-        return random.sample(self.memory, batch_size)
+        # Initialize batches
+        batches = OrderedDict([
+            (batch_name, []) for batch_name in self.transition_contents
+        ])
+
+        # Randomly sample batch from memory
+        batch = random.sample(self.memory, batch_size)
+
+        # Split batches
+        for transition in batch:
+            for batch_name, _ in batches:
+                batches[batch_name].append(transition[batch_name])
+
+        # Return seperate batches (so e.g. state_batch, action_batch etc.)
+        return tuple([batch for _, batch in list(batches.items())])
 
     def __len__(self):
         """Return length"""
