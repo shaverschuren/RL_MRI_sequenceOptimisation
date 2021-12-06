@@ -255,8 +255,9 @@ class SNROptimizer():
     def setup_roi(self):
         """Setup ROI for this SNR optimizer"""
 
-        # Generate ROI path
+        # Generate ROI path and calibration image
         self.roi_path = os.path.join(self.log_dir, "roi.npy")
+        calibration_image = self.perform_scan(pass_fa=False)
 
         # Check for existence of ROI file
         if not self.overwrite_roi and os.path.exists(self.roi_path):
@@ -264,7 +265,6 @@ class SNROptimizer():
             self.roi = np.load(self.roi_path)
         else:
             # Generate new ROI data
-            calibration_image = self.perform_scan(pass_fa=False)
             self.roi = roi.generate_rois(calibration_image, self.roi_path)
 
         # Check whether number of ROIs is appropriate
