@@ -49,7 +49,7 @@ while 1
         while exist(data_loc)
             pause(0.1);
         end
-    elif calibration_image
+    elseif calibration_image
         % Generate and pass calibration image
         img = rand(1)*ones(N,N) + 0.05*rand(N,N);
 
