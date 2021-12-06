@@ -22,10 +22,9 @@ from collections import namedtuple, OrderedDict, deque      # noqa: E402
 import random                                               # noqa: E402
 import numpy as np                                          # noqa: E402
 import torch                                                # noqa: E402
-import torch.nn as nn                                       # noqa: E402
 import torch.optim as optim                                 # noqa: E402
 import torch.nn.functional as F                             # noqa: E402
-from util import loggers, roi                               # noqa: E402
+from util import model, loggers, roi                        # noqa: E402
 
 
 class CNROptimizer():
@@ -187,26 +186,22 @@ class CNROptimizer():
         Optimizer: Adam with lr alpha
         """
 
+        # Define architecture
+        layers = [4, 8, 8, 4]
+        activation_funcs = ['relu', 'relu', 'relu', 'none']
+
         # Construct policy net
-        self.prediction_net = nn.Sequential(OrderedDict([
-            ('fc1', nn.Linear(4, 4)),
-            ('relu1', nn.ReLU()),
-            ('fc2', nn.Linear(4, 8)),
-            ('relu2', nn.ReLU()),
-            ('fc3', nn.Linear(8, 8)),
-            ('relu3', nn.ReLU()),
-            ('output', nn.Linear(8, 4))
-        ])).to(self.device)
+        self.prediction_net = model.FullyConnectedModel(
+            layers,
+            activation_funcs,
+            self.device
+        )
         # Construct target net
-        self.target_net = nn.Sequential(OrderedDict([
-            ('fc1', nn.Linear(4, 4)),
-            ('relu1', nn.ReLU()),
-            ('fc2', nn.Linear(4, 8)),
-            ('relu2', nn.ReLU()),
-            ('fc3', nn.Linear(8, 8)),
-            ('relu3', nn.ReLU()),
-            ('output', nn.Linear(8, 4))
-        ])).to(self.device)
+        self.target_net = model.FullyConnectedModel(
+            layers,
+            activation_funcs,
+            self.device
+        )
 
         # Setup optimizer
         self.optimizer = optim.Adam(

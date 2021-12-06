@@ -2,6 +2,7 @@
 
 from typing import Union
 from collections import OrderedDict
+import torch
 import torch.nn as nn
 
 
@@ -11,22 +12,26 @@ class FullyConnectedModel(nn.Module):
     def __init__(
             self,
             architecture: list[int],
-            activation_functions: Union[str, list] = 'relu'):
+            activation_functions: Union[str, list] = 'relu',
+            device: Union[None, torch.device] = None):
 
         """Builds attributes for this fully connected model
 
         Parameters
-        ==========
+        ----------
         architecture : list[int]
             List of number of neurons per layer
         activation_functions : str | list
             Either a single activation function (str) or a list
             of activation functions (list)
+        device : None | torch.device
+            Optional torch device
         """
 
         # Build attributes
         self.architecture = architecture
         self.activation_functions = activation_functions
+        self.device = device
 
         # Initialize torch.nn.Module
         super(FullyConnectedModel, self).__init__()
@@ -35,7 +40,10 @@ class FullyConnectedModel(nn.Module):
         self.build_architecture_dict()
 
         # Build fully connected stack
-        self.stack = nn.Sequential(self.architecture_dict)
+        if self.device:
+            self.stack = nn.Sequential(self.architecture_dict).to(device)
+        else:
+            self.stack = nn.Sequential(self.architecture_dict)
 
     def build_architecture_dict(self):
         """Builds ordered dict containing model architecture"""
@@ -44,11 +52,19 @@ class FullyConnectedModel(nn.Module):
         architecture_list = []
         # Fill list with required layers
         for layer_i in range(len(self.architecture)):
+            # Define layer name
+            if layer_i == len(self.architecture) - 1:
+                layer_name = "output"
+            else:
+                layer_name = f'fc{layer_i + 1}'
             # Add linear layer
             architecture_list.append(
-                (f'fc{layer_i + 1}', nn.Linear(
-                    self.architecture[max(0, layer_i - 1)],
-                    self.architecture[layer_i]))
+                (
+                    layer_name,
+                    nn.Linear(
+                        self.architecture[max(0, layer_i - 1)],
+                        self.architecture[layer_i])
+                )
             )
             # Extract activation function
             if type(self.activation_functions) == str:
@@ -82,6 +98,8 @@ class FullyConnectedModel(nn.Module):
                 architecture_list.append(
                     (f"softmax{layer_i + 1}", nn.Softmax())
                 )
+            elif str(activation_function).lower() == 'none':
+                pass
             else:
                 raise ValueError(
                     "Activation function not supported. "
@@ -96,3 +114,13 @@ class FullyConnectedModel(nn.Module):
         """Forward pass"""
 
         return self.stack(x)
+
+    def __len__(self):
+        """Returns __len__ of model"""
+
+        return len(self.stack)
+
+    def __getitem__(self, item: int):
+        """Returns subscriptable item"""
+
+        return self.stack[item]
