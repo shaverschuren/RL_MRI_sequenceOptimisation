@@ -62,7 +62,9 @@ class OUNoise(object):
         x = self.state
         dx = (
             self.theta * (self.mu - x)
-            + self.sigma * np.random.randn(self.action_dim)
+            + np.random.normal(
+                loc=self.mu, scale=self.sigma, size=self.action_dim
+            )
         )
         self.state = x + dx
         return self.state
@@ -73,7 +75,7 @@ class OUNoise(object):
         self.sigma = (
             self.max_sigma
             - (self.max_sigma - self.min_sigma)
-            * min(1.0, t / self.decay_period)
+            * min(1.0, t / float(self.decay_period))
         )
         return np.clip(action + ou_state, self.low, self.high)
 
