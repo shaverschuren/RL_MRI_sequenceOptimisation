@@ -18,7 +18,7 @@ if src not in sys.path: sys.path.append(src)
 # File-specific imports
 from typing import Union                                    # noqa: E402
 from datetime import datetime                               # noqa: E402
-from collections import namedtuple, deque                   # noqa: E402
+from collections import namedtuple                          # noqa: E402
 import random                                               # noqa: E402
 import numpy as np                                          # noqa: E402
 import torch                                                # noqa: E402
@@ -37,24 +37,22 @@ class SNROptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 150,
+            n_episodes: int = 5000,
             n_ticks: int = 100,
-            batch_size: int = 32,
-            epochs_per_episode: int = 5,
+            batch_size: int = 64,
             n_done_criterion: int = 10,
             fa_range: list[float] = [20., 60.],
-            fa_delta: float = 1.0,
             Nfa: int = 100,
             T1_range: list[float] = [0.100, 2.500],
             T2_range: list[float] = [0.005, 0.100],
             tr: float = 0.050,
             noise_level: float = 0.05,
-            gamma: float = 1.,
+            gamma: float = 0.99,  # 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 5e-2,
-            actor_alpha: float = 1e-4,
-            critic_alpha: float = 1e-3,
+            epsilon_decay: float = 1. - 1e-3,
+            actor_alpha: float = 1e-4,  # 1e-4,
+            critic_alpha: float = 1e-3,  # 1e-3,
             tau: float = 1e-2,
             log_dir=os.path.join(root, "logs", "epg_snr_optimizer_ddpg"),
             config_path=os.path.join(root, "config.json"),
@@ -78,8 +76,6 @@ class SNROptimizer():
                     Number of same flip angles in recent memory needed to end
                 fa_range : list[float]
                     Range of optimal and initial flip angles
-                fa_delta : float
-                    Amount of change in flip angle done by the model [deg]
                 Nfa : int
                     Number of pulses in epg simulation
                 T1_range_1 : list[float]
@@ -122,11 +118,9 @@ class SNROptimizer():
         self.n_episodes = n_episodes
         self.n_ticks = n_ticks
         self.batch_size = batch_size
-        self.epochs_per_episode = epochs_per_episode
         self.n_done_criterion = n_done_criterion
         self.fa_range = fa_range
         self.fa = float(np.mean(fa_range))
-        self.fa_delta = fa_delta
         self.Nfa = Nfa
         self.T1_range = T1_range
         self.T2_range = T2_range
@@ -186,12 +180,12 @@ class SNROptimizer():
         ])
 
         # Define noise function
-        # TODO: Fix this!!
-        self.noise = training.OUNoise(
-            self.action_space,
-            max_sigma=0.5, min_sigma=0.0,
-            decay_period=10
-        )
+        # TODO: Remove if not necessary anymore
+        # self.noise = training.OUNoise(
+        #     self.action_space,
+        #     max_sigma=0.05, min_sigma=0.,
+        #     decay_period=5
+        # )
 
     def init_model(self):
         """Constructs reinforcement learning model
@@ -202,10 +196,10 @@ class SNROptimizer():
         """
 
         # Define model architecture
-        actor_layers, critic_layers = ([4, 8, 8, 1], [5, 8, 8, 1])
+        actor_layers, critic_layers = ([4, 16, 64, 32, 1], [5, 16, 64, 32, 1])
         actor_activation_funcs, critic_activation_funcs = (
-            ['relu', 'relu', 'relu', 'tanh'],
-            ['relu', 'relu', 'relu', 'none']
+            ['relu', 'relu', 'relu', 'relu', 'tanh'],
+            ['relu', 'relu', 'relu', 'relu', 'none']
         )
 
         # Construct actor models (network + target network)
@@ -241,10 +235,10 @@ class SNROptimizer():
 
         # Setup optimizers
         self.actor_optimizer = optim.Adam(
-            self.actor.parameters(), lr=self.actor_alpha
+            self.actor.parameters(), lr=self.actor_alpha, weight_decay=1e-3
         )
         self.critic_optimizer = optim.Adam(
-            self.critic.parameters(), lr=self.actor_alpha
+            self.critic.parameters(), lr=self.actor_alpha, weight_decay=1e-3
         )
 
         # Setup criterion
@@ -267,10 +261,23 @@ class SNROptimizer():
         self.model_path = os.path.join(self.logs_path, "model.pt")
 
         # Define datafields
-        self.logs_fields = ["fa", "snr", "error", "critic_loss", "policy_loss"]
+        self.logs_fields = [
+            "fa", "fa_norm", "snr", "error", "done", "epsilon",
+            "actor_fa", "action_fa", "critic_loss", "policy_loss"
+        ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
             self.logs_path, self.logs_fields
+        )
+
+    def norm_parameters(self):
+        """Update normalized scan parameters"""
+
+        # Perform normalisation for all parameters
+        # Only fa for now
+        self.fa_norm = float(
+            (self.fa - 0.)
+            / (180. - 0.)
         )
 
     def calculate_snr(self, fa=None):
@@ -320,11 +327,11 @@ class SNROptimizer():
 
         return optimal_fa_list
 
-    def find_best_output(self, step, n_memory=3):
+    def find_best_output(self, n_memory=5):
         """Find best solution provided by model in final n steps"""
 
         # Calculate recent memory length
-        memory_len = min(step + 1, n_memory)
+        memory_len = min(self.tick + 1, n_memory)
         # Retrieve recent memory
         recent_memory = self.memory.get_recent_memory(memory_len)
         # Store as transitions
@@ -355,12 +362,12 @@ class SNROptimizer():
         best_snr = recent_snr[max_idx]
 
         # Find step number that gave the best snr
-        best_step = step - memory_len + max_idx
+        best_step = self.tick - memory_len + max_idx
 
         # Return best fa and snr + number of best step
         return float(best_fa), float(best_snr), int(best_step)
 
-    def step(self, old_state, action, episode_i, step_i):
+    def step(self, old_state, action):
         """Run step of the environment simulation
 
         - Perform selected action
@@ -378,19 +385,19 @@ class SNROptimizer():
         ).all():
             # Adjust flip angle
             delta = float(action[0]) * self.fa
-            self.fa += delta / 2
+            self.fa += delta / 2  # TODO: Think about this ...
             # Correct for flip angle out of bounds
             if self.fa < 0.0: self.fa = 0.0
             if self.fa > 180.0: self.fa = 180.0
+            # Update normalized scan parameters
+            self.norm_parameters()
         else:
             raise ValueError("Action not in action space")
 
         # Run simulations and update state
-        # TODO: Maybe we should normalize parameters to possible range?
-        # e.g. fa=[0,180] deg -> fa=[0,1]
         state = torch.tensor(
             [
-                self.calculate_snr(), self.fa,            # New snr, fa
+                self.calculate_snr(), self.fa_norm,       # New snr, fa
                 float(old_state[0]), float(old_state[1])  # Old snr, fa
             ],
             device=self.device
@@ -418,12 +425,17 @@ class SNROptimizer():
             # We do this to prevent blowing up rewards near the edges
             if reward_gain > 20.: reward_gain = 20.
 
+        # If reward is negative, increase gain
+        if reward_float < 0.:
+            reward_gain *= 2.0
+
+        # Define reward
         reward_float *= reward_gain
 
         # Scale reward with step_i (faster improvement yields bigger rewards)
         # Only scale the positives, though.
         if reward_float > 0.:
-            reward_float *= np.exp(-step_i / self.n_ticks)
+            reward_float *= np.exp(-self.tick / (self.n_ticks / 5.))
 
         # Store reward in tensor
         reward = torch.tensor(
@@ -431,7 +443,7 @@ class SNROptimizer():
         )
 
         # Set done
-        if step_i >= self.n_done_criterion:
+        if self.tick >= self.n_done_criterion:
             # Retrieve recent memory
             recent_memory = \
                 self.memory.get_recent_memory(self.n_done_criterion)
@@ -464,20 +476,26 @@ class SNROptimizer():
 
         self.logger.log_scalar(
             field="fa",
-            tag=f"{self.logs_tag}_{loop_type}_episode_{episode_i + 1}",
-            value=float(state[1]),
-            step=step_i
+            tag=f"{self.logs_tag}_{loop_type}_episode_{self.episode + 1}",
+            value=float(self.fa),
+            step=self.tick
+        )
+        self.logger.log_scalar(
+            field="fa_norm",
+            tag=f"{self.logs_tag}_{loop_type}_episode_{self.episode + 1}",
+            value=float(self.fa_norm),
+            step=self.tick
         )
         self.logger.log_scalar(
             field="snr",
-            tag=f"{self.logs_tag}_{loop_type}_episode_{episode_i + 1}",
+            tag=f"{self.logs_tag}_{loop_type}_episode_{self.episode + 1}",
             value=float(state[0]),
-            step=step_i
+            step=self.tick
         )
 
         return state, reward, done
 
-    def get_action(self, state, step):
+    def get_action(self, state):
         """Get action
 
         Determine the action for this step
@@ -487,19 +505,37 @@ class SNROptimizer():
         """
 
         # Get action from actor model
-        pure_action = self.actor(state)
-        # Pass through noise function
-        # TODO: This noise function is acting up big-time
-        noisy_action = self.noise.get_action(pure_action, step)
-        # noisy_action = np.array(pure_action.detach().numpy() + (random.random() * 2 - 1) * 0.5 * np.exp(-step / 50))
-        # noisy_action = np.clip(noisy_action, -1., 1.)
+        pure_action = self.actor(state).detach().numpy()
+        # Add noise
+        noise = np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
+        noisy_action = np.clip(
+            pure_action + noise,
+            np.min(self.action_space, axis=1),
+            np.max(self.action_space, axis=1)
+        )
         # Print some info
         if self.verbose:
             print(f"Model: {float(pure_action):4.1f}", end="")
 
+        # Log actor output and eventual action
+        loop_type = 'train' if self.train else 'test'
+
+        self.logger.log_scalar(
+            field="actor_fa",
+            tag=f"{self.logs_tag}_{loop_type}_episode_{self.episode + 1}",
+            value=float(pure_action[0]),
+            step=self.tick
+        )
+        self.logger.log_scalar(
+            field="action_fa",
+            tag=f"{self.logs_tag}_{loop_type}_episode_{self.episode + 1}",
+            value=float(noisy_action[0]),
+            step=self.tick
+        )
+
         return torch.FloatTensor(noisy_action, device=self.device)
 
-    def update(self, episode_i, step_i):
+    def update(self):
         """Update model"""
 
         # Sample batch from memory
@@ -558,15 +594,15 @@ class SNROptimizer():
         if self.train:
             self.logger.log_scalar(
                 field="critic_loss",
-                tag=f"{self.logs_tag}_train_episode_{episode_i + 1}",
+                tag=f"{self.logs_tag}_train_losses",
                 value=float(critic_loss),
-                step=step_i
+                step=self.train_tick
             )
             self.logger.log_scalar(
                 field="policy_loss",
-                tag=f"{self.logs_tag}_train_episode_{episode_i + 1}",
+                tag=f"{self.logs_tag}_train_losses",
                 value=float(policy_loss),
-                step=step_i
+                step=self.train_tick
             )
 
     def run(self, train=True):
@@ -603,18 +639,20 @@ class SNROptimizer():
             self.T2_range[0], self.T2_range[1], self.n_episodes
         ))
 
+        # Set training step counter
+        if self.train: self.train_tick = 0
+
         # Loop over episodes
-        for episode in range(self.n_episodes) if train else range(20):
+        for self.episode in range(self.n_episodes) if train else range(20):
             # Print some info
             if self.verbose:
                 print(
-                    f"\n=== Episode {episode + 1:3d}/"
+                    f"\n=== Episode {self.episode + 1:3d}/"
                     f"{self.n_episodes if train else 20:3d} ==="
                 )
-            # Reset noise, done and tick counter
-            self.noise.reset()
+            # Reset done and tick counter
             done = False
-            tick = 0
+            self.tick = 0
 
             # Set initial flip angle, T1 and T2 for this episode
             # If train, take them from the uniform distributions
@@ -648,14 +686,17 @@ class SNROptimizer():
                     self.T2_range[0], self.T2_range[1])
 
             # TODO: Remove (debugging)
-            self.T1 = 0.5
-            self.T2 = 0.05
+            self.T1 = 0.19
+            self.T2 = 0.1
+
+            # Normalize parameters
+            self.norm_parameters()
 
             # Run initial simulation
             snr = self.calculate_snr()
             # Set initial state (snr, fa, previous snr, previous fa)
             state = torch.tensor(
-                [snr, self.fa, 0., 0.],
+                [snr, self.fa_norm, 0., 0.],
                 device=self.device
             )
 
@@ -671,34 +712,33 @@ class SNROptimizer():
             )
 
             # Loop over steps/ticks
-            while tick < self.n_ticks and not bool(done):
+            while self.tick < self.n_ticks and not bool(done):
                 # Print some info
-                print(f"Step {tick + 1:3d}/{self.n_ticks:3d} - ", end="")
+                print(f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - ", end="")
 
                 # Get action
-                action = self.get_action(state, tick)
+                action = self.get_action(state)
 
                 # Simulate step
-                next_state, reward, done = self.step(
-                    state, action, episode, tick
-                )
+                next_state, reward, done = self.step(state, action)
                 # Add to memory
                 self.memory.push(state, action, reward, next_state, done)
                 # Update state
                 state = next_state
                 # Update tick counter
-                tick += 1
+                self.tick += 1
+                if self.train: self.train_tick += 1
 
                 # Update model
                 if train and len(self.memory) >= self.batch_size:
-                    self.update(episode, tick)
+                    self.update()
 
                 # Print some info
                 color_str = "\033[92m" if reward > 0. else "\033[91m"
                 end_str = "\033[0m"
                 print(
                     f" - Action: {float(action):4.1f}"
-                    f" - FA: {float(state[1]):5.1f}"
+                    f" - FA: {float(self.fa):5.1f}"
                     f" - SNR: {float(state[0]):5.2f}"
                     " - Reward: "
                     "" + color_str + f"{float(reward):5.1f}" + end_str
@@ -707,7 +747,7 @@ class SNROptimizer():
                     print("Stopping criterion met")
 
             # Print some info on error relative to theoretical optimum
-            found_fa, found_snr, best_step = self.find_best_output(tick)
+            found_fa, found_snr, best_step = self.find_best_output()
 
             if found_snr == 0.:
                 relative_snr_error = 100.
@@ -728,19 +768,31 @@ class SNROptimizer():
                     field="fa",
                     tag=f"{self.logs_tag}_train_episodes",
                     value=float(found_fa),
-                    step=episode
+                    step=self.episode
                 )
                 self.logger.log_scalar(
                     field="snr",
                     tag=f"{self.logs_tag}_train_episodes",
                     value=float(found_snr),
-                    step=episode
+                    step=self.episode
                 )
                 self.logger.log_scalar(
                     field="error",
                     tag=f"{self.logs_tag}_train_episodes",
                     value=min(float(relative_snr_error) / 100., 1.),
-                    step=episode
+                    step=self.episode
+                )
+                self.logger.log_scalar(
+                    field="done",
+                    tag=f"{self.logs_tag}_train_episodes",
+                    value=float(self.tick + 1),
+                    step=self.episode
+                )
+                self.logger.log_scalar(
+                    field="epsilon",
+                    tag=f"{self.logs_tag}_train_episodes",
+                    value=float(self.epsilon),
+                    step=self.episode
                 )
 
                 # Backup model
