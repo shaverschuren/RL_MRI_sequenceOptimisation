@@ -37,9 +37,9 @@ class SNROptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 5000,
+            n_episodes: int = 1000,
             n_ticks: int = 100,
-            batch_size: int = 64,
+            batch_size: int = 128,
             n_done_criterion: int = 10,
             fa_range: list[float] = [20., 60.],
             Nfa: int = 100,
@@ -50,7 +50,7 @@ class SNROptimizer():
             gamma: float = 0.99,  # 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 1e-3,
+            epsilon_decay: float = 1. - 1e-2,  # 1. - 2e-3,
             actor_alpha: float = 1e-4,  # 1e-4,
             critic_alpha: float = 1e-3,  # 1e-3,
             tau: float = 1e-2,
@@ -189,8 +189,8 @@ class SNROptimizer():
 
     def init_model(self):
         """Constructs reinforcement learning model
-
-        Neural nets: Fully connected 4-8-8-1 and 5-8-8-1
+        TODO: Try in-256-1
+        Neural nets: Fully connected 4-16-64-32-1 and 5-16-64-32-1
         Loss: L2 (MSE) Loss
         Optimizer: Adam with lr alpha
         """
@@ -235,10 +235,10 @@ class SNROptimizer():
 
         # Setup optimizers
         self.actor_optimizer = optim.Adam(
-            self.actor.parameters(), lr=self.actor_alpha, weight_decay=1e-3
+            self.actor.parameters(), lr=self.actor_alpha, weight_decay=1e-2
         )
         self.critic_optimizer = optim.Adam(
-            self.critic.parameters(), lr=self.actor_alpha, weight_decay=1e-3
+            self.critic.parameters(), lr=self.critic_alpha, weight_decay=1e-2
         )
 
         # Setup criterion
@@ -416,11 +416,13 @@ class SNROptimizer():
         else:
             # Calculate relative signal difference and derive reward gain
             snr_diff = abs(state[0] - old_state[0]) / old_state[0]
-            reward_gain = snr_diff * 50.
+            reward_gain = snr_diff * 100.
 
-            # If reward gain is lower than 0.5, use 0.5
-            # We do this to prevent disappearing rewards near the optimum
-            if reward_gain < 0.5: reward_gain = 0.5
+            # If reward is lower than 0.01, penalise
+            # the system for taking steps that are too small.
+            if reward_gain < 0.01:
+                reward_float = -1.0
+                reward_gain = 0.05
             # If reward gain is higher than 20, use 20
             # We do this to prevent blowing up rewards near the edges
             if reward_gain > 20.: reward_gain = 20.
@@ -506,8 +508,11 @@ class SNROptimizer():
 
         # Get action from actor model
         pure_action = self.actor(state).detach().numpy()
-        # Add noise
-        noise = np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
+        # Add noise (if training)
+        noise = (
+            np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
+            if self.train else 0.
+        )
         noisy_action = np.clip(
             pure_action + noise,
             np.min(self.action_space, axis=1),
@@ -515,7 +520,7 @@ class SNROptimizer():
         )
         # Print some info
         if self.verbose:
-            print(f"Model: {float(pure_action):4.1f}", end="")
+            print(f"Model: {float(pure_action):5.2f}", end="")
 
         # Log actor output and eventual action
         loop_type = 'train' if self.train else 'test'
@@ -642,6 +647,9 @@ class SNROptimizer():
         # Set training step counter
         if self.train: self.train_tick = 0
 
+        # If test, tighten done criterion
+        if not self.train: self.n_done_criterion = 3
+
         # Loop over episodes
         for self.episode in range(self.n_episodes) if train else range(20):
             # Print some info
@@ -737,7 +745,7 @@ class SNROptimizer():
                 color_str = "\033[92m" if reward > 0. else "\033[91m"
                 end_str = "\033[0m"
                 print(
-                    f" - Action: {float(action):4.1f}"
+                    f" - Action: {float(action):5.2f}"
                     f" - FA: {float(self.fa):5.1f}"
                     f" - SNR: {float(state[0]):5.2f}"
                     " - Reward: "
