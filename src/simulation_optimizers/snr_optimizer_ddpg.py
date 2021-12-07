@@ -23,7 +23,6 @@ import random                                               # noqa: E402
 import numpy as np                                          # noqa: E402
 import torch                                                # noqa: E402
 import torch.optim as optim                                 # noqa: E402
-import torch.nn.functional as F                             # noqa: E402
 from epg_simulator.python import epg                        # noqa: E402
 from util import model, training, loggers                   # noqa: E402
 
@@ -42,8 +41,7 @@ class SNROptimizer():
             n_ticks: int = 100,
             batch_size: int = 32,
             epochs_per_episode: int = 5,
-            memory_done_criterion: int = 15,
-            n_done_criterion: int = 3,
+            n_done_criterion: int = 10,
             fa_range: list[float] = [20., 60.],
             fa_delta: float = 1.0,
             Nfa: int = 100,
@@ -58,7 +56,6 @@ class SNROptimizer():
             actor_alpha: float = 1e-4,
             critic_alpha: float = 1e-3,
             tau: float = 1e-2,
-            target_update_period: int = 3,
             log_dir=os.path.join(root, "logs", "epg_snr_optimizer_ddpg"),
             config_path=os.path.join(root, "config.json"),
             verbose: bool = True,
@@ -111,8 +108,6 @@ class SNROptimizer():
                     Learning rate for Adam optimizer for critic model
                 tau : float
                     Delay factor for target net. Should be in [0-1]
-                target_update_period : int
-                    Periods between target net updates
                 log_dir : str | bytes | os.PathLike
                     Path to log directory
                 config_path : str | bytes | os.PathLike
@@ -124,12 +119,10 @@ class SNROptimizer():
         """
 
         # Setup attributes
-        # Setup attributes
         self.n_episodes = n_episodes
         self.n_ticks = n_ticks
         self.batch_size = batch_size
         self.epochs_per_episode = epochs_per_episode
-        self.memory_done_criterion = memory_done_criterion
         self.n_done_criterion = n_done_criterion
         self.fa_range = fa_range
         self.fa = float(np.mean(fa_range))
@@ -146,7 +139,6 @@ class SNROptimizer():
         self.actor_alpha = actor_alpha
         self.critic_alpha = critic_alpha
         self.tau = tau
-        self.target_update_period = target_update_period
         self.log_dir = log_dir
         self.config_path = config_path
         self.verbose = verbose
@@ -166,7 +158,7 @@ class SNROptimizer():
             'Transition', self.transition_contents
         )
         self.memory = training.LongTermMemory(
-            capacity=1000,
+            capacity=10000,
             transition_contents=self.transition_contents
         )
 
@@ -194,7 +186,12 @@ class SNROptimizer():
         ])
 
         # Define noise function
-        self.noise = training.OUNoise(self.action_space)
+        # TODO: Fix this!!
+        self.noise = training.OUNoise(
+            self.action_space,
+            max_sigma=0.5, min_sigma=0.0,
+            decay_period=10
+        )
 
     def init_model(self):
         """Constructs reinforcement learning model
@@ -381,7 +378,7 @@ class SNROptimizer():
         ).all():
             # Adjust flip angle
             delta = float(action[0]) * self.fa
-            self.fa += delta
+            self.fa += delta / 2
             # Correct for flip angle out of bounds
             if self.fa < 0.0: self.fa = 0.0
             if self.fa > 180.0: self.fa = 180.0
@@ -389,6 +386,8 @@ class SNROptimizer():
             raise ValueError("Action not in action space")
 
         # Run simulations and update state
+        # TODO: Maybe we should normalize parameters to possible range?
+        # e.g. fa=[0,180] deg -> fa=[0,1]
         state = torch.tensor(
             [
                 self.calculate_snr(), self.fa,            # New snr, fa
@@ -433,28 +432,25 @@ class SNROptimizer():
 
         # Set done
         if step_i >= self.n_done_criterion:
-            # Calculate recent memory length (max memory_done_criterion)
-            memory_len = min(step_i + 1, self.memory_done_criterion)
             # Retrieve recent memory
-            recent_memory = self.memory.get_recent_memory(memory_len)
+            recent_memory = \
+                self.memory.get_recent_memory(self.n_done_criterion)
             # Store as transitions
             recent_transitions = self.Transition(*zip(*recent_memory))
             # Extract flip angles
             recent_states = np.array(torch.cat(recent_transitions.state).cpu())
-            recent_fa = np.delete(
+            recent_snr = np.delete(
                 np.delete(
                     recent_states,
-                    np.arange(0, recent_states.size, 2)
+                    np.arange(1, recent_states.size, 2)
                 ),
                 np.arange(0, recent_states.size // 2, 2)
             )
-            # Append current/last flip angle
-            recent_fa = np.append(recent_fa, float(old_state[1]))
+            # Append current/last SNR
+            recent_snr = np.append(recent_snr, float(old_state[0]))
 
-            # Check for returning flip angles in recent memory
-            _, counts = np.unique(recent_fa, return_counts=True)
-
-            if (counts >= self.n_done_criterion).any():
+            # Check for improvement in SNR over recent records
+            if not (recent_snr[1:] > recent_snr[0]).any():
                 done = torch.tensor(1, device=self.device)
             else:
                 done = torch.tensor(0, device=self.device)
@@ -493,7 +489,13 @@ class SNROptimizer():
         # Get action from actor model
         pure_action = self.actor(state)
         # Pass through noise function
+        # TODO: This noise function is acting up big-time
         noisy_action = self.noise.get_action(pure_action, step)
+        # noisy_action = np.array(pure_action.detach().numpy() + (random.random() * 2 - 1) * 0.5 * np.exp(-step / 50))
+        # noisy_action = np.clip(noisy_action, -1., 1.)
+        # Print some info
+        if self.verbose:
+            print(f"Model: {float(pure_action):4.1f}", end="")
 
         return torch.FloatTensor(noisy_action, device=self.device)
 
@@ -645,6 +647,10 @@ class SNROptimizer():
                 self.T2 = random.uniform(
                     self.T2_range[0], self.T2_range[1])
 
+            # TODO: Remove (debugging)
+            self.T1 = 0.5
+            self.T2 = 0.05
+
             # Run initial simulation
             snr = self.calculate_snr()
             # Set initial state (snr, fa, previous snr, previous fa)
@@ -692,7 +698,7 @@ class SNROptimizer():
                 end_str = "\033[0m"
                 print(
                     f" - Action: {float(action):4.1f}"
-                    f" - FA: {float(state[1]):4.1f}"
+                    f" - FA: {float(state[1]):5.1f}"
                     f" - SNR: {float(state[0]):5.2f}"
                     " - Reward: "
                     "" + color_str + f"{float(reward):5.1f}" + end_str
