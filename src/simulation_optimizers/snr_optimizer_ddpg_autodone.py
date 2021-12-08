@@ -50,7 +50,7 @@ class SNROptimizer():
             gamma: float = 0.99,  # 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 1e-2,  # 1. - 2e-3,
+            epsilon_decay: float = 1. - 1e-3,  # 1. - 2e-3,
             actor_alpha: float = 1e-4,  # 1e-4,
             critic_alpha: float = 1e-3,  # 1e-3,
             tau: float = 1e-2,
@@ -440,9 +440,10 @@ class SNROptimizer():
             reward_float *= np.exp(-self.tick / (self.n_ticks / 5.))
 
         # Update reward based on 'done' verdict. Here, giving 'done' too
-        # early will drastically decrease the given reward.
+        # easily (e.g. we're still improving) will decrease rewards
         if bool(done):
-            reward_float -= max(0, 1 - self.tick / self.n_done_criterion) * 20.
+            if reward_float > 0.1:
+                reward_float = -reward_float
 
         # Store reward in tensor
         reward = torch.tensor(
