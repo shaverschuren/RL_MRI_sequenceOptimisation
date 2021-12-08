@@ -455,8 +455,8 @@ class SNROptimizer():
             # Append current/last SNR
             recent_snr = np.append(recent_snr, float(old_state[0]))
 
-            # Check for improvement in SNR over recent records
-            if not (recent_snr[1:] > recent_snr[0]).any():
+            # Check for improvement in SNR over recent records (minimum of .1%)
+            if not (recent_snr[1:] > (1. + 1e-3) * recent_snr[0]).any():
                 done = torch.tensor(1, device=self.device)
             else:
                 done = torch.tensor(0, device=self.device)
