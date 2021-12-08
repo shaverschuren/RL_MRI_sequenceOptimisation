@@ -37,10 +37,10 @@ class SNROptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 2500,
+            n_episodes: int = 2000,
             n_ticks: int = 100,
             batch_size: int = 128,
-            n_done_criterion: int = 10,
+            n_done_criterion: int = 5,
             fa_range: list[float] = [20., 60.],
             Nfa: int = 100,
             T1_range: list[float] = [0.100, 2.500],
@@ -50,7 +50,7 @@ class SNROptimizer():
             gamma: float = 0.99,  # 1.,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 1e-2,  # 1. - 2e-3,
+            epsilon_decay: float = 1. - 2e-3,
             actor_alpha: float = 1e-4,  # 1e-4,
             critic_alpha: float = 1e-3,  # 1e-3,
             tau: float = 1e-2,
