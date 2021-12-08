@@ -179,41 +179,39 @@ class SNROptimizer():
             [-1.0, 1.0]
         ])
 
+        # Define state size (snr, fa)
+        self.state_size = 2
+
     def init_model(self):
         """Constructs reinforcement learning model
 
-        Neural nets: Fully connected 4-16-64-32-1 and 5-16-64-32-1
+        Neural nets: RNNs
         Loss: L2 (MSE) Loss
-        Optimizer: Adam with lr alpha
+        Optimizer: Adam with lr alpha, weight decay 1e-2
         """
 
-        # Define model architecture
-        actor_layers, critic_layers = ([4, 16, 64, 32, 1], [5, 16, 64, 32, 1])
-        actor_activation_funcs, critic_activation_funcs = (
-            ['relu', 'relu', 'relu', 'relu', 'tanh'],
-            ['relu', 'relu', 'relu', 'relu', 'none']
-        )
-
         # Construct actor models (network + target network)
-        self.actor = model.FullyConnectedModel(
-            actor_layers,
-            actor_activation_funcs,
+        self.actor = model.RNN(
+            self.state_size, 256, np.shape(self.action_space)[0],
+            "tanh",
             self.device
         )
-        self.actor_target = model.FullyConnectedModel(
-            actor_layers,
-            actor_activation_funcs,
+        self.actor_target = model.RNN(
+            self.state_size, 256, np.shape(self.action_space)[0],
+            "tanh",
             self.device
         )
         # Construct critic models (network + target network)
-        self.critic = model.FullyConnectedModel(
-            critic_layers,
-            critic_activation_funcs,
+        self.critic = model.RNN(
+            self.state_size + np.shape(self.action_space)[0], 256,
+            np.shape(self.action_space)[0],
+            "none",
             self.device
         )
-        self.critic_target = model.FullyConnectedModel(
-            critic_layers,
-            critic_activation_funcs,
+        self.critic_target = model.RNN(
+            self.state_size + np.shape(self.action_space)[0], 256,
+            np.shape(self.action_space)[0],
+            "none",
             self.device
         )
 
@@ -389,15 +387,15 @@ class SNROptimizer():
 
         # Run simulations and update state
         new_state = torch.tensor(
-            [[self.calculate_snr(), self.fa_norm]],
+            [[[self.calculate_snr(), self.fa_norm]]],
             device=self.device
         )
 
-        state = torch.cat([new_state, old_state], dim=0)
+        state = torch.cat([old_state, new_state], dim=0)
 
         # Extract previous and current snr info
-        snr = float(state[-1][0])
-        snr_prev = float(state[-2][0])
+        snr = float(state[-1][0][0])
+        snr_prev = float(state[-2][0][0])
 
         # Define reward as either +/- 1 for increase or decrease in signal
         if snr > snr_prev:
@@ -505,7 +503,7 @@ class SNROptimizer():
         """
 
         # Get action from actor model
-        pure_action = self.actor(state).detach().numpy()
+        pure_action = self.actor.forward_sequence(state).detach().numpy()
         # Add noise (if training)
         noise = (
             np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
@@ -559,16 +557,16 @@ class SNROptimizer():
         ).to(self.device)
 
         # Determine critic loss
-        Qvals = self.critic(torch.cat([states, actions], 1))
-        next_actions = self.actor_target(next_states)
-        next_Q = self.critic_target(
+        Qvals = self.critic.forward_sequence(torch.cat([states, actions], 1))
+        next_actions = self.actor_target.forward_sequence(next_states)
+        next_Q = self.critic_target.forward_sequence(
             torch.cat([next_states, next_actions.detach()], 1)
         )
         Qprime = rewards + self.gamma * next_Q
         critic_loss = self.critic_criterion(Qvals, Qprime)
 
         # Determine actor loss
-        policy_loss = -self.critic(
+        policy_loss = -self.critic.forward_sequence(
             torch.cat([states, self.actor(states)], 1)
         ).mean()
 
@@ -702,7 +700,7 @@ class SNROptimizer():
             snr = self.calculate_snr()
             # Set initial state (1x2)  : (snr, fa)xn with n=1
             state = torch.tensor(
-                [[snr, self.fa_norm]],
+                [[[snr, self.fa_norm]]],
                 device=self.device
             )
 
@@ -745,7 +743,7 @@ class SNROptimizer():
                 print(
                     f" - Action: {float(action[0]):5.2f}"
                     f" - FA: {float(self.fa):5.1f}"
-                    f" - SNR: {float(state[0]):5.2f}"
+                    f" - SNR: {float(state[-1][0][0]):5.2f}"
                     " - Reward: "
                     "" + color_str + f"{float(reward):5.1f}" + end_str
                 )
