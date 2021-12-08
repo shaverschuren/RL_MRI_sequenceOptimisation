@@ -720,7 +720,7 @@ class SNROptimizer():
                 # Print some info
                 print(f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - ", end="")
 
-                # Get action TODO:
+                # Get action
                 action = self.get_action(state)
 
                 # Simulate step
@@ -733,7 +733,7 @@ class SNROptimizer():
                 self.tick += 1
                 if self.train: self.train_tick += 1
 
-                # Update model
+                # Update model TODO: Rewrite for RNN model
                 if train and len(self.memory) >= self.batch_size:
                     self.update()
 
@@ -751,7 +751,7 @@ class SNROptimizer():
                     print("Stopping criterion met")
 
             # Print some info on error relative to theoretical optimum
-            # TODO:
+            # TODO: Rewrite for RNNs
             found_fa, found_snr, best_step = self.find_best_output()
 
             if found_snr == 0.:
