@@ -37,7 +37,7 @@ class SNROptimizer():
 
     def __init__(
             self,
-            n_episodes: int = 1000,
+            n_episodes: int = 2500,
             n_ticks: int = 100,
             batch_size: int = 128,
             n_done_criterion: int = 10,
@@ -179,17 +179,9 @@ class SNROptimizer():
             [-1.0, 1.0]
         ])
 
-        # Define noise function
-        # TODO: Remove if not necessary anymore
-        # self.noise = training.OUNoise(
-        #     self.action_space,
-        #     max_sigma=0.05, min_sigma=0.,
-        #     decay_period=5
-        # )
-
     def init_model(self):
         """Constructs reinforcement learning model
-        TODO: Try in-256-1
+
         Neural nets: Fully connected 4-16-64-32-1 and 5-16-64-32-1
         Loss: L2 (MSE) Loss
         Optimizer: Adam with lr alpha
@@ -692,10 +684,6 @@ class SNROptimizer():
                     self.T1_range[0], self.T1_range[1])
                 self.T2 = random.uniform(
                     self.T2_range[0], self.T2_range[1])
-
-            # TODO: Remove (debugging)
-            self.T1 = 0.19
-            self.T2 = 0.1
 
             # Normalize parameters
             self.norm_parameters()
