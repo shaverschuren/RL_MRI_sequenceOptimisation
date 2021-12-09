@@ -35,6 +35,7 @@ parse_params() {
   	simulation=0
   	vm=0
 	validation=0
+    ddpg=0
 
 	# Parse passed options
   	while :; do
@@ -43,6 +44,7 @@ parse_params() {
     	-s | --simulation) simulation=1 ;;
 		-vm | --simulate_vm) vm=1 ;;
 		-v | --validation) validation=1 ;;
+        --ddpg) ddpg=1 ;;
     	-m | --mode)
       	mode="${2-}"
       	shift
@@ -119,7 +121,14 @@ fi
 if [ $validation -eq 0 ]
 then
 	msg "Running RL loop..."
-	python "$src/scanner_optimizers/"$mode"_optimizer.py"
+    # Run DQN or DDPG optimizer
+    if [ $ddpg -eq 0 ]
+    then
+	    python "$src/scanner_optimizers/"$mode"_optimizer.py"
+    elif [ $ddpg -eq 1 ]
+    then
+        python "$src/scanner_optimizers/"$mode"_optimizer_ddpg.py"
+    fi
 elif [ $validation -eq 1 ]
 then
 	msg "Running validation loop..."

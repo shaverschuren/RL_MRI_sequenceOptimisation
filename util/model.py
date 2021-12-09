@@ -4,6 +4,7 @@ from typing import Union
 from collections import OrderedDict
 import torch
 import torch.nn as nn
+from torch.autograd import Variable
 
 
 class FullyConnectedModel(nn.Module):
@@ -124,3 +125,73 @@ class FullyConnectedModel(nn.Module):
         """Returns subscriptable item"""
 
         return self.stack[item]
+
+
+class RNN(nn.Module):
+    def __init__(
+            self,
+            input_size: int, hidden_size: int, output_size: int,
+            output_activation: str,
+            device: Union[None, torch.device] = None
+    ):
+        super(RNN, self).__init__()
+
+        # Build attributes
+        self.hidden_size = hidden_size
+        self.output_activation = output_activation
+        self.device = device
+
+        # Build layers
+        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
+        self.i2o = nn.Linear(input_size + hidden_size, output_size)
+
+        # Select output activation function
+        if output_activation == "relu":
+            self.output_activation_func = nn.ReLU()
+        elif output_activation == "tanh":
+            self.output_activation_func = nn.Tanh()
+        elif output_activation == "none":
+            self.output_activation_func = None
+        else:
+            raise ValueError(
+                "Only relu, tanh and none are supported."
+            )
+
+        # Move to device
+        if self.device:
+            # i2h, i2o
+            self.i2h.to(device)
+            self.i2o.to(device)
+            # Output activation
+            if self.output_activation_func:
+                self.output_activation_func.to(device)
+
+    def forward(self, input, hidden):
+        """Implement forward pass"""
+
+        # Pass through input2hidden, input2output
+        combined = torch.cat((input, hidden), 1)
+        hidden = self.i2h(combined)
+        output = self.i2o(combined)
+
+        # Pass through activation function (if applicable)
+        if self.output_activation_func:
+            output = self.output_activation_func(output)
+
+        # Return output, hidden
+        return output, hidden
+
+    def forward_sequence(self, input: torch.Tensor):
+        """Implements an entire sequential forward pass"""
+
+        # Initialize hidden state
+        hidden = self.init_hidden()
+        output = torch.Tensor(device=self.device)
+
+        for i in range(input.size()[0]):
+            output, hidden = self.forward(input[i], hidden)
+
+        return output
+
+    def init_hidden(self):
+        return Variable(torch.zeros(1, self.hidden_size))
