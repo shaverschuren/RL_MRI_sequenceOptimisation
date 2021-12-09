@@ -26,15 +26,15 @@ def parse_args():
     # Add arguments
     parser.add_argument(
         "--mode", default="snr", type=str,
-        help="Metric to optimize. Available modes: snr/cnr"
+        help="Metric to optimize. Available: snr/cnr"
     )
     parser.add_argument(
         "--env", default="mri", type=str,
-        help="Type of environment. Available environments: mri/epg"
+        help="Type of environment. Available: mri/epg"
     )
     parser.add_argument(
         "--agent", default="ddpg", type=str,
-        help="Type of optimizer agent. Available agents: dqn/ddpg/rdpg"
+        help="Type of optimizer agent. Available: dqn/ddpg/rdpg/validator"
     )
 
     # Parse and return arguments
@@ -59,9 +59,12 @@ def init_environment(args: argparse.Namespace):
         action_space = "discrete"
     elif args.agent.lower() in ["ddpg", "rdpg"]:
         action_space = "continuous"
+    elif args.agent.lower() == "validation":
+        action_space = None
     else:
         raise RuntimeError(
-            "Value of 'agent' should be in ('dqn', 'ddpg', 'rdpg')"
+            "Value of 'agent' should be in "
+            "('dqn', 'ddpg', 'rdpg', 'validation')"
         )
 
     # Check for either cnr or snr optimization
@@ -74,8 +77,11 @@ def init_environment(args: argparse.Namespace):
             "Value of 'mode' argument should be either 'snr' or 'cnr'"
         )
 
+    # Check whether in validation mode or not
+    validation_mode = (args.agent.lower() == "validation")
+
     # Initialize environment
-    # TODO: Add action space and mode
+    # TODO: Add action space, validation and mode
     if platform == "scanner":
         env = environments.ScannerEnv()
     elif platform == "simulation":
