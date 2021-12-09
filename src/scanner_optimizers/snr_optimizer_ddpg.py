@@ -836,5 +836,5 @@ if __name__ == "__main__":
         n_episodes=10,
         pretrained_path=os.path.join(root, "models", "epg_snr_ddpg.pt")
     )
-    optimizer.run()
+    # optimizer.run()
     optimizer.run(train=False)
