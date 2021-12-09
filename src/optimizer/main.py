@@ -103,9 +103,12 @@ def init_optimizer(env, args: argparse.Namespace):
         optimizer = algorithms.DDPG()
     elif args.agent.lower() == "rdpg":
         optimizer = algorithms.RDPG()
+    elif args.agent.lower() == "validation":
+        optimizer = algorithms.Validator()
     else:
         raise RuntimeError(
-            "Value of 'agent' argument should be in ('dqn', 'ddpg', 'rdpg')"
+            "Value of 'agent' argument should be in "
+            "('dqn', 'ddpg', 'rdpg', 'validation')"
         )
 
     return optimizer

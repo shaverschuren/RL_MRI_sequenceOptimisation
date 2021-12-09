@@ -18,3 +18,7 @@ class DDPG(object):
 
 class RDPG(object):
     pass
+
+
+class Validator(object):
+    pass
