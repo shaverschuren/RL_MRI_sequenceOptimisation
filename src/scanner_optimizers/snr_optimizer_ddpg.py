@@ -23,7 +23,7 @@ import random                                               # noqa: E402
 import numpy as np                                          # noqa: E402
 import torch                                                # noqa: E402
 import torch.optim as optim                                 # noqa: E402
-from util import model, training, loggers, roi              # noqa: E402
+from util import models, training, loggers, roi             # noqa: E402
 
 
 class SNROptimizer():
@@ -205,23 +205,23 @@ class SNROptimizer():
         )
 
         # Construct actor models (network + target network)
-        self.actor = model.FullyConnectedModel(
+        self.actor = models.FullyConnectedModel(
             actor_layers,
             actor_activation_funcs,
             self.device
         )
-        self.actor_target = model.FullyConnectedModel(
+        self.actor_target = models.FullyConnectedModel(
             actor_layers,
             actor_activation_funcs,
             self.device
         )
         # Construct critic models (network + target network)
-        self.critic = model.FullyConnectedModel(
+        self.critic = models.FullyConnectedModel(
             critic_layers,
             critic_activation_funcs,
             self.device
         )
-        self.critic_target = model.FullyConnectedModel(
+        self.critic_target = models.FullyConnectedModel(
             critic_layers,
             critic_activation_funcs,
             self.device
