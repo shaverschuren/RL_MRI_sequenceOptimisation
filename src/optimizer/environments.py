@@ -9,12 +9,17 @@ either continuous or discrete action spaces. Also, optimisations
 may be performed over both snr and cnr.
 """
 
+import os
 from typing import Union
+import json
+import time
+import h5py
 import warnings
 import numpy as np
 import random
 import torch
 from epg_simulator.python import epg
+from util import roi
 
 
 class ActionSpace(object):
@@ -111,7 +116,6 @@ class SimulationEnv(object):
             tr: float = 0.050,
             noise_level: float = 0.05,
             lock_material_params: bool = False,
-            gamma: float = 0.99,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
@@ -144,8 +148,6 @@ class SimulationEnv(object):
                     Noise level for snr calculation
                 lock_material_params : bool
                     If True, don't vary material parameters over episodes
-                gamma : float
-                    Discount factor for Q value calculation
                 device : None | torch.device
                     Torch device
             """
@@ -164,7 +166,6 @@ class SimulationEnv(object):
         self.tr = tr
         self.noise_level = noise_level
         self.lock_material_params = lock_material_params
-        self.gamma = gamma
         self.episode = 0
         self.tick = 0
 
@@ -641,4 +642,393 @@ class SimulationEnv(object):
 
 
 class ScannerEnv(object):
-    pass
+    """Class to represent a reinforcement learning environment
+    for scan parameter optimization in an actual MRI scanner
+    """
+
+    def __init__(
+            self,
+            config_path: Union[str, os.PathLike],
+            log_dir: Union[str, os.PathLike],
+            mode: str = "snr",
+            action_space_type: str = "continuous",
+            recurrent_model: bool = False,
+            homogeneous_initialization: bool = False,
+            n_episodes: Union[int, None] = None,
+            fa_range: list[float] = [20., 60.],
+            overwrite_roi: bool = False,
+            device: Union[torch.device, None] = None):
+        """Initializes and builds attributes for this class
+
+            Parameters
+            ----------
+                mode : str
+                    Optimization mode (either snr or cnr)
+                config_path : str | bytes | os.PathLike
+                    Path to config file (mostly for scanner interaction)
+                log_dir : str | bytes | os.PathLike
+                    Path to log directory
+                action_space_type : str
+                    Type of action space. Either discrete or continuous
+                recurrent_model : bool
+                    Whether we use a recurrent optimizer. This influences
+                    the state we'll pass to the model.
+                homogeneous_initialization : bool
+                    Whether to draw the initial flip angles from a
+                    homogeneous distribution (for training)
+                n_episodes : int | None
+                    If homogeneous_initialization=True, n_episodes
+                    gives the length of the to-be-initialized homogeneous lists
+                fa_range : list[float]
+                    Range of initial flip angles
+                overwrite_roi : bool
+                    Whether to overwrite an existing ROI file
+                device : None | torch.device
+                    Torch device
+            """
+
+        # Setup attributes
+        self.config_path = config_path
+        self.log_dir = log_dir
+        self.mode = mode
+        self.action_space_type = action_space_type
+        self.recurrent_model = recurrent_model
+        self.homogeneous_initialization = homogeneous_initialization
+        self.n_episodes = n_episodes
+        self.fa_range = fa_range
+        self.overwrite_roi = overwrite_roi
+        self.episode = 0
+        self.tick = 0
+
+        # Setup device
+        if not device:
+            self.device = \
+                torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+
+        # Read config
+        self.read_config()
+        # Initialize action space
+        self.init_actionspace()
+        # Setup ROI
+        self.setup_roi()
+        # Set homogeneous initialization distributions
+        if self.homogeneous_initialization: self.set_homogeneous_dists()
+        # Set environment to starting state
+        self.reset()
+
+    def read_config(self):
+        """Read info from config file for scanner interaction"""
+
+        # Read config file
+        with open(self.config_path, 'r') as f:
+            self.config = json.load(f)
+
+        # Define communication paths
+        self.txt_path = self.config["param_loc"]
+        self.lck_path = self.txt_path + ".lck"
+        self.data_path = self.config["data_loc"]
+
+    def init_actionspace(self):
+        """Initialize action space
+
+        For continuous mode, use 1 output (fa)
+        For discrete mode, use 4 outputs (fa up down, small big)
+        """
+
+        if self.action_space_type == "continuous":
+            self.action_space = ActionSpace(
+                ["Change FA"],
+                action_ranges=np.array([[-1., 1.]]),
+                _type="continuous"
+            )
+        elif self.action_space == "discrete":
+            self.action_space = ActionSpace(
+                [
+                    "Decrease FA by 1 [deg]",
+                    "Increase FA by 1 [deg]",
+                    "Decrease FA by 5 [deg]",
+                    "Increase FA by 5 [deg]"
+                ],
+                action_deltas=np.array([-1., 1., 5., -5.]),
+                _type="discrete"
+            )
+        else:
+            raise UserWarning(
+                "action_space_type should be either 'continuous'"
+                " or 'discrete'"
+            )
+
+    def setup_roi(self):
+        """Setup ROI for this environment"""
+
+        # Generate ROI path and calibration image
+        self.roi_path = os.path.join(self.log_dir, "roi.npy")
+        calibration_image = self.perform_scan(pass_fa=False)
+
+        # Check for existence of ROI file
+        if not self.overwrite_roi and os.path.exists(self.roi_path):
+            # Load ROI data
+            self.roi = np.load(self.roi_path)
+        else:
+            # Generate new ROI data
+            self.roi = roi.generate_rois(calibration_image, self.roi_path)
+
+        # Check whether number of ROIs is appropriate
+        if not np.shape(self.roi)[0] == 2:
+            raise UserWarning(
+                f"Expected a single ROI to be selected but got "
+                f"{np.shape(self.roi)[0]}.\n"
+                f"ROIs are stored in {self.roi_path}"
+            )
+
+    def set_homogeneous_dists(self):
+        """Determine a set of uniformly distributed lists
+        for the initializations per episode.
+        """
+
+        # Check whether self.n_episodes is defined
+        if not self.n_episodes:
+            raise UserWarning(
+                "If homogeneous_initialization=True, "
+                "n_episodes MUST be defined"
+            )
+
+        # Create list of initial and optimal flip angles
+        # (uniformly distributed in range)
+        self.initial_fa = list(np.linspace(
+            self.fa_range[0], self.fa_range[1],
+            self.n_episodes
+        ))
+
+    def norm_parameters(self):
+        """Update normalized scan parameters"""
+
+        # Perform normalisation for all parameters
+        # Only fa for now
+        self.fa_norm = float(
+            (self.fa - 0.)
+            / (180. - 0.)
+        )
+
+    def perform_scan(self, fa=None, pass_fa=True):
+        """Perform scan by passing parameters to scanner"""
+
+        # If pass_fa, generate a flip angle file
+        if pass_fa:
+            # Set flip angle we'll communicate to the scanner
+            if not fa:
+                fa = self.fa
+
+            # Write new flip angle to appropriate location
+            with open(self.lck_path, 'w') as txt_file:
+                txt_file.write(f"{fa:.2f}")
+            os.system(f"mv {self.lck_path} {self.txt_path}")
+
+        # Wait for image to come back by checking the data file
+        while not os.path.exists(self.data_path):
+            # Refresh file table
+            os.system(f"ls {os.path.dirname(self.data_path)} > /dev/null")
+            # Wait for a while
+            time.sleep(0.05)
+
+        # When the image is returned, load it and store the results
+        with h5py.File(self.data_path, "r") as f:
+            img = np.asarray(f['/img'])
+
+        # Remove the data file
+        os.remove(self.data_path)
+
+        return img
+
+    def run_scan_and_update(self):
+        """Runs a scan and updates snr/cnr parameter accordingly"""
+
+        # Perform scan and extract image
+        img = self.perform_scan()
+
+        # Extract roi
+        img_roi = roi.extract_rois(img, self.roi)
+
+        # Determine either snr or cnr (based on mode)
+        if self.mode == "snr":
+            # Check ROI validity
+            if not np.shape(img_roi)[0] == 1:
+                raise UserWarning(
+                    "In snr mode, only one ROI should be selected."
+                )
+            # Calculate SNR
+            self.snr = np.mean(img_roi) / np.std(img_roi)
+        elif self.mode == "cnr":
+            # Check ROI validity
+            if not np.shape(img_roi)[0] == 2:
+                raise UserWarning(
+                    "In cnr mode, two ROIs should be selected."
+                )
+            # Calculate CNR
+            self.cnr = np.abs(
+                np.mean(img_roi[0]) - np.mean(img_roi[1])
+            ) / np.std(np.concatenate((img_roi[0], img_roi[1])))
+
+    def define_reward(self):
+        """Define reward for last step"""
+
+        # Define reward as either +/- 1 for increase or decrease in signal
+        if self.state[0] > self.old_state[0]:
+            reward_float = 1.0
+        else:
+            reward_float = -1.0
+
+        # Scale reward with signal difference
+        if float(self.old_state[0]) < 1e-2:
+            # If old_state signal is too small, set reward gain to 20
+            reward_gain = 20.
+        else:
+            # Calculate relative signal difference and derive reward gain
+            snr_diff = (
+                abs(self.state[0] - self.old_state[0])
+                / self.old_state[0]
+            )
+            reward_gain = snr_diff * 100.
+
+            # If reward is lower than 0.01, penalise
+            # the system for taking steps that are too small.
+            if reward_gain < 0.01:
+                reward_float = -1.0
+                reward_gain = 0.05
+            # If reward gain is higher than 20, use 20
+            # We do this to prevent blowing up rewards near the edges
+            if reward_gain > 20.: reward_gain = 20.
+
+        # If reward is negative, increase gain
+        if reward_float < 0.:
+            reward_gain *= 2.0
+
+        # Define reward
+        reward_float *= reward_gain
+
+        # Scale reward with step_i (faster improvement yields bigger rewards)
+        # Only scale the positives, though.
+        if reward_float > 0.:
+            reward_float *= np.exp(-self.tick / 20.)
+
+        # Store reward in tensor
+        self.reward = torch.tensor(
+            [float(reward_float)], device=self.device
+        )
+
+    def define_done(self):
+        """Define done for last step"""
+
+        # Would like to do this through the agent in the future
+        self.done = torch.tensor(0, device=self.device)
+
+    def step(self, action):
+        """Run a single step of the RL loop
+
+        - Perform action
+        - Run EPG simulation
+        - Determine state
+        - Determine reward
+        - Determine done
+        """
+
+        # Update counter
+        self.tick += 1
+
+        # Check action validity and perform action
+        action_np = action.detach().numpy()
+        if self.action_space_type == "continuous":
+            if (
+                (self.action_space.low <= action_np).all()
+                and (action_np <= self.action_space.high).all()
+            ):
+                # Adjust flip angle
+                delta = float(action[0]) * self.fa / 2
+                self.fa += delta
+            else:
+                raise RuntimeError(
+                    "Action not in action space. Expected something "
+                    f"in range {self.action_space.ranges} but got "
+                    f"{action_np}"
+                )
+        elif self.action_space_type == "discrete":
+            if action_np < len(self.action_space.deltas):
+                # Adjust flip angle
+                delta = float(self.action_space.deltas[int(action)])
+                self.fa += delta
+            else:
+                raise RuntimeError(
+                    "Action not in action space. Expected something "
+                    f"in range [0, {len(self.action_space.deltas) - 1}] "
+                    f"but got {action_np}."
+                )
+
+        # Correct for flip angle out of bounds
+        if self.fa < 0.0: self.fa = 0.0
+        if self.fa > 180.0: self.fa = 180.0
+        # Update normalized scan parameters
+        self.norm_parameters()
+
+        # Run EPG
+        self.run_scan_and_update()
+
+        # Define new state
+        self.old_state = self.state
+        if not self.recurrent_model:
+            self.state = torch.tensor(
+                [
+                    getattr(self, self.mode), self.fa_norm,
+                    float(self.old_state[0]), float(self.old_state[1])
+                ],
+                device=self.device
+            )
+        else:
+            self.state = torch.tensor(
+                [
+                    getattr(self, self.mode), self.fa_norm
+                ],
+                device=self.device
+            )
+
+        # Define reward
+        self.define_reward()
+
+        # Define done
+        self.define_done()
+
+        return self.state, self.reward, self.done
+
+    def reset(self):
+        """Reset environment for next episode"""
+
+        # Update counters and reset done
+        self.episode += 1
+        self.tick = 0
+        self.done = False
+
+        # Set new fa_initial
+        if self.homogeneous_initialization:
+            # Set initial flip angle. Here, we randomly sample from the
+            # uniformly distributed list we created earlier.
+            self.fa = float(self.initial_fa.pop(
+                random.randint(0, len(self.initial_fa) - 1)
+            ))
+        else:
+            # Randomly set fa
+            self.fa = random.uniform(
+                self.fa_range[0], self.fa_range[1]
+            )
+
+        # Normalize parameters
+        self.norm_parameters()
+
+        # Run single simulation step and define initial state
+        self.run_scan_and_update()
+        self.state = torch.tensor(
+            [getattr(self, self.mode), self.fa_norm, 0., 0.]
+            if not self.recurrent_model else
+            [getattr(self, self.mode), self.fa_norm],
+            device=self.device
+        )

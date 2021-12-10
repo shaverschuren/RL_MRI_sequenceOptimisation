@@ -95,8 +95,14 @@ def init_environment(args: argparse.Namespace):
 
     # Initialize environment
     if platform == "scanner":
-        raise NotImplementedError()
-        env = environments.ScannerEnv()
+        env = environments.ScannerEnv(
+            config_path=os.path.join(root, "config.json"),
+            log_dir=os.path.join(
+                root, "logs", f"{platform}_{mode}_{args.agent.lower()}"
+            ),
+            mode=mode, action_space_type=action_space,
+            recurrent_model=recurrent_model
+        )
     elif platform == "simulation":
         env = environments.SimulationEnv(
             mode=mode, action_space_type=action_space,
