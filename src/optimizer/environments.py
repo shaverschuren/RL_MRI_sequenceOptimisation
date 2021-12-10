@@ -182,6 +182,9 @@ class SimulationEnv(object):
         if self.homogeneous_initialization: self.set_homogeneous_dists()
         # Set environment to starting state
         self.reset()
+        # Set n_actions and n_states
+        self.n_actions = len(self.action_space._info)
+        self.n_states = len(self.state)
 
     def init_actionspace(self):
         """Initialize action space
@@ -717,6 +720,9 @@ class ScannerEnv(object):
         if self.homogeneous_initialization: self.set_homogeneous_dists()
         # Set environment to starting state
         self.reset()
+        # Set n_actions and n_states
+        self.n_actions = len(self.action_space._info)
+        self.n_states = len(self.state)
 
     def read_config(self):
         """Read info from config file for scanner interaction"""
