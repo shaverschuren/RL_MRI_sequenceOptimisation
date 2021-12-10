@@ -10,6 +10,7 @@ may be performed over both snr and cnr.
 """
 
 from typing import Union
+import warnings
 import numpy as np
 import random
 import torch
@@ -46,7 +47,7 @@ class ActionSpace(object):
         # Build actual action space
         if _type == "continuous":
             # Check if action_ranges is defined
-            if not action_ranges:
+            if type(action_ranges) is None:
                 raise UserWarning(
                     "Action_ranges must be defined in continuous mode"
                 )
@@ -101,8 +102,8 @@ class SimulationEnv(object):
             mode: str = "snr",
             action_space_type: str = "continuous",
             recurrent_model: bool = False,
-            homogeneous_initialization: bool = True,
-            n_episodes=None,
+            homogeneous_initialization: bool = False,
+            n_episodes: Union[None, int] = None,
             fa_range: list[float] = [20., 60.],
             Nfa: int = 100,
             T1_range: list[float] = [0.100, 2.500],
@@ -214,8 +215,14 @@ class SimulationEnv(object):
     def set_homogeneous_dists(self):
         """Determine a set of uniformly distributed lists
         for the initializations per episode.
-        TODO: for CNR case
         """
+
+        # Check whether self.n_episodes is defined
+        if not self.n_episodes:
+            raise UserWarning(
+                "If homogeneous_initialization=True, "
+                "n_episodes MUST be defined"
+            )
 
         # Create list of initial and optimal flip angles
         # (uniformly distributed in range)
@@ -229,26 +236,150 @@ class SimulationEnv(object):
             self.n_episodes
         ))
 
-        # Create lists of T2s
-        # (uniformly distributed in range)
-        self.T2_list = list(np.linspace(
-            self.T2_range[0], self.T2_range[1], self.n_episodes
-        ))
+        if self.mode == "snr":
+            # Create lists of T2s for single tissue
+            # (uniformly distributed in range)
+            self.T2_list = list(np.linspace(
+                self.T2_range[0], self.T2_range[1],
+                self.n_episodes
+            ))
+        elif self.mode == "cnr":
+            # Create lists of T2s for both tissues
+            # (uniformly distributed in range)
+            self.T2_list_1 = list(np.linspace(
+                self.T2_range[0], self.T2_range[1], self.n_episodes
+            ))
+            self.T2_list_2 = list(np.linspace(
+                self.T2_range[0], self.T2_range[1], self.n_episodes
+            ))
 
     def set_t1_from_distribution(self, optimal_fa_list):
-        """Find values for T1 of tissue based on ernst angle"""
+        """Find values for T1 for single tissue (snr) or two (cnr)"""
 
-        # Sample an optimal_fa from the list
-        fa_idx = random.randint(0, len(optimal_fa_list) - 1)
-        optimal_fa = optimal_fa_list.pop(fa_idx)
+        if self.mode == "snr":
+            # Sample an optimal_fa from the list
+            fa_idx = random.randint(0, len(optimal_fa_list) - 1)
+            optimal_fa = optimal_fa_list.pop(fa_idx)
 
-        # Convert to radians
-        fa_rad = optimal_fa * np.pi / 180.
+            # Convert to radians
+            fa_rad = optimal_fa * np.pi / 180.
 
-        # Calculate tissue T1
-        self.T1 = -self.tr / np.log(np.cos(fa_rad))
+            # Calculate tissue T1
+            self.T1 = -self.tr / np.log(np.cos(fa_rad))
+        elif self.mode == "cnr":
+            # Sample an optimal_fa from the list
+            fa_idx = random.randint(0, len(optimal_fa_list) - 1)
+            optimal_fa = optimal_fa_list[fa_idx]
+
+            # Loop until we find a proper match
+            loop = 0
+            done = False
+            while not done:
+                # Check whether we have surpassed the max count
+                if loop >= 9999:
+                    # Display warning
+                    warnings.warn(
+                        "\nT1a/T1b combination for flip angle "
+                        f"of {optimal_fa:.2f} [deg] not found!"
+                        "\nWe're skipping this flip angle."
+                    )
+                    # Replace non-viable flip angle
+                    optimal_fa_list.pop(fa_idx)
+                    optimal_fa_list.append(optimal_fa_list[0])
+                    # Break loop
+                    break
+
+                # Set T1_1
+                T1_1 = random.uniform(
+                    self.T1_range[0], self.T1_range[1])
+
+                # Calculate T1_2 based on these parameters.
+                T1_2 = self.calculate_2nd_T1(optimal_fa, T1_1)
+
+                # If T1_2 calculation was succesful, remove T1_1 and optimal_fa
+                # from the lists and stop loop
+                if T1_2 and T1_2 != float('NaN'):
+                    # Remove value at chosen index from list
+                    optimal_fa_list.pop(fa_idx)
+                    # Set T1_1 and T1_2
+                    self.T1_1 = T1_1
+                    self.T1_2 = T1_2
+                    # Set done
+                    done = True
+
+                # Update loop counter
+                loop += 1
 
         return optimal_fa_list
+
+    def calculate_2nd_T1(self, optimal_fa, T1_1):
+        """Calculates T1 of 2nd tissue based on optimal fa and T1_1"""
+
+        # This function is based on some algebra performed on the formula
+        # given in calculate_exact_optimum()
+
+        # Calculate optimal_fa in radians
+        alpha = optimal_fa * np.pi / 180.
+
+        # Define E1a
+        E1a = np.exp(-self.tr / T1_1)
+
+        # Define terms of quadratic formula
+        a = (
+            4 * np.cos(alpha) ** 2 * E1a ** 2
+            + 8 * np.cos(alpha) * E1a ** 2
+            - 4 * E1a
+            - 8 * np.cos(alpha) ** 2 * E1a
+            - 12 * np.cos(alpha) * E1a
+            + 4
+            + 4 * np.cos(alpha) ** 2
+            + 4 * np.cos(alpha)
+        )
+        b = (
+            -4 * E1a ** 2
+            - 8 * np.cos(alpha) ** 2 * E1a ** 2
+            - 12 * np.cos(alpha) * E1a ** 2
+            + 12 * E1a
+            + 8 * np.cos(alpha) ** 2 * E1a
+            + 16 * np.cos(alpha) * E1a
+            - 4
+            - 8 * np.cos(alpha)
+        )
+        c = (
+            4 * np.cos(alpha) ** 2 * E1a ** 2
+            + 4 * np.cos(alpha) * E1a ** 2
+            + 4 * E1a ** 2
+            - 8 * np.cos(alpha) * E1a
+            - 4 * E1a
+        )
+
+        # Define E1b (using quadratic formula)
+        if (b ** 2 - 4 * a * c) > 0.:
+            E1b = np.array([
+                (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a),
+                (-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+            ])
+        else:
+            return None
+
+        # Calculate T1_2 if E1b is valid
+        if (E1b > 0.).all():
+            T1_2 = -self.tr / np.log(E1b)
+        elif (E1b > 0.).any() and not (E1b > 0.).all():
+            E1b = E1b[E1b > 0.]
+            T1_2 = -self.tr / np.log(E1b)
+        else:
+            return None
+
+        # Return T1_2 if in proper range
+        if (self.T1_range[0] < T1_2 < self.T1_range[1]).any():
+            # Remove non-valid T1_2 values
+            T1_2 = T1_2[self.T1_range[0] < T1_2 < self.T1_range[1]]
+            T1_2 = float(T1_2[0])
+            # REturn T1_2
+            return T1_2
+        else:
+            return None
 
     def norm_parameters(self):
         """Update normalized scan parameters"""
@@ -278,14 +409,28 @@ class SimulationEnv(object):
             )
 
             # Determine snr
-            self.snr = (
+            self.snr = float(
                 np.abs(F0[-1])
                 / self.noise_level
             )
 
-        # TODO: Determine CNR (if mode="cnr")
+        # Determine CNR (if mode="cnr")
         elif self.mode == "cnr":
-            raise NotImplementedError()
+            # Run simulations
+            F0_1, _, _ = epg.epg_as_numpy(
+                self.Nfa, fa, self.tr,
+                self.T1_1, self.T2_1
+            )
+            F0_2, _, _ = epg.epg_as_numpy(
+                self.Nfa, fa, self.tr,
+                self.T1_2, self.T2_2
+            )
+
+            # Determine CNR
+            self.cnr = float(
+                np.abs(np.abs(F0_1[-1]) - np.abs(F0_2[-1]))
+                / self.noise_level
+            )
         else:
             raise RuntimeError(
                 "mode should be 'snr' or 'cnr'"
@@ -444,19 +589,43 @@ class SimulationEnv(object):
             self.optimal_fa = \
                 self.set_t1_from_distribution(self.optimal_fa)
 
-            # Set T2 for this episode. We randomly sample this
-            # from the previously definded uniform distribution.
-            self.T2 = float(self.T2_list.pop(
-                random.randint(0, len(self.T2_list) - 1)
-            ))
+            if self.mode == "snr":
+                # Set T2 for this episode. We randomly sample this
+                # from the previously definded uniform distribution.
+                self.T2 = float(self.T2_list.pop(
+                    random.randint(0, len(self.T2_list) - 1)
+                ))
+            elif self.mode == "cnr":
+                # Set T2s for this episode. We randomly sample these
+                # from the previously definded uniform distributions for both
+                # tissues.
+                self.T2_1 = float(self.T2_list_1.pop(
+                    random.randint(0, len(self.T2_list_1) - 1)
+                ))
+                self.T2_2 = float(self.T2_list_2.pop(
+                    random.randint(0, len(self.T2_list_2) - 1)
+                ))
+
         else:
+            # Randomly set fa
             self.fa = random.uniform(
                 self.fa_range[0], self.fa_range[1]
             )
-            self.T1 = random.uniform(
-                self.T1_range[0], self.T1_range[1])
-            self.T2 = random.uniform(
-                self.T2_range[0], self.T2_range[1])
+            # Randomly set T1/T2 (either for single tissue of two tissues)
+            if self.mode == "snr":
+                self.T1 = random.uniform(
+                    self.T1_range[0], self.T1_range[1])
+                self.T2 = random.uniform(
+                    self.T2_range[0], self.T2_range[1])
+            if self.mode == "cnr":
+                self.T1_1 = random.uniform(
+                    self.T1_range[0], self.T1_range[1])
+                self.T1_2 = random.uniform(
+                    self.T1_range[0], self.T1_range[1])
+                self.T2_1 = random.uniform(
+                    self.T2_range[0], self.T2_range[1])
+                self.T2_2 = random.uniform(
+                    self.T2_range[0], self.T2_range[1])
 
         # Normalize parameters
         self.norm_parameters()

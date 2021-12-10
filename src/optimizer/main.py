@@ -60,7 +60,20 @@ def init_environment(args: argparse.Namespace):
     elif args.agent.lower() in ["ddpg", "rdpg"]:
         action_space = "continuous"
     elif args.agent.lower() == "validation":
-        action_space = None
+        raise NotImplementedError()
+    else:
+        raise RuntimeError(
+            "Value of 'agent' should be in "
+            "('dqn', 'ddpg', 'rdpg', 'validation')"
+        )
+
+    # Check for recurrent or non-recurrent model
+    if args.agent.lower() in ["dqn", "ddpg"]:
+        recurrent_model = False
+    elif args.agent.lower() == "rdpg":
+        recurrent_model = True
+    elif args.agent.lower() == "validation":
+        raise NotImplementedError()
     else:
         raise RuntimeError(
             "Value of 'agent' should be in "
@@ -81,11 +94,14 @@ def init_environment(args: argparse.Namespace):
     validation_mode = (args.agent.lower() == "validation")
 
     # Initialize environment
-    # TODO: Add action space, validation and mode
     if platform == "scanner":
+        raise NotImplementedError()
         env = environments.ScannerEnv()
     elif platform == "simulation":
-        env = environments.SimulationEnv()
+        env = environments.SimulationEnv(
+            mode=mode, action_space_type=action_space,
+            recurrent_model=recurrent_model
+        )
     else:
         return
 
