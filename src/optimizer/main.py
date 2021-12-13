@@ -36,6 +36,10 @@ def parse_args():
         "--agent", default="ddpg", type=str,
         help="Type of optimizer agent. Available: dqn/ddpg/rdpg/validator"
     )
+    parser.add_argument(
+        "--mode", default="both", type=str,
+        help="Mode to operate in. Available: train/test/both"
+    )
 
     # Parse and return arguments
     return parser.parse_args()
@@ -167,5 +171,10 @@ if __name__ == "__main__":
     # Initialize optimizer
     optimizer = init_optimizer(env, args)
 
-    # Run optimizer
-    # TODO: optimizer.run()
+    # Run optimizer training and testing
+    if args.mode in ["train", "both"]:
+        # Run training loop
+        optimizer.run(train=True)
+    if args.mode in ["test", "both"]:
+        # Run testing loop
+        optimizer.run(train=False)

@@ -88,14 +88,49 @@ class DQN(object):
             self.logs_path, self.logs_fields
         )
 
+    def run(self, train=True):
+        """Run either training or testing loop"""
+
+        pass
+
 
 class DDPG(object):
-    pass
+    """Class to represent a DDPG optimizer"""
+
+    def __init__(self):
+        """Initializes and builds the attributes for this class"""
+
+        raise NotImplementedError()
+
+    def run(self, train=True):
+        """Run either training or testing loop"""
+
+        pass
 
 
 class RDPG(object):
-    pass
+    """Class to represent an RDPG optimizer"""
+
+    def __init__(self):
+        """Initializes and builds the attributes for this class"""
+
+        raise NotImplementedError()
+
+    def run(self, train=True):
+        """Run either training or testing loop"""
+
+        pass
 
 
 class Validator(object):
-    pass
+    """Class to represent a validator algorithm"""
+
+    def __init__(self):
+        """Initializes and builds the attributes for this class"""
+
+        raise NotImplementedError()
+
+    def run(self, train=True):
+        """Run either training or testing loop"""
+
+        pass
