@@ -91,7 +91,42 @@ class DQN(object):
     def run(self, train=True):
         """Run either training or testing loop"""
 
-        pass
+        # Set training variable
+        self.train = train
+
+        # Create training initial condition distributions
+        if train:
+            self.env.n_episodes = self.n_episodes
+            self.env.homogeneous_initialization = True
+            self.env.set_homogeneous_dists()
+
+        # Episode loop
+        for episode in range(self.n_episodes) if train else range(10):
+
+            # Reset environment
+            self.env.reset()
+
+            # Loop over ticks/steps
+            for tick in range(self.n_ticks):
+
+                # Choose action
+                action = self.agent.select_action(self.env.state)
+
+                # Simulate step
+                reward, next_state, done = self.env.step(action)
+
+                # Add to memory
+                self.memory.push(
+                    self.env.state, action, reward, next_state, done
+                )
+
+                # TODO: Update model (self.agent.update() may be used on batch)
+
+                # TODO: Print some info (Work out in util)
+
+                # Check if done
+                if done:
+                    break
 
 
 class DDPG(object):
