@@ -25,12 +25,12 @@ def parse_args():
 
     # Add arguments
     parser.add_argument(
-        "--mode", default="snr", type=str,
+        "--metric", default="snr", type=str,
         help="Metric to optimize. Available: snr/cnr"
     )
     parser.add_argument(
-        "--env", default="mri", type=str,
-        help="Type of environment. Available: mri/epg"
+        "--platform", default="scanner", type=str,
+        help="Type of platform/environment. Available: scanner/sim"
     )
     parser.add_argument(
         "--agent", default="ddpg", type=str,
@@ -41,14 +41,32 @@ def parse_args():
     return parser.parse_args()
 
 
+def init_paths():
+    """Setup some required paths for this software"""
+
+    # Extract global vars
+    global args, root, src
+
+    # Setup root, src
+    args.root = root
+    args.src = src
+
+    # Setup log_dir
+    args.log_dir = os.path.join(
+        args.root, "logs", f"{args.platform}_{args.metric}_{args.agent}"
+    )
+    # Setup config path
+    args.config_path = os.path.join(args.root, "config.json")
+
+
 def init_environment(args: argparse.Namespace):
     """Function used to select the appropriate environment for a run"""
 
     # Check for either scanner or simulation platform
-    if args.env.lower() == "mri":
+    if args.platform.lower() == "scanner":
         platform = "scanner"
-    elif args.env.lower() == "epg":
-        platform = "simulation"
+    elif args.platform.lower() == "sim":
+        platform = "sim"
     else:
         raise RuntimeError(
             "Value of 'env' argument should be either 'epg' or 'mri'"
@@ -56,9 +74,9 @@ def init_environment(args: argparse.Namespace):
 
     # Check for discrete or continuous action space
     if args.agent.lower() == "dqn":
-        action_space = "discrete"
+        action_space_type = "discrete"
     elif args.agent.lower() in ["ddpg", "rdpg"]:
-        action_space = "continuous"
+        action_space_type = "continuous"
     elif args.agent.lower() == "validation":
         raise NotImplementedError()
     else:
@@ -81,10 +99,10 @@ def init_environment(args: argparse.Namespace):
         )
 
     # Check for either cnr or snr optimization
-    if args.mode.lower() == "snr":
-        mode = "snr"
-    elif args.mode.lower() == "cnr":
-        mode = "cnr"
+    if args.metric.lower() == "snr":
+        metric = "snr"
+    elif args.metric.lower() == "cnr":
+        metric = "cnr"
     else:
         raise RuntimeError(
             "Value of 'mode' argument should be either 'snr' or 'cnr'"
@@ -96,20 +114,20 @@ def init_environment(args: argparse.Namespace):
     # Initialize environment
     if platform == "scanner":
         env = environments.ScannerEnv(
-            config_path=os.path.join(root, "config.json"),
-            log_dir=os.path.join(
-                root, "logs", f"{platform}_{mode}_{args.agent.lower()}"
-            ),
-            mode=mode, action_space_type=action_space,
+            config_path=args.config_path,
+            log_dir=args.log_dir,
+            metric=args.metric, action_space_type=action_space_type,
             recurrent_model=recurrent_model
         )
-    elif platform == "simulation":
+    elif platform == "sim":
         env = environments.SimulationEnv(
-            mode=mode, action_space_type=action_space,
+            mode=metric, action_space_type=action_space_type,
             recurrent_model=recurrent_model
         )
     else:
-        return
+        raise RuntimeError(
+            "This shouldn't happen"
+        )
 
     return env
 
@@ -118,9 +136,8 @@ def init_optimizer(env, args: argparse.Namespace):
     """Function to select and initialize optimizer for this run"""
 
     # Select appropriate optimizer
-    # TODO: Pass environment and arguments
     if args.agent.lower() == "dqn":
-        optimizer = algorithms.DQN()
+        optimizer = algorithms.DQN(env=env, log_dir=args.log_dir)
     elif args.agent.lower() == "ddpg":
         optimizer = algorithms.DDPG()
     elif args.agent.lower() == "rdpg":
@@ -140,6 +157,9 @@ if __name__ == "__main__":
 
     # Parse arguments
     args = parse_args()
+
+    # Setup paths
+    init_paths()
 
     # Initialize environment
     env = init_environment(args)

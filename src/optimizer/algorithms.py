@@ -21,6 +21,7 @@ class DQN(object):
     def __init__(
             self,
             env,
+            log_dir: Union[str, os.PathLike],
             n_episodes: int = 50,
             n_ticks: int = 30,
             batch_size: int = 128,
@@ -31,6 +32,8 @@ class DQN(object):
         ----------
             env : optimizer.environments.* object
                 Environment to be optimized
+            log_dir : str | os.PathLike
+                Directory in which we store the logs
             n_episodes : int
                 Number of episodes we'll run
             n_ticks : int
@@ -41,6 +44,7 @@ class DQN(object):
 
         # Build attributes
         self.env = env
+        self.log_dir = log_dir
         self.n_episodes = n_episodes
         self.n_ticks = n_ticks
         self.batch_size = batch_size
@@ -63,14 +67,14 @@ class DQN(object):
         """Sets up logger and appropriate directories"""
 
         # Create logs dir if not already there
-        if not os.path.isdir(self.env.log_dir):
-            os.mkdir(self.env.log_dir)
+        if not os.path.isdir(self.log_dir):
+            os.mkdir(self.log_dir)
 
         # Generate logs file path and store tag
         now = datetime.now()
         logs_dirname = str(now.strftime("%Y-%m-%d_%H-%M-%S"))
         self.logs_tag = logs_dirname
-        self.logs_path = os.path.join(self.env.log_dir, logs_dirname)
+        self.logs_path = os.path.join(self.log_dir, logs_dirname)
 
         # Setup model checkpoint path
         self.model_path = os.path.join(self.logs_path, "model.pt")

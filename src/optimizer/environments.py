@@ -52,7 +52,7 @@ class ActionSpace(object):
         # Build actual action space
         if _type == "continuous":
             # Check if action_ranges is defined
-            if type(action_ranges) is None:
+            if action_ranges is None:
                 raise UserWarning(
                     "Action_ranges must be defined in continuous mode"
                 )
@@ -73,9 +73,9 @@ class ActionSpace(object):
 
         elif _type == "discrete":
             # Check if action_deltas is defined
-            if not action_deltas:
+            if action_deltas is None:
                 raise UserWarning(
-                    "Action_deltas must be defined in continuous mode"
+                    "Action_deltas must be defined in discrete mode"
                 )
 
             # Define deltas
@@ -153,7 +153,7 @@ class SimulationEnv(object):
             """
 
         # Setup attributes
-        self.mode = mode
+        self.metric = mode
         self.action_space_type = action_space_type
         self.recurrent_model = recurrent_model
         self.homogeneous_initialization = homogeneous_initialization
@@ -199,7 +199,7 @@ class SimulationEnv(object):
                 action_ranges=np.array([[-1., 1.]]),
                 _type="continuous"
             )
-        elif self.action_space == "discrete":
+        elif self.action_space_type == "discrete":
             self.action_space = ActionSpace(
                 [
                     "Decrease FA by 1 [deg]",
@@ -240,14 +240,14 @@ class SimulationEnv(object):
             self.n_episodes
         ))
 
-        if self.mode == "snr":
+        if self.metric == "snr":
             # Create lists of T2s for single tissue
             # (uniformly distributed in range)
             self.T2_list = list(np.linspace(
                 self.T2_range[0], self.T2_range[1],
                 self.n_episodes
             ))
-        elif self.mode == "cnr":
+        elif self.metric == "cnr":
             # Create lists of T2s for both tissues
             # (uniformly distributed in range)
             self.T2_list_1 = list(np.linspace(
@@ -260,7 +260,7 @@ class SimulationEnv(object):
     def set_t1_from_distribution(self, optimal_fa_list):
         """Find values for T1 for single tissue (snr) or two (cnr)"""
 
-        if self.mode == "snr":
+        if self.metric == "snr":
             # Sample an optimal_fa from the list
             fa_idx = random.randint(0, len(optimal_fa_list) - 1)
             optimal_fa = optimal_fa_list.pop(fa_idx)
@@ -270,7 +270,7 @@ class SimulationEnv(object):
 
             # Calculate tissue T1
             self.T1 = -self.tr / np.log(np.cos(fa_rad))
-        elif self.mode == "cnr":
+        elif self.metric == "cnr":
             # Sample an optimal_fa from the list
             fa_idx = random.randint(0, len(optimal_fa_list) - 1)
             optimal_fa = optimal_fa_list[fa_idx]
@@ -405,7 +405,7 @@ class SimulationEnv(object):
             fa = float(fa)
 
         # Determine SNR (if mode="snr")
-        if self.mode == "snr":
+        if self.metric == "snr":
             # Run simulations
             F0, _, _ = epg.epg_as_numpy(
                 self.Nfa, fa, self.tr,
@@ -419,7 +419,7 @@ class SimulationEnv(object):
             )
 
         # Determine CNR (if mode="cnr")
-        elif self.mode == "cnr":
+        elif self.metric == "cnr":
             # Run simulations
             F0_1, _, _ = epg.epg_as_numpy(
                 self.Nfa, fa, self.tr,
@@ -441,7 +441,7 @@ class SimulationEnv(object):
             )
 
         # Return self.snr or self.cnr
-        return getattr(self, self.mode)
+        return getattr(self, self.metric)
 
     def define_reward(self):
         """Define reward for last step"""
@@ -551,7 +551,7 @@ class SimulationEnv(object):
         if not self.recurrent_model:
             self.state = torch.tensor(
                 [
-                    getattr(self, self.mode), self.fa_norm,
+                    getattr(self, self.metric), self.fa_norm,
                     float(self.old_state[0]), float(self.old_state[1])
                 ],
                 device=self.device
@@ -559,7 +559,7 @@ class SimulationEnv(object):
         else:
             self.state = torch.tensor(
                 [
-                    getattr(self, self.mode), self.fa_norm
+                    getattr(self, self.metric), self.fa_norm
                 ],
                 device=self.device
             )
@@ -593,13 +593,13 @@ class SimulationEnv(object):
             self.optimal_fa = \
                 self.set_t1_from_distribution(self.optimal_fa)
 
-            if self.mode == "snr":
+            if self.metric == "snr":
                 # Set T2 for this episode. We randomly sample this
                 # from the previously definded uniform distribution.
                 self.T2 = float(self.T2_list.pop(
                     random.randint(0, len(self.T2_list) - 1)
                 ))
-            elif self.mode == "cnr":
+            elif self.metric == "cnr":
                 # Set T2s for this episode. We randomly sample these
                 # from the previously definded uniform distributions for both
                 # tissues.
@@ -616,12 +616,12 @@ class SimulationEnv(object):
                 self.fa_range[0], self.fa_range[1]
             )
             # Randomly set T1/T2 (either for single tissue of two tissues)
-            if self.mode == "snr":
+            if self.metric == "snr":
                 self.T1 = random.uniform(
                     self.T1_range[0], self.T1_range[1])
                 self.T2 = random.uniform(
                     self.T2_range[0], self.T2_range[1])
-            if self.mode == "cnr":
+            if self.metric == "cnr":
                 self.T1_1 = random.uniform(
                     self.T1_range[0], self.T1_range[1])
                 self.T1_2 = random.uniform(
@@ -637,9 +637,9 @@ class SimulationEnv(object):
         # Run single simulation step and define initial state
         self.run_simulation()
         self.state = torch.tensor(
-            [getattr(self, self.mode), self.fa_norm, 0., 0.]
+            [getattr(self, self.metric), self.fa_norm, 0., 0.]
             if not self.recurrent_model else
-            [getattr(self, self.mode), self.fa_norm],
+            [getattr(self, self.metric), self.fa_norm],
             device=self.device
         )
 
@@ -653,7 +653,7 @@ class ScannerEnv(object):
             self,
             config_path: Union[str, os.PathLike],
             log_dir: Union[str, os.PathLike],
-            mode: str = "snr",
+            metric: str = "snr",
             action_space_type: str = "continuous",
             recurrent_model: bool = False,
             homogeneous_initialization: bool = False,
@@ -665,8 +665,8 @@ class ScannerEnv(object):
 
             Parameters
             ----------
-                mode : str
-                    Optimization mode (either snr or cnr)
+                metric : str
+                    Optimization metric (either snr or cnr)
                 config_path : str | bytes | os.PathLike
                     Path to config file (mostly for scanner interaction)
                 log_dir : str | bytes | os.PathLike
@@ -693,7 +693,7 @@ class ScannerEnv(object):
         # Setup attributes
         self.config_path = config_path
         self.log_dir = log_dir
-        self.mode = mode
+        self.metric = metric
         self.action_space_type = action_space_type
         self.recurrent_model = recurrent_model
         self.homogeneous_initialization = homogeneous_initialization
@@ -858,7 +858,7 @@ class ScannerEnv(object):
         img_roi = roi.extract_rois(img, self.roi)
 
         # Determine either snr or cnr (based on mode)
-        if self.mode == "snr":
+        if self.metric == "snr":
             # Check ROI validity
             if not np.shape(img_roi)[0] == 1:
                 raise UserWarning(
@@ -866,7 +866,7 @@ class ScannerEnv(object):
                 )
             # Calculate SNR
             self.snr = np.mean(img_roi) / np.std(img_roi)
-        elif self.mode == "cnr":
+        elif self.metric == "cnr":
             # Check ROI validity
             if not np.shape(img_roi)[0] == 2:
                 raise UserWarning(
@@ -985,7 +985,7 @@ class ScannerEnv(object):
         if not self.recurrent_model:
             self.state = torch.tensor(
                 [
-                    getattr(self, self.mode), self.fa_norm,
+                    getattr(self, self.metric), self.fa_norm,
                     float(self.old_state[0]), float(self.old_state[1])
                 ],
                 device=self.device
@@ -993,7 +993,7 @@ class ScannerEnv(object):
         else:
             self.state = torch.tensor(
                 [
-                    getattr(self, self.mode), self.fa_norm
+                    getattr(self, self.metric), self.fa_norm
                 ],
                 device=self.device
             )
@@ -1033,8 +1033,8 @@ class ScannerEnv(object):
         # Run single simulation step and define initial state
         self.run_scan_and_update()
         self.state = torch.tensor(
-            [getattr(self, self.mode), self.fa_norm, 0., 0.]
+            [getattr(self, self.metric), self.fa_norm, 0., 0.]
             if not self.recurrent_model else
-            [getattr(self, self.mode), self.fa_norm],
+            [getattr(self, self.metric), self.fa_norm],
             device=self.device
         )
