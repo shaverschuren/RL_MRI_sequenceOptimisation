@@ -25,7 +25,7 @@ class DQNAgent(object):
             gamma: float = 0.99,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 1e-2,
+            epsilon_decay: float = 1. - 5e-3,
             alpha: float = 0.005,
             tau: float = 1e-2,
             device: Union[torch.device, None] = None):
@@ -193,9 +193,9 @@ class DQNAgent(object):
 
         # Calculate Q values for current states
         Q_targets_current = \
-            rewards + self.gamma * Q_targets_next
+            rewards + self.gamma * Q_targets_next.unsqueeze(1)
 
-        return Q_targets_current.unsqueeze(1)
+        return Q_targets_current
 
     def compute_q_predictions(self, states, actions):
         """Computes the Q predictions for a given state batch"""
