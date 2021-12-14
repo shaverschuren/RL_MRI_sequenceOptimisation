@@ -157,7 +157,7 @@ class LongTermMemory(object):
     def get_recent_memory(self, length: int):
         """Extract recent memory"""
 
-        return list(self.memory)[-length + 1:]
+        return list(self.memory)[-length:]
 
     def __len__(self):
         """Return length"""

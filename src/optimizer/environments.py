@@ -230,12 +230,12 @@ class SimulationEnv(object):
 
         # Create list of initial and optimal flip angles
         # (uniformly distributed in range)
-        self.initial_fa = list(np.linspace(
+        self.initial_fa_list = list(np.linspace(
             self.fa_range[0], self.fa_range[1],
             self.n_episodes
         ))
 
-        self.optimal_fa = list(np.linspace(
+        self.optimal_fa_list = list(np.linspace(
             self.fa_range[0], self.fa_range[1],
             self.n_episodes
         ))
@@ -628,14 +628,14 @@ class SimulationEnv(object):
         if self.homogeneous_initialization:
             # Set initial flip angle. Here, we randomly sample from the
             # uniformly distributed list we created earlier.
-            self.fa = float(self.initial_fa.pop(
-                random.randint(0, len(self.initial_fa) - 1)
+            self.fa = float(self.initial_fa_list.pop(
+                random.randint(0, len(self.initial_fa_list) - 1)
             ))
             # Set the T1s for this episode. Here, we randomly sample
             # T1_1 from the uniform distribution and then calculate T1_2
             # based on the desired optimum flip angle
-            self.optimal_fa = \
-                self.set_t1_from_distribution(self.optimal_fa)
+            self.optimal_fa_list = \
+                self.set_t1_from_distribution(self.optimal_fa_list)
 
             if self.metric == "snr":
                 # Set T2 for this episode. We randomly sample this
@@ -850,7 +850,7 @@ class ScannerEnv(object):
 
         # Create list of initial and optimal flip angles
         # (uniformly distributed in range)
-        self.initial_fa = list(np.linspace(
+        self.initial_fa_list = list(np.linspace(
             self.fa_range[0], self.fa_range[1],
             self.n_episodes
         ))
@@ -1065,8 +1065,8 @@ class ScannerEnv(object):
         if self.homogeneous_initialization:
             # Set initial flip angle. Here, we randomly sample from the
             # uniformly distributed list we created earlier.
-            self.fa = float(self.initial_fa.pop(
-                random.randint(0, len(self.initial_fa) - 1)
+            self.fa = float(self.initial_fa_list.pop(
+                random.randint(0, len(self.initial_fa_list) - 1)
             ))
         else:
             # Randomly set fa
