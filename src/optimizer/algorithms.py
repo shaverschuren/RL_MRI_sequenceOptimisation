@@ -224,10 +224,9 @@ class DQN(object):
 
                 # Print some info
                 print(
-                    f"Step {self.tick + 1:3d}/"
-                    f"{self.n_ticks if train else 10:3d} - "
+                    f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
                     f"Action: {int(action):2d} - "
-                    f"FA: {float(next_state[1]) * 180. / np.pi:5.1f} - "
+                    f"FA: {float(next_state[1]) * 180.:5.1f} - "
                     f"{self.env.metric.upper()}: {float(next_state[0]):5.2f} -"
                     f" Reward: {float(reward):5.2f}"
                 )
@@ -240,7 +239,8 @@ class DQN(object):
                     break
 
             # Log episode results
-            self.log_episode()
+            if train:
+                self.log_episode()
 
             # Backup model
             self.agent.save(self.model_path)
