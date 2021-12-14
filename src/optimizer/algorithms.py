@@ -9,6 +9,7 @@ Here, we give implementations of several algorithms, namely:
 
 import os
 from typing import Union
+import numpy as np
 from datetime import datetime
 import torch
 from optimizer import agents
@@ -94,11 +95,21 @@ class DQN(object):
         # Set training variable
         self.train = train
 
+        # Print some info
+        print(
+            "\n\n==================== "
+            f"Running {'training' if train else 'test'} loop"
+            " ====================\n\n"
+        )
+
         # Create training initial condition distributions
         if train:
             self.env.n_episodes = self.n_episodes
             self.env.homogeneous_initialization = True
             self.env.set_homogeneous_dists()
+        else:
+            self.env.n_episodes = None
+            self.env.homogeneous_initialization = False
 
         # Episode loop
         for episode in range(self.n_episodes) if train else range(10):
@@ -106,27 +117,54 @@ class DQN(object):
             # Reset environment
             self.env.reset()
 
+            # Print some info
+            print(
+                "\n========== "
+                f"Episode {episode + 1:3d}/{self.n_episodes:3d}"
+                " ==========\n"
+            )
+
             # Loop over ticks/steps
             for tick in range(self.n_ticks):
 
+                # Extract current state
+                state = self.env.state
+
                 # Choose action
-                action = self.agent.select_action(self.env.state)
+                action = self.agent.select_action(state)
 
                 # Simulate step
-                reward, next_state, done = self.env.step(action)
+                next_state, reward, done = self.env.step(action)
 
                 # Add to memory
                 self.memory.push(
-                    self.env.state, action, reward, next_state, done
+                    state, action, reward, next_state, done
                 )
 
-                # TODO: Update model (self.agent.update() may be used on batch)
+                # If training, update model
+                if train and self.batch_size <= len(self.memory):
+                    batch = self.memory.sample(self.batch_size)
+                    self.agent.update(batch)
 
-                # TODO: Print some info (Work out in util)
+                # Print some info
+                print(
+                    f"Step {tick + 1:3d}/{self.n_ticks if train else 10:3d} - "
+                    f"Action: {int(action):2d} - "
+                    f"FA: {float(next_state[1]) * 180. / np.pi:5.1f} - "
+                    f"{self.env.metric.upper()}: {float(next_state[0]):5.2f} -"
+                    f" Reward: {float(reward):5.2f}"
+                )
+
+                # TODO: Log step results
 
                 # Check if done
                 if done:
                     break
+
+            # TODO: Log episode results
+
+            # Backup model
+            self.agent.save(self.model_path)
 
 
 class DDPG(object):

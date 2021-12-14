@@ -205,7 +205,7 @@ class DQNAgent(object):
         # Select appropriate Q values from output by indexing with
         # the actual actions
         Q_predictions = torch.gather(
-            policy_output, dim=-1, index=actions.unsqueeze(1)
+            policy_output, dim=-1, index=actions
         )
 
         return Q_predictions

@@ -133,7 +133,7 @@ class LongTermMemory(object):
 
         # Check whether batch size isn't larger than memory
         if self.__len__() < batch_size:
-            raise ValueError(
+            raise IndexError(
                 "Batch size is larger then memory size!\n"
                 f"Batch size: {batch_size}\nMemory size: {self.__len__()}"
             )
