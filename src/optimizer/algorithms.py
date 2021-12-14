@@ -23,7 +23,7 @@ class DQN(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            n_episodes: int = 1000,
+            n_episodes: int = 750,
             n_ticks: int = 30,
             batch_size: int = 64,
             device: Union[torch.device, None] = None):
@@ -198,7 +198,8 @@ class DQN(object):
         # Assemble print string
         print_str = (
             "\n========== "
-            f"Episode {self.episode + 1:3d}/{self.n_episodes:3d}"
+            f"Episode {self.episode + 1:3d}/"
+            f"{self.n_episodes if self.train else 10:3d}"
             " ==========\n"
             "\n-----------------------------------"
             "\nRunning episode with "
@@ -263,7 +264,7 @@ class DQN(object):
                 state = self.env.state
 
                 # Choose action
-                action = self.agent.select_action(state)
+                action = self.agent.select_action(state, train)
 
                 # Simulate step
                 next_state, reward, done = self.env.step(action)
