@@ -28,6 +28,7 @@ class DQNAgent(object):
             epsilon_decay: float = 1. - 5e-3,
             alpha: float = 0.005,
             tau: float = 1e-2,
+            hidden_layers: list[int] = [8, 8],
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
@@ -51,6 +52,8 @@ class DQNAgent(object):
                 Learning rate for Adam optimizer
             tau : float
                 Measure of "lag" between policy and target models
+            hidden_layers : list[int]
+                Number of neurons of each hidden layer
             device : torch.device | None
                 The torch device. If None, assign one.
         """
@@ -64,6 +67,7 @@ class DQNAgent(object):
         self.epsilon_decay = epsilon_decay
         self.alpha = alpha
         self.tau = tau
+        self.hidden_layers = hidden_layers
 
         # Setup device
         if not device:
@@ -79,8 +83,8 @@ class DQNAgent(object):
         """Constructs model for this agent"""
 
         # Define architecture
-        layers = [self.n_states, 8, 8, self.n_actions]
-        activation_funcs = ['relu', 'relu', 'relu', 'none']
+        layers = [self.n_states] + self.hidden_layers + [self.n_actions]
+        activation_funcs = ['relu'] * len(layers) + ['none']
 
         # Construct policy net
         self.prediction_net = models.FullyConnectedModel(

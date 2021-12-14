@@ -141,7 +141,10 @@ def init_optimizer(env, args: argparse.Namespace):
 
     # Select appropriate optimizer
     if args.agent.lower() == "dqn":
-        optimizer = algorithms.DQN(env=env, log_dir=args.log_dir)
+        optimizer = algorithms.DQN(
+            env=env, log_dir=args.log_dir,
+            n_episodes=750 if args.metric == "snr" else 2500
+        )
     elif args.agent.lower() == "ddpg":
         optimizer = algorithms.DDPG()
     elif args.agent.lower() == "rdpg":

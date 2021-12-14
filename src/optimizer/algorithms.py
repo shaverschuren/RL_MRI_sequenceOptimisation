@@ -45,6 +45,7 @@ class DQN(object):
 
         # Build attributes
         self.env = env
+        self.metric = self.env.metric
         self.log_dir = log_dir
         self.n_episodes = n_episodes
         self.n_ticks = n_ticks
@@ -58,7 +59,11 @@ class DQN(object):
             self.device = device
 
         # Setup agent
-        self.agent = agents.DQNAgent(env.n_states, env.n_actions)
+        self.agent = agents.DQNAgent(
+            env.n_states, env.n_actions,
+            hidden_layers=[8, 8] if self.metric == "snr" else [64, 256, 32],
+            epsilon_decay=1 - 5e-3 if self.metric == "snr" else 1 - 2e-3
+        )
         # Setup memory
         self.memory = training.LongTermMemory(10000)
         # Setup logger
@@ -82,7 +87,7 @@ class DQN(object):
 
         # Define datafields
         self.logs_fields = [
-            "fa", "fa_norm", self.env.metric, "error", "done", "epsilon"
+            "fa", "fa_norm", self.metric, "error", "done", "epsilon"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -107,7 +112,7 @@ class DQN(object):
             f"{action_mode} - "
             f"Action: {int(action):2d} - "
             f"FA: {float(next_state[1]) * 180.:5.1f} - "
-            f"{self.env.metric.upper()}: {float(next_state[0]):5.2f} -"
+            f"{self.metric.upper()}: {float(next_state[0]):5.2f} -"
             " Reward: "
             "" + reward_color + f"{float(reward):5.2f}" + end_str
         )
@@ -128,9 +133,9 @@ class DQN(object):
             step=self.tick
         )
         self.logger.log_scalar(
-            field=self.env.metric,
+            field=self.metric,
             tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(getattr(self.env, self.env.metric)),
+            value=float(getattr(self.env, self.metric)),
             step=self.tick
         )
         self.logger.log_scalar(
@@ -145,7 +150,7 @@ class DQN(object):
 
         # Find optimal fa and snr/cnr
         optimal_fa = self.env.optimal_fa
-        optimal_metric = getattr(self.env, f"optimal_{self.env.metric}")
+        optimal_metric = getattr(self.env, f"optimal_{self.metric}")
 
         # Extract recent memory
         recent_memory = self.memory.get_recent_memory(5)
@@ -174,7 +179,7 @@ class DQN(object):
             step=self.episode
         )
         self.logger.log_scalar(
-            field=self.env.metric,
+            field=self.metric,
             tag=f"{self.logs_tag}_train_episodes",
             value=best_metric,
             step=self.episode
@@ -205,9 +210,9 @@ class DQN(object):
             "\nRunning episode with "
         )
 
-        if self.env.metric == "snr":
+        if self.metric == "snr":
             print_str += f"T1={self.env.T1:.4f}s & T2={self.env.T2:.4f}s"
-        elif self.env.metric == "cnr":
+        elif self.metric == "cnr":
             print_str += (
                 f"T1a={self.env.T1_1:.4f}s; T2a={self.env.T2_1:.4f}s; "
                 f"T1b={self.env.T1_2:.4f}s; T2b={self.env.T2_2:.4f}s"
@@ -218,8 +223,8 @@ class DQN(object):
         print_str += (
             f"\nInitial FA:\t\t{self.env.fa:4.1f} [deg]"
             f"\nOptimal FA:\t\t{self.env.optimal_fa:4.1f} [deg]"
-            f"\nOptimal {self.env.metric.upper()}:\t\t"
-            f"{getattr(self.env, f'optimal_{self.env.metric}'):4.2f} [-]"
+            f"\nOptimal {self.metric.upper()}:\t\t"
+            f"{getattr(self.env, f'optimal_{self.metric}'):4.2f} [-]"
             "\n-----------------------------------"
         )
 
