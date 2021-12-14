@@ -113,7 +113,7 @@ class DQNAgent(object):
         actions.
         """
 
-        if np.random.random() <= self.epsilon and not train:
+        if np.random.random() <= self.epsilon and train:
             # Exploration (random choice)
             return torch.tensor(
                 [np.random.choice(np.arange(
