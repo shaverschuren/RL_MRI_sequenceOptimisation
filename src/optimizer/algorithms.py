@@ -23,9 +23,9 @@ class DQN(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            n_episodes: int = 500,
+            n_episodes: int = 1000,
             n_ticks: int = 30,
-            batch_size: int = 128,
+            batch_size: int = 64,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
@@ -89,9 +89,30 @@ class DQN(object):
             self.logs_path, self.logs_fields
         )
 
-    def log_step(self):
+    def log_step(self, state, action, reward, next_state, done):
         """Log a single step"""
 
+        # Print some info regarding this step
+        reward_color = "\033[92m" if reward > 0. else "\033[91m"
+        if self.agent.action_mode == "exploration":
+            action_mode = "\033[93mR\033[0m"
+        elif self.agent.action_mode == "exploitation":
+            action_mode = "\033[94mP\033[0m"
+        else:
+            raise RuntimeError()
+        end_str = "\033[0m"
+
+        print(
+            f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
+            f"{action_mode} - "
+            f"Action: {int(action):2d} - "
+            f"FA: {float(next_state[1]) * 180.:5.1f} - "
+            f"{self.env.metric.upper()}: {float(next_state[0]):5.2f} -"
+            " Reward: "
+            "" + reward_color + f"{float(reward):5.2f}" + end_str
+        )
+
+        # Log this step to tensorboard
         run_type = "train" if self.train else "test"
 
         self.logger.log_scalar(
@@ -171,6 +192,39 @@ class DQN(object):
             step=self.episode
         )
 
+    def verbose_episode(self):
+        """Prints some info about the current episode"""
+
+        # Assemble print string
+        print_str = (
+            "\n========== "
+            f"Episode {self.episode + 1:3d}/{self.n_episodes:3d}"
+            " ==========\n"
+            "\n-----------------------------------"
+            "\nRunning episode with "
+        )
+
+        if self.env.metric == "snr":
+            print_str += f"T1={self.env.T1:.4f}s & T2={self.env.T2:.4f}s"
+        elif self.env.metric == "cnr":
+            print_str += (
+                f"T1a={self.env.T1_1:.4f}s; T2a={self.env.T2_1:.4f}s; "
+                f"T1b={self.env.T1_2:.4f}s; T2b={self.env.T2_2:.4f}s"
+            )
+        else:
+            RuntimeError()
+
+        print_str += (
+            f"\nInitial FA:\t\t{self.env.fa:4.1f} [deg]"
+            f"\nOptimal FA:\t\t{self.env.optimal_fa:4.1f} [deg]"
+            f"\nOptimal {self.env.metric.upper()}:\t\t"
+            f"{getattr(self.env, f'optimal_{self.env.metric}'):4.2f} [-]"
+            "\n-----------------------------------"
+        )
+
+        # Print the string
+        print(print_str)
+
     def run(self, train=True):
         """Run either training or testing loop"""
 
@@ -200,11 +254,7 @@ class DQN(object):
             self.env.reset()
 
             # Print some info
-            print(
-                "\n========== "
-                f"Episode {self.episode + 1:3d}/{self.n_episodes:3d}"
-                " ==========\n"
-            )
+            self.verbose_episode()
 
             # Loop over ticks/steps
             for self.tick in range(self.n_ticks):
@@ -228,18 +278,8 @@ class DQN(object):
                     batch = self.memory.sample(self.batch_size)
                     self.agent.update(batch)
 
-                # Print some info
-                print(
-                    f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-                    f"{'R' if self.agent.action_mode == 'exploration' else 'P'} - "
-                    f"Action: {int(action):2d} - "
-                    f"FA: {float(next_state[1]) * 180.:5.1f} - "
-                    f"{self.env.metric.upper()}: {float(next_state[0]):5.2f} -"
-                    f" Reward: {float(reward):5.2f}"
-                )
-
                 # Log step results
-                self.log_step()
+                self.log_step(state, action, reward, next_state, done)
 
                 # Check if done
                 if done:
