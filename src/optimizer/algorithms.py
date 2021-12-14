@@ -64,6 +64,31 @@ class DQN(object):
         # Setup logger
         self.setup_logger()
 
+    def setup_logger(self):
+        """Sets up logger and appropriate directories"""
+
+        # Create logs dir if not already there
+        if not os.path.isdir(self.log_dir):
+            os.mkdir(self.log_dir)
+
+        # Generate logs file path and store tag
+        now = datetime.now()
+        logs_dirname = str(now.strftime("%Y-%m-%d_%H-%M-%S"))
+        self.logs_tag = logs_dirname
+        self.logs_path = os.path.join(self.log_dir, logs_dirname)
+
+        # Setup model checkpoint path
+        self.model_path = os.path.join(self.logs_path, "model.pt")
+
+        # Define datafields
+        self.logs_fields = [
+            "fa", "fa_norm", self.env.metric, "error", "done", "epsilon"
+        ]
+        # Setup logger object
+        self.logger = loggers.TensorBoardLogger(
+            self.logs_path, self.logs_fields
+        )
+
     def log_step(self):
         """Log a single step"""
 
@@ -139,30 +164,11 @@ class DQN(object):
             value=min(relative_error, 1.),
             step=self.episode
         )
-
-    def setup_logger(self):
-        """Sets up logger and appropriate directories"""
-
-        # Create logs dir if not already there
-        if not os.path.isdir(self.log_dir):
-            os.mkdir(self.log_dir)
-
-        # Generate logs file path and store tag
-        now = datetime.now()
-        logs_dirname = str(now.strftime("%Y-%m-%d_%H-%M-%S"))
-        self.logs_tag = logs_dirname
-        self.logs_path = os.path.join(self.log_dir, logs_dirname)
-
-        # Setup model checkpoint path
-        self.model_path = os.path.join(self.logs_path, "model.pt")
-
-        # Define datafields
-        self.logs_fields = [
-            "fa", "fa_norm", self.env.metric, "error", "done", "epsilon"
-        ]
-        # Setup logger object
-        self.logger = loggers.TensorBoardLogger(
-            self.logs_path, self.logs_fields
+        self.logger.log_scalar(
+            field="epsilon",
+            tag=f"{self.logs_tag}_train_episodes",
+            value=self.agent.epsilon,
+            step=self.episode
         )
 
     def run(self, train=True):
@@ -225,6 +231,7 @@ class DQN(object):
                 # Print some info
                 print(
                     f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
+                    f"{'R' if self.agent.action_mode == 'exploration' else 'P'} - "
                     f"Action: {int(action):2d} - "
                     f"FA: {float(next_state[1]) * 180.:5.1f} - "
                     f"{self.env.metric.upper()}: {float(next_state[0]):5.2f} -"
@@ -241,6 +248,9 @@ class DQN(object):
             # Log episode results
             if train:
                 self.log_episode()
+
+            # Update epsilon
+            self.agent.update_epsilon()
 
             # Backup model
             self.agent.save(self.model_path)

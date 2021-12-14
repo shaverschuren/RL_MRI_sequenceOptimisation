@@ -25,7 +25,7 @@ class DQNAgent(object):
             gamma: float = 0.99,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 5e-2,
+            epsilon_decay: float = 1. - 1e-2,
             alpha: float = 0.005,
             tau: float = 1e-2,
             device: Union[torch.device, None] = None):
@@ -115,6 +115,7 @@ class DQNAgent(object):
 
         if np.random.random() <= self.epsilon and train:
             # Exploration (random choice)
+            self.action_mode = "exploration"
             return torch.tensor(
                 [np.random.choice(np.arange(
                     0, self.n_actions
@@ -123,6 +124,7 @@ class DQNAgent(object):
             )
         else:
             # Exploitation (max expected reward)
+            self.action_mode = "exploitation"
             with torch.no_grad():
                 return torch.tensor(
                     [torch.argmax(self.prediction_net(state))],
