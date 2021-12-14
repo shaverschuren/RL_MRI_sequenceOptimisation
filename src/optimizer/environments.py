@@ -395,7 +395,45 @@ class SimulationEnv(object):
             / (180. - 0.)
         )
 
-    def run_simulation(self, fa=None):
+    def calculate_theoretical_optimum(self):
+        """Determine the theoretical optimum for a set of parameters"""
+
+        # If metric=SNR, calculate Ernst angle
+        if self.metric == "snr":
+            # Calculate Ernst angle
+            self.optimal_fa = \
+                np.arccos(np.exp(-self.tr / self.T1)) * 180. / np.pi
+            # Simulate SNR for Ernst angle
+            self.optimal_snr = self.run_simulation(
+                fa=self.optimal_fa, pass_to_self=False)
+
+        # If metric=CNR, calculate the optimum algebraically
+        elif self.metric == "cnr":
+            # Determine E1 for both tissues
+            E1a = np.exp(-self.tr / self.T1_1)
+            E1b = np.exp(-self.tr / self.T1_2)
+
+            # Calculate best flip angle analytically. Formula retrieved from:
+            # Haselhoff EH. Optimization of flip angle for T1 dependent cnr: a
+            # closed form solution. Magn Reson Med 1997;38:518 – 9.
+            self.optimal_fa = float(np.arccos(
+                (
+                    -2 * E1a * E1b + E1a + E1b - 2 + np.sqrt(
+                        -3 * (E1a ** 2) - 3 * (E1b ** 2)
+                        + 4 * (E1a ** 2) * (E1b ** 2) - 2 * E1a * E1b + 4
+                    )
+                )
+                / (
+                    2 * (E1a * E1b - E1a - E1b)
+                )
+            ) * 180. / np.pi)
+
+            # Simulate CNR for this FA
+            self.optimal_cnr = self.run_simulation(
+                fa=self.optimal_fa, pass_to_self=False
+            )
+
+    def run_simulation(self, fa=None, pass_to_self=True):
         """Run a simulation for scan parameters stored in self"""
 
         # Select flip angle
@@ -413,10 +451,14 @@ class SimulationEnv(object):
             )
 
             # Determine snr
-            self.snr = float(
+            snr = float(
                 np.abs(F0[-1])
                 / self.noise_level
             )
+            if pass_to_self: self.snr = snr
+
+            # Return snr
+            return snr
 
         # Determine CNR (if mode="cnr")
         elif self.metric == "cnr":
@@ -431,17 +473,19 @@ class SimulationEnv(object):
             )
 
             # Determine CNR
-            self.cnr = float(
+            cnr = float(
                 np.abs(np.abs(F0_1[-1]) - np.abs(F0_2[-1]))
                 / self.noise_level
             )
+            if pass_to_self: self.cnr = cnr
+
+            # Return cnr
+            return cnr
+
         else:
             raise RuntimeError(
                 "mode should be 'snr' or 'cnr'"
             )
-
-        # Return self.snr or self.cnr
-        return getattr(self, self.metric)
 
     def define_reward(self):
         """Define reward for last step"""
@@ -633,6 +677,9 @@ class SimulationEnv(object):
 
         # Normalize parameters
         self.norm_parameters()
+
+        # Determine theoretical optimum
+        self.calculate_theoretical_optimum()
 
         # Run single simulation step and define initial state
         self.run_simulation()
