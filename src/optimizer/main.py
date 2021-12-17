@@ -44,8 +44,44 @@ def parse_args():
         help="Optional: Path to pretrained model"
     )
 
-    # Parse and return arguments
-    return parser.parse_args()
+    # Parse arguments
+    args = parser.parse_args()
+
+    # Check argument validity
+    args.metric = args.metric.lower()
+    if args.metric not in ["snr", "cnr"]:
+        raise ValueError(
+            "The 'metric' argument options are ('snr', 'cnr'), "
+            f"but got '{args.metric}'."
+        )
+    args.platform = args.platform.lower()
+    if args.platform not in ["scanner", "sim"]:
+        raise ValueError(
+            "The 'platform' argument options are ('scanner', 'sim'), "
+            f"but got '{args.platform}'."
+        )
+    args.agent = args.agent.lower()
+    if args.agent not in ['dqn', 'ddpg', 'rdpg', 'validator']:
+        raise ValueError(
+            "The 'agent' argument options are "
+            "('dqn', 'ddpg', 'rdpg', 'validator'), "
+            f"but got '{args.agent}'."
+        )
+    args.mode = args.mode.lower()
+    if args.mode not in ['train', 'test', 'both']:
+        raise ValueError(
+            "The 'mode' argument options are ('train', 'test', 'both'), "
+            f"but got '{args.mode}'."
+        )
+    if args.pretrained_path:
+        if not os.path.exists(args.pretrained_path):
+            raise ValueError(
+                "The file passed in argument 'pretrained_path' doesn't exist"
+                f"\nGot '{args.pretrained_path}'"
+            )
+
+    # Return arguments
+    return args
 
 
 def init_paths():
@@ -69,66 +105,46 @@ def init_paths():
 def init_environment(args: argparse.Namespace):
     """Function used to select the appropriate environment for a run"""
 
-    # Check for either scanner or simulation platform
-    if args.platform.lower() == "scanner":
-        platform = "scanner"
-    elif args.platform.lower() == "sim":
-        platform = "sim"
-    else:
-        raise RuntimeError(
-            "Value of 'env' argument should be either 'epg' or 'mri'"
-        )
-
     # Check for discrete or continuous action space
-    if args.agent.lower() == "dqn":
+    if args.agent == "dqn":
         action_space_type = "discrete"
-    elif args.agent.lower() in ["ddpg", "rdpg"]:
+    elif args.agent in ["ddpg", "rdpg"]:
         action_space_type = "continuous"
-    elif args.agent.lower() == "validation":
+    elif args.agent == "validation":
         raise NotImplementedError()
     else:
-        raise RuntimeError(
+        raise ValueError(
             "Value of 'agent' should be in "
             "('dqn', 'ddpg', 'rdpg', 'validation')"
         )
 
     # Check for recurrent or non-recurrent model
-    if args.agent.lower() in ["dqn", "ddpg"]:
+    if args.agent in ["dqn", "ddpg"]:
         recurrent_model = False
-    elif args.agent.lower() == "rdpg":
+    elif args.agent == "rdpg":
         recurrent_model = True
-    elif args.agent.lower() == "validation":
+    elif args.agent == "validation":
         raise NotImplementedError()
     else:
-        raise RuntimeError(
+        raise ValueError(
             "Value of 'agent' should be in "
             "('dqn', 'ddpg', 'rdpg', 'validation')"
-        )
-
-    # Check for either cnr or snr optimization
-    if args.metric.lower() == "snr":
-        metric = "snr"
-    elif args.metric.lower() == "cnr":
-        metric = "cnr"
-    else:
-        raise RuntimeError(
-            "Value of 'mode' argument should be either 'snr' or 'cnr'"
         )
 
     # Check whether in validation mode or not
     validation_mode = (args.agent.lower() == "validation")
 
     # Initialize environment
-    if platform == "scanner":
+    if args.platform == "scanner":
         env = environments.ScannerEnv(
             config_path=args.config_path,
             log_dir=args.log_dir,
             metric=args.metric, action_space_type=action_space_type,
             recurrent_model=recurrent_model
         )
-    elif platform == "sim":
+    elif args.platform == "sim":
         env = environments.SimulationEnv(
-            mode=metric, action_space_type=action_space_type,
+            mode=args.metric, action_space_type=action_space_type,
             recurrent_model=recurrent_model
         )
     else:
@@ -143,24 +159,24 @@ def init_optimizer(env, args: argparse.Namespace):
     """Function to select and initialize optimizer for this run"""
 
     # Select appropriate optimizer
-    if args.agent.lower() == "dqn":
+    if args.agent == "dqn":
         optimizer = algorithms.DQN(
             env=env, log_dir=args.log_dir,
             n_episodes=750 if args.metric == "snr" else 2500,
             pretrained_path=args.pretrained_path
         )
-    elif args.agent.lower() == "ddpg":
+    elif args.agent == "ddpg":
         optimizer = algorithms.DDPG(
             env=env, log_dir=args.log_dir,
             n_episodes=1500 if args.metric == "snr" else 2500,
             pretrained_path=args.pretrained_path
         )
-    elif args.agent.lower() == "rdpg":
+    elif args.agent == "rdpg":
         optimizer = algorithms.RDPG()
-    elif args.agent.lower() == "validation":
+    elif args.agent == "validation":
         optimizer = algorithms.Validator()
     else:
-        raise RuntimeError(
+        raise ValueError(
             "Value of 'agent' argument should be in "
             "('dqn', 'ddpg', 'rdpg', 'validation')"
         )
