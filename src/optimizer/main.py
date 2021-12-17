@@ -21,31 +21,40 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="RL-based MRI sequence design optimizer"
     )
+    parser._action_groups.pop()
+    required = parser.add_argument_group('Required arguments')
+    optional = parser.add_argument_group('Optional arguments')
 
     # Add arguments
-    parser.add_argument(
-        "--metric", default="snr", type=str,
+    required.add_argument(
+        "--metric", type=str, required=True,
         help="Metric to optimize. Available: snr/cnr"
     )
-    parser.add_argument(
-        "--platform", default="scanner", type=str,
+    required.add_argument(
+        "--platform", type=str, required=True,
         help="Type of platform/environment. Available: scanner/sim"
     )
-    parser.add_argument(
-        "--agent", default="ddpg", type=str,
+    required.add_argument(
+        "--agent", type=str, required=True,
         help="Type of optimizer agent. Available: dqn/ddpg/rdpg/validator"
     )
-    parser.add_argument(
-        "--mode", default="both", type=str,
+    required.add_argument(
+        "--mode", type=str, required=True,
         help="Mode to operate in. Available: train/test/both"
     )
-    parser.add_argument(
+    optional.add_argument(
         "--pretrained_path", type=str,
         help="Optional: Path to pretrained model"
     )
 
     # Parse arguments
     args = parser.parse_args()
+
+    # Check if all required parameters are provided
+    if not args.metric: raise ValueError("'metric' argument is required")
+    if not args.platform: raise ValueError("'platform' argument is required")
+    if not args.agent: raise ValueError("'agent' argument is required")
+    if not args.mode: raise ValueError("'mode' argument is required")
 
     # Check argument validity
     args.metric = args.metric.lower()
