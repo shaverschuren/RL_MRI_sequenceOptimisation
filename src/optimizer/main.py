@@ -10,9 +10,8 @@ if root not in sys.path: sys.path.append(root)
 if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
-import argparse                 # noqa: E402
-import algorithms               # noqa: E402
-import environments             # noqa: E402
+import argparse                                 # noqa: E402
+from optimizer import algorithms, environments  # noqa: E402
 
 
 def parse_args():

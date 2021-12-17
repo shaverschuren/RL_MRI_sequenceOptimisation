@@ -12,8 +12,7 @@ from typing import Union
 import numpy as np
 from datetime import datetime
 import torch
-import agents
-import environments
+from optimizer import agents, environments
 from util import training, loggers
 
 
@@ -128,7 +127,7 @@ class DQN(object):
         run_type = "train" if self.train else "test"
 
         if (
-            type(self.env) == environments.ScannerEnv
+            isinstance(self.env, environments.ScannerEnv)
             and hasattr(self.env, 'recent_img')
         ):
             self.logger.log_image(
@@ -440,7 +439,7 @@ class DDPG(object):
         run_type = "train" if self.train else "test"
 
         if (
-            type(self.env) == environments.ScannerEnv
+            isinstance(self.env, environments.ScannerEnv)
             and hasattr(self.env, 'recent_img')
         ):
             self.logger.log_image(
