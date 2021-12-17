@@ -148,7 +148,7 @@ def init_optimizer(env, args: argparse.Namespace):
     elif args.agent.lower() == "ddpg":
         optimizer = algorithms.DDPG(
             env=env, log_dir=args.log_dir,
-            n_episodes=2000 if args.metric == "snr" else 3000
+            n_episodes=1500 if args.metric == "snr" else 2500
         )
     elif args.agent.lower() == "rdpg":
         optimizer = algorithms.RDPG()

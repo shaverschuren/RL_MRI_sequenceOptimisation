@@ -458,6 +458,8 @@ class DDPGAgent(object):
                 param.data * self.tau + target_param.data * (1.0 - self.tau)
             )
 
+        return float(policy_loss.detach()), float(critic_loss.detach())
+
     def update_epsilon(self):
         """Update epsilon (called at the end of an episode)"""
 
