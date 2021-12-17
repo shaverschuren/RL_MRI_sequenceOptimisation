@@ -665,7 +665,7 @@ class SimulationEnv(object):
                     self.T1_range[0], self.T1_range[1])
                 self.T2 = random.uniform(
                     self.T2_range[0], self.T2_range[1])
-            if self.metric == "cnr":
+            elif self.metric == "cnr":
                 self.T1_1 = random.uniform(
                     self.T1_range[0], self.T1_range[1])
                 self.T1_2 = random.uniform(
@@ -674,6 +674,17 @@ class SimulationEnv(object):
                     self.T2_range[0], self.T2_range[1])
                 self.T2_2 = random.uniform(
                     self.T2_range[0], self.T2_range[1])
+
+        # If lock_material_params, we simply don't vary T1/T2s
+        if self.lock_material_params:
+            if self.metric == "snr":
+                self.T1 = float(np.mean(self.T1_range))
+                self.T2 = float(np.mean(self.T2_range))
+            elif self.metric == "cnr":
+                self.T1_1 = float(np.percentile(self.T1_range, 25))
+                self.T1_2 = float(np.percentile(self.T1_range, 75))
+                self.T2_1 = float(np.mean(self.T2_range))
+                self.T2_2 = float(np.mean(self.T2_range))
 
         # Normalize parameters
         self.norm_parameters()
