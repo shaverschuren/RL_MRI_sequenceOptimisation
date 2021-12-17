@@ -888,12 +888,12 @@ class ScannerEnv(object):
 
         # When the image is returned, load it and store the results
         with h5py.File(self.data_path, "r") as f:
-            img = np.asarray(f['/img'])
+            self.recent_img = np.asarray(f['/img'])
 
         # Remove the data file
         os.remove(self.data_path)
 
-        return img
+        return self.recent_img
 
     def run_scan_and_update(self):
         """Runs a scan and updates snr/cnr parameter accordingly"""

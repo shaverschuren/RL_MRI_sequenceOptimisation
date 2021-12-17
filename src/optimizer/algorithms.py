@@ -12,7 +12,7 @@ from typing import Union
 import numpy as np
 from datetime import datetime
 import torch
-from optimizer import agents
+from optimizer import agents, environments
 from util import training, loggers
 
 
@@ -87,7 +87,7 @@ class DQN(object):
 
         # Define datafields
         self.logs_fields = [
-            "fa", "fa_norm", self.metric, "error", "done", "epsilon"
+            "img", "fa", "fa_norm", self.metric, "error", "done", "epsilon"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -119,6 +119,17 @@ class DQN(object):
 
         # Log this step to tensorboard
         run_type = "train" if self.train else "test"
+
+        if (
+            type(self.env) == environments.ScannerEnv
+            and hasattr(self.env, 'recent_img')
+        ):
+            self.logger.log_image(
+                field="img",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                image=np.array(self.env.recent_img),
+                step=self.tick
+            )
 
         self.logger.log_scalar(
             field="fa",
@@ -372,7 +383,7 @@ class DDPG(object):
 
         # Define datafields
         self.logs_fields = [
-            "fa", "fa_norm", self.metric, "error", "done", "epsilon",
+            "img", "fa", "fa_norm", self.metric, "error", "done", "epsilon",
             "critic_loss", "policy_loss"
         ]
         # Setup logger object
@@ -398,6 +409,17 @@ class DDPG(object):
 
         # Log this step to tensorboard
         run_type = "train" if self.train else "test"
+
+        if (
+            type(self.env) == environments.ScannerEnv
+            and hasattr(self.env, 'recent_img')
+        ):
+            self.logger.log_image(
+                field="img",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                image=np.array(self.env.recent_img),
+                step=self.tick
+            )
 
         self.logger.log_scalar(
             field="fa",
