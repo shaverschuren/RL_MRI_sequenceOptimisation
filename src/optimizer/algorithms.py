@@ -26,6 +26,7 @@ class DQN(object):
             n_episodes: int = 750,
             n_ticks: int = 30,
             batch_size: int = 64,
+            pretrained_path: Union[str, os.PathLike, None] = None,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
@@ -41,6 +42,8 @@ class DQN(object):
                 Maximum number of ticks in an episode
             batch_size: int
                 Batch size used for optimization
+            Pretrained_path : str | os.PathLike | None
+                Path to pretrained model
         """
 
         # Build attributes
@@ -50,6 +53,7 @@ class DQN(object):
         self.n_episodes = n_episodes
         self.n_ticks = n_ticks
         self.batch_size = batch_size
+        self.pretrained_path = pretrained_path
 
         # Setup device
         if not device:
@@ -64,6 +68,8 @@ class DQN(object):
             hidden_layers=[8, 8] if self.metric == "snr" else [64, 256, 32],
             epsilon_decay=1 - 5e-3 if self.metric == "snr" else 1 - 2e-3
         )
+        if pretrained_path: self.agent.load(pretrained_path)
+
         # Setup memory
         self.memory = training.LongTermMemory(10000)
         # Setup logger
@@ -323,6 +329,7 @@ class DDPG(object):
             n_episodes: int = 1000,
             n_ticks: int = 30,
             batch_size: int = 64,
+            pretrained_path: Union[str, os.PathLike, None] = None,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
@@ -338,6 +345,8 @@ class DDPG(object):
                 Maximum number of ticks in an episode
             batch_size: int
                 Batch size used for optimization
+            pretrained_path : str | os.PathLike | None
+                Path to pretrained model
         """
 
         # Build attributes
@@ -347,6 +356,7 @@ class DDPG(object):
         self.n_episodes = n_episodes
         self.n_ticks = n_ticks
         self.batch_size = batch_size
+        self.pretrained_path = pretrained_path
 
         # Setup device
         if not device:
@@ -360,6 +370,8 @@ class DDPG(object):
             env.action_space, env.n_states, env.n_actions,
             epsilon_decay=1 - 5e-3 if self.metric == "snr" else 1 - 2e-3
         )
+        if self.pretrained_path: self.agent.load(pretrained_path)
+
         # Setup memory
         self.memory = training.LongTermMemory(10000)
         # Setup logger

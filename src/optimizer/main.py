@@ -40,6 +40,10 @@ def parse_args():
         "--mode", default="both", type=str,
         help="Mode to operate in. Available: train/test/both"
     )
+    parser.add_argument(
+        "--pretrained_path", type=str,
+        help="Optional: Path to pretrained model"
+    )
 
     # Parse and return arguments
     return parser.parse_args()
@@ -143,12 +147,14 @@ def init_optimizer(env, args: argparse.Namespace):
     if args.agent.lower() == "dqn":
         optimizer = algorithms.DQN(
             env=env, log_dir=args.log_dir,
-            n_episodes=750 if args.metric == "snr" else 2500
+            n_episodes=750 if args.metric == "snr" else 2500,
+            pretrained_path=args.pretrained_path
         )
     elif args.agent.lower() == "ddpg":
         optimizer = algorithms.DDPG(
             env=env, log_dir=args.log_dir,
-            n_episodes=1500 if args.metric == "snr" else 2500
+            n_episodes=1500 if args.metric == "snr" else 2500,
+            pretrained_path=args.pretrained_path
         )
     elif args.agent.lower() == "rdpg":
         optimizer = algorithms.RDPG()
