@@ -807,7 +807,7 @@ class ScannerEnv(object):
                 action_ranges=np.array([[-1., 1.]]),
                 _type="continuous"
             )
-        elif self.action_space == "discrete":
+        elif self.action_space_type == "discrete":
             self.action_space = ActionSpace(
                 [
                     "Decrease FA by 1 [deg]",
@@ -836,16 +836,27 @@ class ScannerEnv(object):
             # Load ROI data
             self.roi = np.load(self.roi_path)
         else:
+            # Check whether appropriate directory exists
+            if not os.path.exists(os.path.dirname(self.roi_path)):
+                os.mkdir(os.path.dirname(self.roi_path))
             # Generate new ROI data
             self.roi = roi.generate_rois(calibration_image, self.roi_path)
 
         # Check whether number of ROIs is appropriate
-        if not np.shape(self.roi)[0] == 2:
-            raise UserWarning(
-                f"Expected a single ROI to be selected but got "
-                f"{np.shape(self.roi)[0]}.\n"
-                f"ROIs are stored in {self.roi_path}"
-            )
+        if self.metric == "snr":
+            if not np.shape(self.roi)[0] == 1:
+                raise UserWarning(
+                    f"Expected a single ROI to be selected but got "
+                    f"{np.shape(self.roi)[0]}.\n"
+                    f"ROIs are stored in {self.roi_path}"
+                )
+        elif self.metric == "cnr":
+            if not np.shape(self.roi)[0] == 2:
+                raise UserWarning(
+                    f"Expected two ROIs to be selected but got "
+                    f"{np.shape(self.roi)[0]}.\n"
+                    f"ROIs are stored in {self.roi_path}"
+                )
 
     def set_homogeneous_dists(self):
         """Determine a set of uniformly distributed lists
@@ -923,7 +934,7 @@ class ScannerEnv(object):
                     "In snr mode, only one ROI should be selected."
                 )
             # Calculate SNR
-            self.snr = np.mean(img_roi) / np.std(img_roi)
+            self.snr = float(np.mean(img_roi) / np.std(img_roi))
         elif self.metric == "cnr":
             # Check ROI validity
             if not np.shape(img_roi)[0] == 2:
@@ -931,9 +942,13 @@ class ScannerEnv(object):
                     "In cnr mode, two ROIs should be selected."
                 )
             # Calculate CNR
-            self.cnr = np.abs(
-                np.mean(img_roi[0]) - np.mean(img_roi[1])
-            ) / np.std(np.concatenate((img_roi[0], img_roi[1])))
+            self.cnr = float(
+                np.abs(
+                    np.mean(img_roi[0]) - np.mean(img_roi[1])
+                ) / np.std(np.concatenate(
+                    (img_roi[0].flatten(), img_roi[1].flatten())
+                ))
+            )
 
     def define_reward(self):
         """Define reward for last step"""

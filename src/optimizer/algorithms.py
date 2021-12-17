@@ -12,7 +12,8 @@ from typing import Union
 import numpy as np
 from datetime import datetime
 import torch
-from optimizer import agents, environments
+import agents
+import environments
 from util import training, loggers
 
 
@@ -165,10 +166,6 @@ class DQN(object):
     def log_episode(self):
         """Log a single episode"""
 
-        # Find optimal fa and snr/cnr
-        optimal_fa = self.env.optimal_fa
-        optimal_metric = getattr(self.env, f"optimal_{self.metric}")
-
         # Extract recent memory
         recent_memory = self.memory.get_recent_memory(5)
         recent_states = [transition.next_state for transition in recent_memory]
@@ -179,14 +176,6 @@ class DQN(object):
         best_idx = np.argmax(recent_metrics)
         best_metric = recent_metrics[best_idx]
         best_fa = recent_fa[best_idx]
-
-        # Calculate relative SNR/CNR error
-        if best_metric == 0.:
-            relative_error = 1.
-        else:
-            relative_error = abs(
-                optimal_metric - best_metric
-            ) / best_metric
 
         # Log scalars
         self.logger.log_scalar(
@@ -202,48 +191,76 @@ class DQN(object):
             step=self.episode
         )
         self.logger.log_scalar(
-            field="error",
-            tag=f"{self.logs_tag}_train_episodes",
-            value=min(relative_error, 1.),
-            step=self.episode
-        )
-        self.logger.log_scalar(
             field="epsilon",
             tag=f"{self.logs_tag}_train_episodes",
             value=self.agent.epsilon,
             step=self.episode
         )
 
+        # If theoretical optimum is known, log the error
+        if isinstance(self.env, environments.SimulationEnv):
+            # Find optimal fa and snr/cnr
+            optimal_fa = self.env.optimal_fa
+            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+            # Calculate relative SNR/CNR error
+            if best_metric == 0.:
+                relative_error = 1.
+            else:
+                relative_error = abs(
+                    optimal_metric - best_metric
+                ) / best_metric
+
+            self.logger.log_scalar(
+                field="error",
+                tag=f"{self.logs_tag}_train_episodes",
+                value=min(relative_error, 1.),
+                step=self.episode
+            )
+
     def verbose_episode(self):
         """Prints some info about the current episode"""
 
         # Assemble print string
-        print_str = (
-            "\n========== "
-            f"Episode {self.episode + 1:3d}/"
-            f"{self.n_episodes if self.train else 10:3d}"
-            " ==========\n"
-            "\n-----------------------------------"
-            "\nRunning episode with "
-        )
+        if isinstance(self.env, environments.SimulationEnv):
+            print_str = (
+                "\n========== "
+                f"Episode {self.episode + 1:3d}/"
+                f"{self.n_episodes if self.train else 10:3d}"
+                " ==========\n"
+                "\n-----------------------------------"
+                "\nRunning episode with "
+            )
 
-        if self.metric == "snr":
-            print_str += f"T1={self.env.T1:.4f}s & T2={self.env.T2:.4f}s"
-        elif self.metric == "cnr":
+            if self.metric == "snr":
+                print_str += f"T1={self.env.T1:.4f}s & T2={self.env.T2:.4f}s"
+            elif self.metric == "cnr":
+                print_str += (
+                    f"T1a={self.env.T1_1:.4f}s; T2a={self.env.T2_1:.4f}s; "
+                    f"T1b={self.env.T1_2:.4f}s; T2b={self.env.T2_2:.4f}s"
+                )
+            else:
+                RuntimeError()
+
             print_str += (
-                f"T1a={self.env.T1_1:.4f}s; T2a={self.env.T2_1:.4f}s; "
-                f"T1b={self.env.T1_2:.4f}s; T2b={self.env.T2_2:.4f}s"
+                f"\nInitial FA:\t\t{self.env.fa:4.1f} [deg]"
+                f"\nOptimal FA:\t\t{self.env.optimal_fa:4.1f} [deg]"
+                f"\nOptimal {self.metric.upper()}:\t\t"
+                f"{getattr(self.env, f'optimal_{self.metric}'):4.2f} [-]"
+                "\n-----------------------------------"
+            )
+        elif isinstance(self.env, environments.ScannerEnv):
+            print_str = (
+                "\n========== "
+                f"Episode {self.episode + 1:3d}/"
+                f"{self.n_episodes if self.train else 10:3d}"
+                " ==========\n"
+                "\n-----------------------------------"
+                f"\nInitial FA:\t{self.env.fa:4.1f} [deg]"
+                "\n-----------------------------------"
             )
         else:
-            RuntimeError()
-
-        print_str += (
-            f"\nInitial FA:\t\t{self.env.fa:4.1f} [deg]"
-            f"\nOptimal FA:\t\t{self.env.optimal_fa:4.1f} [deg]"
-            f"\nOptimal {self.metric.upper()}:\t\t"
-            f"{getattr(self.env, f'optimal_{self.metric}'):4.2f} [-]"
-            "\n-----------------------------------"
-        )
+            print(self.env.__class__)
+            raise RuntimeError()
 
         # Print the string
         print(print_str)
@@ -486,10 +503,6 @@ class DDPG(object):
     def log_episode(self):
         """Log a single episode"""
 
-        # Find optimal fa and snr/cnr
-        optimal_fa = self.env.optimal_fa
-        optimal_metric = getattr(self.env, f"optimal_{self.metric}")
-
         # Extract recent memory
         recent_memory = self.memory.get_recent_memory(5)
         recent_states = [transition.next_state for transition in recent_memory]
@@ -500,14 +513,6 @@ class DDPG(object):
         best_idx = np.argmax(recent_metrics)
         best_metric = recent_metrics[best_idx]
         best_fa = recent_fa[best_idx]
-
-        # Calculate relative SNR/CNR error
-        if best_metric == 0.:
-            relative_error = 1.
-        else:
-            relative_error = abs(
-                optimal_metric - best_metric
-            ) / best_metric
 
         # Log scalars
         self.logger.log_scalar(
@@ -523,48 +528,76 @@ class DDPG(object):
             step=self.episode
         )
         self.logger.log_scalar(
-            field="error",
-            tag=f"{self.logs_tag}_train_episodes",
-            value=min(relative_error, 1.),
-            step=self.episode
-        )
-        self.logger.log_scalar(
             field="epsilon",
             tag=f"{self.logs_tag}_train_episodes",
             value=self.agent.epsilon,
             step=self.episode
         )
 
+        # If theoretical optimum is known, log the error
+        if isinstance(self.env, environments.SimulationEnv):
+            # Find optimal fa and snr/cnr
+            optimal_fa = self.env.optimal_fa
+            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+            # Calculate relative SNR/CNR error
+            if best_metric == 0.:
+                relative_error = 1.
+            else:
+                relative_error = abs(
+                    optimal_metric - best_metric
+                ) / best_metric
+
+            self.logger.log_scalar(
+                field="error",
+                tag=f"{self.logs_tag}_train_episodes",
+                value=min(relative_error, 1.),
+                step=self.episode
+            )
+
     def verbose_episode(self):
         """Prints some info about the current episode"""
 
         # Assemble print string
-        print_str = (
-            "\n========== "
-            f"Episode {self.episode + 1:3d}/"
-            f"{self.n_episodes if self.train else 10:3d}"
-            " ==========\n"
-            "\n-----------------------------------"
-            "\nRunning episode with "
-        )
+        if isinstance(self.env, environments.SimulationEnv):
+            print_str = (
+                "\n========== "
+                f"Episode {self.episode + 1:3d}/"
+                f"{self.n_episodes if self.train else 10:3d}"
+                " ==========\n"
+                "\n-----------------------------------"
+                "\nRunning episode with "
+            )
 
-        if self.metric == "snr":
-            print_str += f"T1={self.env.T1:.4f}s & T2={self.env.T2:.4f}s"
-        elif self.metric == "cnr":
+            if self.metric == "snr":
+                print_str += f"T1={self.env.T1:.4f}s & T2={self.env.T2:.4f}s"
+            elif self.metric == "cnr":
+                print_str += (
+                    f"T1a={self.env.T1_1:.4f}s; T2a={self.env.T2_1:.4f}s; "
+                    f"T1b={self.env.T1_2:.4f}s; T2b={self.env.T2_2:.4f}s"
+                )
+            else:
+                RuntimeError()
+
             print_str += (
-                f"T1a={self.env.T1_1:.4f}s; T2a={self.env.T2_1:.4f}s; "
-                f"T1b={self.env.T1_2:.4f}s; T2b={self.env.T2_2:.4f}s"
+                f"\nInitial FA:\t\t{self.env.fa:4.1f} [deg]"
+                f"\nOptimal FA:\t\t{self.env.optimal_fa:4.1f} [deg]"
+                f"\nOptimal {self.metric.upper()}:\t\t"
+                f"{getattr(self.env, f'optimal_{self.metric}'):4.2f} [-]"
+                "\n-----------------------------------"
+            )
+        elif isinstance(self.env, environments.ScannerEnv):
+            print_str = (
+                "\n========== "
+                f"Episode {self.episode + 1:3d}/"
+                f"{self.n_episodes if self.train else 10:3d}"
+                " ==========\n"
+                "\n-----------------------------------"
+                f"\nInitial FA:\t{self.env.fa:4.1f} [deg]"
+                "\n-----------------------------------"
             )
         else:
-            RuntimeError()
-
-        print_str += (
-            f"\nInitial FA:\t\t{self.env.fa:4.1f} [deg]"
-            f"\nOptimal FA:\t\t{self.env.optimal_fa:4.1f} [deg]"
-            f"\nOptimal {self.metric.upper()}:\t\t"
-            f"{getattr(self.env, f'optimal_{self.metric}'):4.2f} [-]"
-            "\n-----------------------------------"
-        )
+            print(self.env.__class__)
+            raise RuntimeError()
 
         # Print the string
         print(print_str)
