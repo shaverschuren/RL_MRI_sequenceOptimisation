@@ -2,6 +2,10 @@
 .vscode/
 *.m~
 
+.DS_Store
+
+tmp/
+
 logs/*
 !logs/README.txt
 
