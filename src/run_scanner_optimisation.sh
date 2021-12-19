@@ -3,8 +3,7 @@
 set -Eeuo pipefail
 
 # Setup directories
-dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
-src="$(dirname "$dir")"
+src=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 root="$(dirname "$src")"
 
 cd $root
@@ -20,10 +19,10 @@ between our two types of optimisers.
 The options given below may be used to change this script's behaviour.
 
 Available options:
--m, --mode		(required) snr|cnr - Choose snr/cnr optimisation
+-m, --mode		    (required) snr|cnr - Choose snr/cnr optimisation
 -h, --help      	Print this help and exit
 -s, --simulation	Use the MATLAB simulator instead of scanner interface
--vm, --simulate_vm  	Simulate the interface VM in Python, only available with -s
+-vm, --simulate_vm  Simulate the interface VM in Python, only available with -s
 -v, --validation	Run the validation program instead of optimisation
 EOF
 	exit
@@ -103,7 +102,7 @@ conda activate r_learning
 if [ $vm -eq 1 ]
 then
 	msg "Starting up vm simulator... "
-	python "$dir/vm_sim.py" >/dev/null &
+	python "$root/util/vm_sim.py" >/dev/null &
 fi
 
 # Start up MATLAB interface
@@ -124,15 +123,15 @@ then
     # Run DQN or DDPG optimizer
     if [ $ddpg -eq 0 ]
     then
-	    python "$src/scanner_optimizers/"$mode"_optimizer.py"
+	    python "$src/optimizer/main.py --metric "$mode" --platform scanner --agent dqn --mode both"
     elif [ $ddpg -eq 1 ]
     then
-        python "$src/scanner_optimizers/"$mode"_optimizer_ddpg.py"
+        python "$src/optimizer/main.py --metric "$mode" --platform scanner --agent ddpg --mode both"
     fi
 elif [ $validation -eq 1 ]
 then
 	msg "Running validation loop..."
-	python "$src/validators/scanner_"$mode"_validator.py"
+	python "$src/optimizer/main.py --metric "$mode" --platform scanner --agent validation --mode validation"
 fi
 
 # Exit program

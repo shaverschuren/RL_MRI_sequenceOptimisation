@@ -133,7 +133,7 @@ class LongTermMemory(object):
 
         # Check whether batch size isn't larger than memory
         if self.__len__() < batch_size:
-            raise ValueError(
+            raise IndexError(
                 "Batch size is larger then memory size!\n"
                 f"Batch size: {batch_size}\nMemory size: {self.__len__()}"
             )
@@ -157,7 +157,7 @@ class LongTermMemory(object):
     def get_recent_memory(self, length: int):
         """Extract recent memory"""
 
-        return list(self.memory)[-length + 1:]
+        return list(self.memory)[-length:]
 
     def __len__(self):
         """Return length"""
