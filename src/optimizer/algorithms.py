@@ -690,12 +690,152 @@ class RDPG(object):
 class Validator(object):
     """Class to represent a validator algorithm"""
 
-    def __init__(self):
-        """Initializes and builds the attributes for this class"""
+    def __init__(
+            self,
+            env,
+            log_dir: Union[str, os.PathLike],
+            fa_range: list[int] = [1, 90],
+            n_ticks: int = 30,
+            device: Union[torch.device, None] = None):
+        """Initializes and builds the attributes for this class
 
-        raise NotImplementedError()
+        Parameters
+        ----------
+            env : optimizer.environments.* object
+                Environment to be optimized
+            log_dir : str | os.PathLike
+                Directory in which we store the logs
+            fa_range : list[int]
+                Range over which to vary the flip angle
+            n_ticks : int
+                Number of steps we'll vary over
+            device : torch.device | None
+                The torch device. If None, assign one.
+        """
+
+        # Build attributes
+        self.env = env
+        self.metric = self.env.metric
+        self.log_dir = log_dir
+        self.fa_range = fa_range
+        self.n_ticks = n_ticks
+
+        # Setup device
+        if not device:
+            self.device = \
+                torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+
+        # Setup logger
+        self.setup_logger()
+
+    def setup_logger(self):
+        """Sets up logger and appropriate directories"""
+
+        # Create logs dir if not already there
+        if not os.path.isdir(self.log_dir):
+            os.mkdir(self.log_dir)
+
+        # Generate logs file path and store tag
+        now = datetime.now()
+        logs_dirname = str(now.strftime("%Y-%m-%d_%H-%M-%S"))
+        self.logs_tag = logs_dirname
+        self.logs_path = os.path.join(self.log_dir, logs_dirname)
+
+        # Setup model checkpoint path
+        self.model_path = os.path.join(self.logs_path, "model.pt")
+
+        # Define datafields
+        self.logs_fields = [
+            "img", "fa", "fa_norm", self.metric
+        ]
+        # Setup logger object
+        self.logger = loggers.TensorBoardLogger(
+            self.logs_path, self.logs_fields
+        )
 
     def run(self, train=True):
-        """Run either training or testing loop"""
+        """Run validation loop"""
 
-        pass
+        # Create list of flip angles we wish to try
+        fa_list = np.linspace(
+            self.fa_range[0], self.fa_range[1], self.n_ticks
+        )
+
+        # Lock parameters if environment is simulation
+        if isinstance(self.env, environments.SimulationEnv):
+            self.env.lock_material_params = True
+        self.env.reset()
+
+        # Print start info
+        print(
+            "\n======= Running SNR validation ======="
+            "\n\n--------------------------------------"
+            f"\nFA Range [deg]: [{self.fa_range[0]}, {self.fa_range[1]}]"
+            f"\nN_scans:        {self.n_ticks}"
+            "\n--------------------------------------\n"
+        )
+
+        # Loop over flip angles, create scans and log results
+        step = 0
+        for fa in fa_list:
+            # If applicable, print some info
+            print(
+                f"Scan #{step+1:2d}: fa = {fa:4.1f} [deg] -> scanning...",
+                end="", flush=True
+            )
+
+            # Set flip angle
+            self.env.fa = float(fa)
+            self.env.norm_parameters()
+
+            # Perform scan
+            if isinstance(self.env, environments.SimulationEnv):
+                self.env.run_simulation()
+            elif isinstance(self.env, environments.ScannerEnv):
+                self.env.run_scan_and_update()
+            else:
+                raise RuntimeError("This shouldn't happen")
+
+            # Log this step (scalars + image)
+            self.logger.log_scalar(
+                field="fa",
+                tag=f"{self.logs_tag}_validation",
+                value=float(self.env.fa),
+                step=step
+            )
+            self.logger.log_scalar(
+                field="fa_norm",
+                tag=f"{self.logs_tag}_validation",
+                value=float(self.env.fa_norm),
+                step=step
+            )
+            self.logger.log_scalar(
+                field=self.metric,
+                tag=f"{self.logs_tag}_validation",
+                value=float(getattr(self.env, self.metric)),
+                step=step
+            )
+            if isinstance(self.env, environments.ScannerEnv):
+                self.logger.log_image(
+                    field="img",
+                    tag=f"{self.logs_tag}_validation",
+                    image=np.array(self.env.recent_img),
+                    step=step
+                )
+
+            # If applicable, print some info
+            print(
+                f"\rScan #{step+1:2d}: fa = {fa:4.1f} [deg] -> "
+                f"{self.metric} = {getattr(self.env, self.metric):5.2f} [-]"
+            )
+
+            # Update step counter
+            step += 1
+
+        # Print logs location
+        print(
+            "\nValidation complete! Logs stored at:"
+            f"\n{self.logs_path}\n"
+        )

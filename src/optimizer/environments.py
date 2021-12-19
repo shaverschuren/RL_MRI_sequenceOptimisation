@@ -105,8 +105,8 @@ class SimulationEnv(object):
     def __init__(
             self,
             mode: str = "snr",
-            action_space_type: str = "continuous",
-            recurrent_model: bool = False,
+            action_space_type: Union[str, None] = "continuous",
+            recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[None, int] = None,
             fa_range: list[float] = [20., 60.],
@@ -116,6 +116,7 @@ class SimulationEnv(object):
             tr: float = 0.050,
             noise_level: float = 0.05,
             lock_material_params: bool = False,
+            validation_mode: bool = False,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
@@ -148,6 +149,8 @@ class SimulationEnv(object):
                     Noise level for snr calculation
                 lock_material_params : bool
                     If True, don't vary material parameters over episodes
+                validation_mode : bool
+                    If True, use validation mode
                 device : None | torch.device
                     Torch device
             """
@@ -166,6 +169,7 @@ class SimulationEnv(object):
         self.tr = tr
         self.noise_level = noise_level
         self.lock_material_params = lock_material_params
+        self.validation_mode = validation_mode
         self.episode = 0
         self.tick = 0
 
@@ -183,8 +187,9 @@ class SimulationEnv(object):
         # Set environment to starting state
         self.reset()
         # Set n_actions and n_states
-        self.n_actions = len(self.action_space._info)
-        self.n_states = len(self.state)
+        if not validation_mode:
+            self.n_actions = len(self.action_space._info)
+            self.n_states = len(self.state)
 
     def init_actionspace(self):
         """Initialize action space
@@ -193,28 +198,29 @@ class SimulationEnv(object):
         For discrete mode, use 4 outputs (fa up down, small big)
         """
 
-        if self.action_space_type == "continuous":
-            self.action_space = ActionSpace(
-                ["Change FA"],
-                action_ranges=np.array([[-1., 1.]]),
-                _type="continuous"
-            )
-        elif self.action_space_type == "discrete":
-            self.action_space = ActionSpace(
-                [
-                    "Decrease FA by 1 [deg]",
-                    "Increase FA by 1 [deg]",
-                    "Decrease FA by 5 [deg]",
-                    "Increase FA by 5 [deg]"
-                ],
-                action_deltas=np.array([-1., 1., 5., -5.]),
-                _type="discrete"
-            )
-        else:
-            raise UserWarning(
-                "action_space_type should be either 'continuous'"
-                " or 'discrete'"
-            )
+        if not self.validation_mode:
+            if self.action_space_type == "continuous":
+                self.action_space = ActionSpace(
+                    ["Change FA"],
+                    action_ranges=np.array([[-1., 1.]]),
+                    _type="continuous"
+                )
+            elif self.action_space_type == "discrete":
+                self.action_space = ActionSpace(
+                    [
+                        "Decrease FA by 1 [deg]",
+                        "Increase FA by 1 [deg]",
+                        "Decrease FA by 5 [deg]",
+                        "Increase FA by 5 [deg]"
+                    ],
+                    action_deltas=np.array([-1., 1., 5., -5.]),
+                    _type="discrete"
+                )
+            else:
+                raise UserWarning(
+                    "action_space_type should be either 'continuous'"
+                    " or 'discrete'"
+                )
 
     def set_homogeneous_dists(self):
         """Determine a set of uniformly distributed lists
@@ -712,12 +718,13 @@ class ScannerEnv(object):
             config_path: Union[str, os.PathLike],
             log_dir: Union[str, os.PathLike],
             metric: str = "snr",
-            action_space_type: str = "continuous",
-            recurrent_model: bool = False,
+            action_space_type: Union[str, None] = "continuous",
+            recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[int, None] = None,
             fa_range: list[float] = [20., 60.],
             overwrite_roi: bool = False,
+            validation_mode: bool = False,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
@@ -744,6 +751,8 @@ class ScannerEnv(object):
                     Range of initial flip angles
                 overwrite_roi : bool
                     Whether to overwrite an existing ROI file
+                validation_mode : bool
+                    If True, use validation mode
                 device : None | torch.device
                     Torch device
             """
@@ -758,6 +767,7 @@ class ScannerEnv(object):
         self.n_episodes = n_episodes
         self.fa_range = fa_range
         self.overwrite_roi = overwrite_roi
+        self.validation_mode = validation_mode
         self.episode = 0
         self.tick = 0
 
@@ -779,8 +789,9 @@ class ScannerEnv(object):
         # Set environment to starting state
         self.reset()
         # Set n_actions and n_states
-        self.n_actions = len(self.action_space._info)
-        self.n_states = len(self.state)
+        if not validation_mode:
+            self.n_actions = len(self.action_space._info)
+            self.n_states = len(self.state)
 
     def read_config(self):
         """Read info from config file for scanner interaction"""
@@ -801,28 +812,29 @@ class ScannerEnv(object):
         For discrete mode, use 4 outputs (fa up down, small big)
         """
 
-        if self.action_space_type == "continuous":
-            self.action_space = ActionSpace(
-                ["Change FA"],
-                action_ranges=np.array([[-1., 1.]]),
-                _type="continuous"
-            )
-        elif self.action_space_type == "discrete":
-            self.action_space = ActionSpace(
-                [
-                    "Decrease FA by 1 [deg]",
-                    "Increase FA by 1 [deg]",
-                    "Decrease FA by 5 [deg]",
-                    "Increase FA by 5 [deg]"
-                ],
-                action_deltas=np.array([-1., 1., 5., -5.]),
-                _type="discrete"
-            )
-        else:
-            raise UserWarning(
-                "action_space_type should be either 'continuous'"
-                " or 'discrete'"
-            )
+        if not self.validation_mode:
+            if self.action_space_type == "continuous":
+                self.action_space = ActionSpace(
+                    ["Change FA"],
+                    action_ranges=np.array([[-1., 1.]]),
+                    _type="continuous"
+                )
+            elif self.action_space_type == "discrete":
+                self.action_space = ActionSpace(
+                    [
+                        "Decrease FA by 1 [deg]",
+                        "Increase FA by 1 [deg]",
+                        "Decrease FA by 5 [deg]",
+                        "Increase FA by 5 [deg]"
+                    ],
+                    action_deltas=np.array([-1., 1., 5., -5.]),
+                    _type="discrete"
+                )
+            else:
+                raise UserWarning(
+                    "action_space_type should be either 'continuous'"
+                    " or 'discrete'"
+                )
 
     def setup_roi(self):
         """Setup ROI for this environment"""

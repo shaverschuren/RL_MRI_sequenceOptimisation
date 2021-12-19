@@ -36,11 +36,11 @@ def parse_args():
     )
     required.add_argument(
         "--agent", type=str, required=True,
-        help="Type of optimizer agent. Available: dqn/ddpg/rdpg/validator"
+        help="Type of optimizer agent. Available: dqn/ddpg/rdpg/validation"
     )
     required.add_argument(
         "--mode", type=str, required=True,
-        help="Mode to operate in. Available: train/test/both"
+        help="Mode to operate in. Available: train/test/both/validation"
     )
     optional.add_argument(
         "--pretrained_path", type=str,
@@ -70,16 +70,17 @@ def parse_args():
             f"but got '{args.platform}'."
         )
     args.agent = args.agent.lower()
-    if args.agent not in ['dqn', 'ddpg', 'rdpg', 'validator']:
+    if args.agent not in ['dqn', 'ddpg', 'rdpg', 'validation']:
         raise ValueError(
             "The 'agent' argument options are "
             "('dqn', 'ddpg', 'rdpg', 'validator'), "
             f"but got '{args.agent}'."
         )
     args.mode = args.mode.lower()
-    if args.mode not in ['train', 'test', 'both']:
+    if args.mode not in ['train', 'test', 'both', 'validation']:
         raise ValueError(
-            "The 'mode' argument options are ('train', 'test', 'both'), "
+            "The 'mode' argument options are "
+            "('train', 'test', 'both', 'validation'), "
             f"but got '{args.mode}'."
         )
     if args.pretrained_path:
@@ -120,7 +121,7 @@ def init_environment(args: argparse.Namespace):
     elif args.agent in ["ddpg", "rdpg"]:
         action_space_type = "continuous"
     elif args.agent == "validation":
-        raise NotImplementedError()
+        action_space_type = None
     else:
         raise ValueError(
             "Value of 'agent' should be in "
@@ -133,7 +134,7 @@ def init_environment(args: argparse.Namespace):
     elif args.agent == "rdpg":
         recurrent_model = True
     elif args.agent == "validation":
-        raise NotImplementedError()
+        recurrent_model = None
     else:
         raise ValueError(
             "Value of 'agent' should be in "
@@ -141,7 +142,7 @@ def init_environment(args: argparse.Namespace):
         )
 
     # Check whether in validation mode or not
-    validation_mode = (args.agent.lower() == "validation")
+    validation_mode = (args.agent == "validation")
 
     # Initialize environment
     if args.platform == "scanner":
@@ -149,12 +150,14 @@ def init_environment(args: argparse.Namespace):
             config_path=args.config_path,
             log_dir=args.log_dir,
             metric=args.metric, action_space_type=action_space_type,
-            recurrent_model=recurrent_model
+            recurrent_model=recurrent_model,
+            validation_mode=validation_mode
         )
     elif args.platform == "sim":
         env = environments.SimulationEnv(
             mode=args.metric, action_space_type=action_space_type,
-            recurrent_model=recurrent_model
+            recurrent_model=recurrent_model,
+            validation_mode=validation_mode
         )
     else:
         raise RuntimeError(
@@ -183,7 +186,9 @@ def init_optimizer(env, args: argparse.Namespace):
     elif args.agent == "rdpg":
         optimizer = algorithms.RDPG()
     elif args.agent == "validation":
-        optimizer = algorithms.Validator()
+        optimizer = algorithms.Validator(
+            env=env, log_dir=args.log_dir
+        )
     else:
         raise ValueError(
             "Value of 'agent' argument should be in "
@@ -207,10 +212,14 @@ if __name__ == "__main__":
     # Initialize optimizer
     optimizer = init_optimizer(env, args)
 
-    # Run optimizer training and testing
-    if args.mode in ["train", "both"]:
-        # Run training loop
-        optimizer.run(train=True)
-    if args.mode in ["test", "both"]:
-        # Run testing loop
-        optimizer.run(train=False)
+    if args.mode == "validation":
+        # Run validation loop
+        optimizer.run()
+    else:
+        # Run optimizer training and testing
+        if args.mode in ["train", "both"]:
+            # Run training loop
+            optimizer.run(train=True)
+        if args.mode in ["test", "both"]:
+            # Run testing loop
+            optimizer.run(train=False)
