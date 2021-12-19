@@ -10,7 +10,8 @@ if root not in sys.path: sys.path.append(root)
 if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
-import argparse             # noqa: E402
+import argparse                             # noqa: E402
+from scanner_simulator import simulator     # noqa: E402
 
 
 def parse_args():
@@ -68,3 +69,15 @@ if __name__ == "__main__":
 
     # Parse arguments
     args = parse_args()
+
+    # Initialize simulator
+    sim = simulator.Simulator(
+        config_path=os.path.join(root, "config.json"),
+        n_phantoms=args.n_phantoms,
+        resolution=args.resolution,
+        T1a=args.T1a, T2a=args.T2a,
+        T1b=args.T1b, T2b=args.T2b
+    )
+
+    # Run simulator
+    sim.run()
