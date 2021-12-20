@@ -235,8 +235,17 @@ class Simulator(object):
             # Remove txt file
             os.remove(self.txt_path)
 
+            # Print info
+            print(
+                f"Simulating image with flip angle: {fa:5.2f} [deg]...",
+                end="", flush=True
+            )
+
             # Simulate image for given flip angle
             img = self.simulate_image(fa)
+
+            # Print info
+            print(" Done")
 
             # Write image to h5 file
             self.write_data(img)
