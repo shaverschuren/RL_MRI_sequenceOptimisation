@@ -21,7 +21,7 @@ class Simulator(object):
             T2a: float = 0.050,
             T1b: Union[float, None] = None,
             T2b: Union[float, None] = None,
-            noise_level: float = 0.05):
+            noise_level: float = 0.02):
         """Initializes and builds attributes for this class
 
             Parameters
@@ -194,13 +194,9 @@ class Simulator(object):
 
         # Create full image (signal + noise)
         img += phantom_image
-        img += np.random.normal(
-            loc=0., scale=self.noise_level,
+        img += self.noise_level * np.random.random(
             size=(self.resolution, self.resolution)
         )
-
-        # Shift image to make sure minimum is 0
-        img -= float(np.min(img))
 
         # Return image
         return img
