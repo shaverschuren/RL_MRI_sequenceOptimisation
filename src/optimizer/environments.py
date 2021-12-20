@@ -923,7 +923,7 @@ class ScannerEnv(object):
             if not os.path.exists(self.data_path):
                 # Just pass an fa file anyway if still not there
                 with open(self.lck_path, 'w') as txt_file:
-                    txt_file.write(f"{self.fa:.2f}")
+                    txt_file.write(f"{float(np.mean(self.fa_range)):.2f}")
                 os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back by checking the data file
