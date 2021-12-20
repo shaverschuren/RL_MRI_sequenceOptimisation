@@ -4,16 +4,17 @@ They are e.g. used to perform an ROI determination
 and extraction.
 """
 
-import os
 import matplotlib
-import matplotlib.pyplot as plt
-from matplotlib.widgets import RectangleSelector
-from typing import Union
-import numpy as np
 
 # Using TkAgg framework for SSH funcitonality.
 # If this gives errors, reset the terminal.
 matplotlib.use('TkAgg')
+
+import os                                           # noqa: E402
+import matplotlib.pyplot as plt                     # noqa: E402
+from matplotlib.widgets import RectangleSelector    # noqa: E402
+from typing import Union                            # noqa: E402
+import numpy as np                                  # noqa: E402
 
 
 class ROISelector(object):
@@ -54,7 +55,10 @@ class ROISelector(object):
         # Display image
         self.ax.set_xticks([])
         self.ax.set_yticks([])
-        self.ax.imshow(self.image, cmap='gray')
+        self.ax.imshow(
+            np.array(self.image, dtype=float),
+            cmap='gray'
+        )
 
         # Show figure
         plt.show()
