@@ -21,7 +21,7 @@ class Simulator(object):
             T2a: float = 0.050,
             T1b: Union[float, None] = None,
             T2b: Union[float, None] = None,
-            noise_level: float = 0.02):
+            noise_level: float = 0.05):
         """Initializes and builds attributes for this class
 
             Parameters
@@ -149,7 +149,7 @@ class Simulator(object):
         )
 
         # Extract and return signal
-        signal = float(np.abs(F0[-1]))
+        signal = float(np.abs(F0[-1])) * 2.  # Multiply by 2 (scaling factor)
 
         return signal
 
@@ -157,7 +157,7 @@ class Simulator(object):
         """Simulate an image based on a passed flip angle"""
 
         # Initialize empty image
-        img = np.zeros((self.resolution, self.resolution))
+        img = np.zeros((self.resolution, self.resolution), dtype=np.float64)
 
         # If n_phantoms == 1, run single simulation
         if self.n_phantoms == 1:
@@ -167,7 +167,7 @@ class Simulator(object):
             )
             # Get image contribution of phantom
             phantom_image = \
-                np.array(self.phantom_mask, dtype=np.float16) * signal
+                np.array(self.phantom_mask, dtype=np.float64) * signal
 
         # if n_phantoms == 2, run double simulation
         elif self.n_phantoms == 2:
@@ -192,11 +192,14 @@ class Simulator(object):
         else:
             raise RuntimeError()
 
-        # Create full image (signal + noise)
-        img += phantom_image
-        img += self.noise_level * np.random.random(
+        # Create noise image
+        noise_image = self.noise_level * np.random.random(
             size=(self.resolution, self.resolution)
         )
+
+        # Create full image (signal + noise)
+        img += phantom_image
+        img += noise_image
 
         # Return image
         return img
