@@ -912,6 +912,19 @@ class ScannerEnv(object):
             with open(self.lck_path, 'w') as txt_file:
                 txt_file.write(f"{fa:.2f}")
             os.system(f"mv {self.lck_path} {self.txt_path}")
+        else:
+            # If not pass_fa, wait for some time and then just pass one
+            # anyway for good measure. This enables prototyping without
+            # having to restart the scanner before every run
+
+            if not os.path.exists(self.data_path):
+                # Wait 10 seconds
+                time.sleep(10.)
+            if not os.path.exists(self.data_path):
+                # Just pass an fa file anyway if still not there
+                with open(self.lck_path, 'w') as txt_file:
+                    txt_file.write(f"{self.fa:.2f}")
+                os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back by checking the data file
         while not os.path.exists(self.data_path):
