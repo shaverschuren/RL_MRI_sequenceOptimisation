@@ -127,71 +127,121 @@ class FullyConnectedModel(nn.Module):
         return self.stack[item]
 
 
-class RNN(nn.Module):
+class RecurrentModel_LSTM(nn.Module):
     def __init__(
             self,
             input_size: int, hidden_size: int, output_size: int,
+            fully_connected_architecture: list[int],
             output_activation: str,
             device: Union[None, torch.device] = None
     ):
-        super(RNN, self).__init__()
+        super(RecurrentModel_LSTM, self).__init__()
 
         # Build attributes
+        self.input_size = input_size
+        self.output_size = output_size
         self.hidden_size = hidden_size
+        self.fully_connected_architecture = fully_connected_architecture
         self.output_activation = output_activation
         self.device = device
 
-        # Build layers
-        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
-        self.i2o = nn.Linear(input_size + hidden_size, output_size)
+        # Build architecture dict
+        self.build_architecture_dict()
 
-        # Select output activation function
-        if output_activation == "relu":
-            self.output_activation_func = nn.ReLU()
-        elif output_activation == "tanh":
-            self.output_activation_func = nn.Tanh()
-        elif output_activation == "none":
-            self.output_activation_func = None
+        # Build stack
+        if self.device:
+            self.stack = nn.Sequential(self.architecture_dict).to(device)
         else:
-            raise ValueError(
-                "Only relu, tanh and none are supported."
+            self.stack = nn.Sequential(self.architecture_dict)
+
+    def build_architecture_dict(self):
+        """Build model layer stack"""
+
+        # Init architecture list
+        architecture_list = []
+
+        # Add LSTM module and initial relu layer
+        architecture_list.append(
+            (
+                "lstm0",
+                nn.LSTM(
+                    input_size=self.input_size,
+                    hidden_size=self.hidden_size,
+                    batch_first=True
+                )
+            )
+        )
+        architecture_list.append(
+            (
+                "relu0", nn.ReLU()
+            )
+        )
+
+        # Append list with  layers
+        for layer_i in range(len(self.fully_connected_architecture)):
+            # Define layer name
+            if layer_i == len(self.fully_connected_architecture) - 1:
+                layer_name = "output"
+            else:
+                layer_name = f'fc{layer_i + 1}'
+            # Add linear layer
+            architecture_list.append(
+                (
+                    layer_name,
+                    nn.Linear(
+                        self.fully_connected_architecture[max(0, layer_i - 1)],
+                        self.fully_connected_architecture[layer_i])
+                )
             )
 
-        # Move to device
-        if self.device:
-            # i2h, i2o
-            self.i2h.to(device)
-            self.i2o.to(device)
-            # Output activation
-            if self.output_activation_func:
-                self.output_activation_func.to(device)
+            # Add activation function
+            if not layer_name == "output":
+                architecture_list.append(
+                    (f"relu{layer_i + 1}", nn.ReLU())
+                )
+            else:
+                if str(self.output_activation).lower() == 'relu':
+                    architecture_list.append(
+                        (f"relu{layer_i + 1}", nn.ReLU())
+                    )
+                elif str(self.output_activation).lower() == 'leaky_relu':
+                    architecture_list.append(
+                        (f"leaky_relu{layer_i + 1}", nn.LeakyReLU())
+                    )
+                elif str(self.output_activation).lower() == 'tanh':
+                    architecture_list.append(
+                        (f"tanh{layer_i + 1}", nn.Tanh())
+                    )
+                elif str(self.output_activation).lower() == 'sigmoid':
+                    architecture_list.append(
+                        (f"sigmoid{layer_i + 1}", nn.Sigmoid())
+                    )
+                elif str(self.output_activation).lower() == 'softmax':
+                    architecture_list.append(
+                        (f"softmax{layer_i + 1}", nn.Softmax())
+                    )
+                elif str(self.output_activation).lower() == 'none':
+                    pass
+                else:
+                    raise ValueError(
+                        "Activation function not supported. "
+                        "Expected either 'relu', 'leaky_relu', 'tanh', "
+                        "'sigmoid' or 'softmax', but got "
+                        f"'{self.output_activation}'."
+                    )
 
-    def forward(self, input, hidden):
+        # Fill ordered dict
+        self.architecture_dict = OrderedDict(architecture_list)
+
+    def forward(self, history, hidden):
         """Implement forward pass"""
 
-        # Pass through input2hidden, input2output
-        combined = torch.cat((input, hidden), 1)
-        hidden = self.i2h(combined)
-        output = self.i2o(combined)
+        # Pass through LSTM and extract hidden state
+        x, hidden = self.stack["lstm"](history)
+        # Pass through rest of the stack and extract output
+        x = self.stack[1:](x)
 
-        # Pass through activation function (if applicable)
-        if self.output_activation_func:
-            output = self.output_activation_func(output)
-
-        # Return output, hidden
-        return output, hidden
-
-    def forward_sequence(self, input: torch.Tensor):
-        """Implements an entire sequential forward pass"""
-
-        # Initialize hidden state
-        hidden = self.init_hidden()
-        output = torch.Tensor(device=self.device)
-
-        for i in range(input.size()[0]):
-            output, hidden = self.forward(input[i], hidden)
-
-        return output
+        return x, hidden
 
     def init_hidden(self):
         return Variable(torch.zeros(1, self.hidden_size))

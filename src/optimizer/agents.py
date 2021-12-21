@@ -509,11 +509,142 @@ class DDPGAgent(object):
 class RDPGAgent(object):
     """Class to represent a Recurrent Deterministic Policy Gradient agent"""
 
-    def __init__(self):
+    def __init__(
+            self,
+            action_space: environments.ActionSpace,
+            n_states: int = 4,
+            n_actions: int = 1,
+            gamma: float = 0.99,
+            epsilon: float = 1.,
+            epsilon_min: float = 0.01,
+            epsilon_decay: float = 1. - 2e-3,
+            alpha_actor: float = 1e-4,
+            alpha_critic: float = 1e-3,
+            tau: float = 1e-2,
+            hidden_layers: list[int] = [16, 64, 32],
+            device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
         Parameters
         ----------
+            action_space : environments.ActionSpace
+                Action space object
+            n_states : int
+                Number of values passed in "state" (amount of input neurons)
+            n_actions : int
+                Number of possible actions (amount of output neurons)
+            gamma : float
+                Discount factor for future rewards
+            epsilon : float
+                Exploration/exploitation factor
+            epsilon_min : float
+                Minimal epsilon
+            epsilon_decay : float
+                Decay factor for epsilon
+            alpha_actor : float
+                Learning rate for Adam optimizer  for actor model
+            alpha_critic : float
+                Learning rate for Adam optimizer  for critic model
+            tau : float
+                Measure of "lag" between policy and target models
+            hidden_layers : list[int]
+                Number of neurons of each hidden layer
+            device : torch.device | None
+                The torch device. If None, assign one.
         """
 
-        raise NotImplementedError()
+        # Setup attributes
+        self.action_space = action_space
+        self.n_states = n_states
+        self.n_actions = n_actions
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.epsilon_min = epsilon_min
+        self.epsilon_decay = epsilon_decay
+        self.alpha_actor = alpha_actor
+        self.alpha_critic = alpha_critic
+        self.tau = tau
+        self.hidden_layers = hidden_layers
+
+        # Setup device
+        if not device:
+            self.device = \
+                torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+
+        # Initialize model
+        self.init_model()
+
+    def init_model(self):
+        """Constructs reinforcement learning model
+
+        Neural nets: LSTM-RNN
+        Loss: L2 (MSE) Loss
+        Optimizer: Adam with lr alpha
+        """
+
+        # Define hidden size
+        hidden_size = 64
+
+        # Construct actor models (network + target network)
+        self.actor = models.RecurrentModel_LSTM(
+            input_size=self.n_states,
+            output_size=self.n_actions,
+            hidden_size=hidden_size,
+            fully_connected_architecture=[
+                hidden_size, 128, 128, self.n_actions
+            ],
+            output_activation="tanh",
+            device=self.device
+        )
+        self.critic = models.RecurrentModel_LSTM(
+            input_size=self.n_states,
+            output_size=self.n_actions,
+            hidden_size=hidden_size,
+            fully_connected_architecture=[
+                hidden_size, 128, 128, self.n_actions
+            ],
+            output_activation="none",
+            device=self.device
+        )
+        # Construct critic models (network + target network)
+        self.actor_target = models.RecurrentModel_LSTM(
+            input_size=self.n_states,
+            output_size=self.n_actions,
+            hidden_size=hidden_size,
+            fully_connected_architecture=[
+                hidden_size, 128, 128, self.n_actions
+            ],
+            output_activation="tanh",
+            device=self.device
+        )
+        self.critic_target = models.RecurrentModel_LSTM(
+            input_size=self.n_states,
+            output_size=self.n_actions,
+            hidden_size=hidden_size,
+            fully_connected_architecture=[
+                hidden_size, 128, 128, self.n_actions
+            ],
+            output_activation="none",
+            device=self.device
+        )
+
+        # We initialize the target networks as copies of the original networks
+        for target_param, param in zip(
+                self.actor_target.parameters(), self.actor.parameters()):
+            target_param.data.copy_(param.data)
+        for target_param, param in zip(
+                self.critic_target.parameters(), self.critic.parameters()):
+            target_param.data.copy_(param.data)
+
+        # Setup optimizers
+        self.actor_optimizer = optim.Adam(
+            self.actor.parameters(), lr=self.alpha_actor, weight_decay=1e-2
+        )
+        self.critic_optimizer = optim.Adam(
+            self.critic.parameters(), lr=self.alpha_critic, weight_decay=1e-2
+        )
+
+        # Setup criterion
+        self.critic_criterion = torch.nn.MSELoss()

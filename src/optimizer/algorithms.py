@@ -676,10 +676,60 @@ class DDPG(object):
 class RDPG(object):
     """Class to represent an RDPG optimizer"""
 
-    def __init__(self):
-        """Initializes and builds the attributes for this class"""
+    def __init__(
+            self,
+            env,
+            log_dir: Union[str, os.PathLike],
+            n_episodes: int = 1000,
+            n_ticks: int = 30,
+            batch_size: int = 64,
+            pretrained_path: Union[str, os.PathLike, None] = None,
+            device: Union[torch.device, None] = None):
+        """Initializes and builds attributes for this class
 
-        raise NotImplementedError()
+        Parameters
+        ----------
+            env : optimizer.environments.* object
+                Environment to be optimized
+            log_dir : str | os.PathLike
+                Directory in which we store the logs
+            n_episodes : int
+                Number of episodes we'll run
+            n_ticks : int
+                Maximum number of ticks in an episode
+            batch_size: int
+                Batch size used for optimization
+            pretrained_path : str | os.PathLike | None
+                Path to pretrained model
+        """
+
+        # Build attributes
+        self.env = env
+        self.metric = self.env.metric
+        self.log_dir = log_dir
+        self.n_episodes = n_episodes
+        self.n_ticks = n_ticks
+        self.batch_size = batch_size
+        self.pretrained_path = pretrained_path
+
+        # Setup device
+        if not device:
+            self.device = \
+                torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+
+        # Setup agent
+        self.agent = agents.RDPGAgent(
+            env.action_space,
+            epsilon_decay=1 - 5e-3 if self.metric == "snr" else 1 - 2e-3
+        )
+        # if self.pretrained_path: self.agent.load(pretrained_path)
+
+        # Setup memory
+        self.memory = training.LongTermMemory(10000)
+        # Setup logger
+        # self.setup_logger()
 
     def run(self, train=True):
         """Run either training or testing loop"""
