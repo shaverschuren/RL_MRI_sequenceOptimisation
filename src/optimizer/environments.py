@@ -597,11 +597,12 @@ class SimulationEnv(object):
         # Correct for flip angle out of bounds
         if self.fa < 0.0: self.fa = 0.0
         if self.fa > 180.0: self.fa = 180.0
-        # Update normalized scan parameters
-        self.norm_parameters()
 
         # Run EPG
         self.run_simulation()
+
+        # Update normalized scan parameters
+        self.norm_parameters()
 
         # Define new state
         self.old_state = self.state
@@ -1097,11 +1098,12 @@ class ScannerEnv(object):
         # Correct for flip angle out of bounds
         if self.fa < 0.0: self.fa = 0.0
         if self.fa > 180.0: self.fa = 180.0
-        # Update normalized scan parameters
-        self.norm_parameters()
 
         # Run EPG
         self.run_scan_and_update()
+
+        # Update normalized scan parameters
+        self.norm_parameters()
 
         # Define new state
         self.old_state = self.state
