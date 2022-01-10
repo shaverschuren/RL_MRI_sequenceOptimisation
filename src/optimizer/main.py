@@ -35,24 +35,28 @@ def parse_args():
 
     # Add arguments
     required.add_argument(
-        "--metric", type=str, required=True,
+        "--metric", "-m", type=str, required=True,
         help="Metric to optimize. Available: snr/cnr"
     )
     required.add_argument(
-        "--platform", type=str, required=True,
+        "--platform", "-p", type=str, required=True,
         help="Type of platform/environment. Available: scanner/sim"
     )
     required.add_argument(
-        "--agent", type=str, required=True,
+        "--agent", "-a", type=str, required=True,
         help="Type of optimizer agent. Available: dqn/ddpg/rdpg/validation"
     )
     required.add_argument(
-        "--mode", type=str, required=True,
+        "--mode", "-mo", type=str, required=True,
         help="Mode to operate in. Available: train/test/both/validation"
     )
     optional.add_argument(
         "--pretrained_path", type=str,
         help="Optional: Path to pretrained model"
+    )
+    optional.add_argument(
+        "--episodes", type=int,
+        help="Optional: Override the number of episodes to train with"
     )
 
     # Parse arguments
@@ -180,21 +184,39 @@ def init_optimizer(env, args: argparse.Namespace):
 
     # Select appropriate optimizer
     if args.agent == "dqn":
+        # Set n_epochs
+        if args.episodes:
+            n_episodes = args.episodes
+        else:
+            n_episodes = 750 if args.metric == "snr" else 2500
+        # Define optimizer
         optimizer = algorithms.DQN(
             env=env, log_dir=args.log_dir,
-            n_episodes=750 if args.metric == "snr" else 2500,
+            n_episodes=n_episodes,
             pretrained_path=args.pretrained_path
         )
     elif args.agent == "ddpg":
+        # Set n_epochs
+        if args.episodes:
+            n_episodes = args.episodes
+        else:
+            n_episodes = 1500 if args.metric == "snr" else 2500
+        # Define optimizer
         optimizer = algorithms.DDPG(
             env=env, log_dir=args.log_dir,
-            n_episodes=1500 if args.metric == "snr" else 2500,
+            n_episodes=n_episodes,
             pretrained_path=args.pretrained_path
         )
     elif args.agent == "rdpg":
+        # Set n_epochs
+        if args.episodes:
+            n_episodes = args.episodes
+        else:
+            n_episodes = 1500 if args.metric == "snr" else 2500
+        # Define optimizer
         optimizer = algorithms.RDPG(
             env=env, log_dir=args.log_dir,
-            n_episodes=1500 if args.metric == "snr" else 2500,
+            n_episodes=n_episodes,
             pretrained_path=args.pretrained_path
         )
     elif args.agent == "validation":
