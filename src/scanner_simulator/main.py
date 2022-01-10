@@ -35,12 +35,12 @@ def parse_args():
         help="Resolution of the simulation (NxN). Default: 256"
     )
     optional.add_argument(
-        "--T1a", default=0.500, type=float,
-        help="T1 to simulate phantom with [s]. Default: 0.500"
+        "--T1a", default=4.000, type=float,
+        help="T1 to simulate phantom with [s]. Default: 4.000"
     )
     optional.add_argument(
-        "--T2a", default=0.050, type=float,
-        help="T1 to simulate phantom with [s]. Default: 0.050"
+        "--T2a", default=2.000, type=float,
+        help="T1 to simulate phantom with [s]. Default: 2.000"
     )
     optional.add_argument(
         "--T1b", default=1.000, type=float,
