@@ -10,8 +10,11 @@ if root not in sys.path: sys.path.append(root)
 if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
+import time                                     # noqa: E402
+start = time.time()
 import argparse                                 # noqa: E402
 from optimizer import algorithms, environments  # noqa: E402
+print(f"Importing took {time.time() - start:.2f} seconds")
 
 
 def parse_args():
@@ -218,6 +221,7 @@ if __name__ == "__main__":
 
     if args.mode == "validation":
         # Run validation loop
+        print("Starting validation run")
         optimizer.run()
     else:
         # Run optimizer training and testing
