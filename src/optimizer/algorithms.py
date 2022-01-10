@@ -819,7 +819,7 @@ class Validator(object):
             self.env.reset()
         # Set initial flip angle if in scanner environment
         elif isinstance(self.env, environments.ScannerEnv):
-            self.env.reset(fa=self.fa_range[0])
+            self.env.reset(fa=self.fa_range[0], run_scan=False)
 
         # Print start info
         print(
@@ -835,7 +835,7 @@ class Validator(object):
         for fa in fa_list:
             # If applicable, print some info
             print(
-                f"Scan #{step+1:2d}: fa = {fa:4.1f} [deg] -> scanning...",
+                f"Scan #{step+1:2d}: fa = {fa:4.1f} [deg] -> ",
                 end="", flush=True
             )
 
@@ -882,6 +882,7 @@ class Validator(object):
             print(
                 f"\rScan #{step+1:2d}: fa = {fa:4.1f} [deg] -> "
                 f"{self.metric} = {getattr(self.env, self.metric):5.2f} [-]"
+                "        "
             )
 
             # Update step counter

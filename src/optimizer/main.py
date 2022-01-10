@@ -11,10 +11,11 @@ if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
 import time                                     # noqa: E402
+print("Importing dependencies... ", end="", flush=True)
 start = time.time()
 import argparse                                 # noqa: E402
 from optimizer import algorithms, environments  # noqa: E402
-print(f"Importing took {time.time() - start:.2f} seconds")
+print(f"Took {time.time() - start:.2f} seconds")
 
 
 def parse_args():
