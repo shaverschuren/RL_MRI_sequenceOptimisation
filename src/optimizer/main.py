@@ -12,6 +12,7 @@ if src not in sys.path: sys.path.append(src)
 # File-specific imports
 import time                                     # noqa: E402
 print("Importing dependencies... ", end="", flush=True)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Remove tensorflow verbose
 start = time.time()
 import argparse                                 # noqa: E402
 from optimizer import algorithms, environments  # noqa: E402
