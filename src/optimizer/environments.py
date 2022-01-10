@@ -114,7 +114,7 @@ class SimulationEnv(object):
             T1_range: list[float] = [0.100, 4.000],
             T2_range: list[float] = [0.005, 0.100],
             tr: float = 0.050,
-            noise_level: float = 0.015,
+            noise_level: float = 0.005,
             lock_material_params: bool = False,
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -787,7 +787,7 @@ class ScannerEnv(object):
         # Set homogeneous initialization distributions
         if self.homogeneous_initialization: self.set_homogeneous_dists()
         # Set environment to starting state
-        self.reset()
+        self.reset(run_scan=False)
         # Set n_actions and n_states
         if not validation_mode:
             self.n_actions = len(self.action_space._info)
@@ -836,8 +836,15 @@ class ScannerEnv(object):
                     " or 'discrete'"
                 )
 
-    def setup_roi(self):
+    def setup_roi(self, verbose=True):
         """Setup ROI for this environment"""
+
+        # If applicable, print line
+        if verbose:
+            print(
+                "Setting up ROI... ",
+                end="", flush=True
+            )
 
         # Generate ROI path and calibration image
         self.roi_path = os.path.join(self.log_dir, "roi.npy")
@@ -848,7 +855,10 @@ class ScannerEnv(object):
             # Load ROI data
             self.roi = np.load(self.roi_path)
             # Print "remove file"
-            print("Removed initial image")
+            print(
+                "Setting up ROI... "
+                "Already there. Removed initial image"
+            )
         else:
             # Check whether appropriate directory exists
             if not os.path.exists(os.path.dirname(self.roi_path)):
@@ -901,8 +911,12 @@ class ScannerEnv(object):
             / (180. - 0.)
         )
 
-    def perform_scan(self, fa=None, pass_fa=True):
+    def perform_scan(self, fa=None, pass_fa=True, verbose=True):
         """Perform scan by passing parameters to scanner"""
+
+        # Print line if verbose
+        if verbose:
+            print("Waiting for scanner...")
 
         # If pass_fa, generate a flip angle file
         if pass_fa:
@@ -932,6 +946,10 @@ class ScannerEnv(object):
 
         # Remove the data file
         os.remove(self.data_path)
+
+        # Print line if verbose
+        if verbose:
+            print("\033[A                             \033[A")
 
         return self.recent_img
 
@@ -1097,8 +1115,15 @@ class ScannerEnv(object):
 
         return self.state, self.reward, self.done
 
-    def reset(self, fa=None):
+    def reset(self, fa=None, run_scan=True, verbose=True):
         """Reset environment for next episode"""
+
+        # If applicable, print line
+        if verbose:
+            print(
+                "Resetting environment... ",
+                end="", flush=True
+            )
 
         # Update counters and reset done
         self.episode += 1
@@ -1124,11 +1149,26 @@ class ScannerEnv(object):
         # Normalize parameters
         self.norm_parameters()
 
-        # Run single simulation step and define initial state
-        self.run_scan_and_update()
-        self.state = torch.tensor(
-            [getattr(self, self.metric), self.fa_norm, 0., 0.]
-            if not self.recurrent_model else
-            [getattr(self, self.metric), self.fa_norm],
-            device=self.device
-        )
+        # Run single simulation step and define initial state (if applicable)
+        if run_scan:
+            self.run_scan_and_update()
+            self.state = torch.tensor(
+                [getattr(self, self.metric), self.fa_norm, 0., 0.]
+                if not self.recurrent_model else
+                [getattr(self, self.metric), self.fa_norm],
+                device=self.device
+            )
+        else:
+            self.state = torch.tensor(
+                [0., 0., 0., 0.]
+                if not self.recurrent_model else
+                [0., 0.],
+                device=self.device
+            )
+
+        # If applicable, print line
+        if verbose:
+            print(
+                "\rResetting environment... Done"
+                "                  "
+            )

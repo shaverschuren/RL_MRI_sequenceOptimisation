@@ -21,7 +21,7 @@ class Simulator(object):
             T2a: float = 0.050,
             T1b: Union[float, None] = None,
             T2b: Union[float, None] = None,
-            noise_level: float = 0.05):
+            noise_level: float = 0.02):
         """Initializes and builds attributes for this class
 
             Parameters
