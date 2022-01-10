@@ -10,13 +10,16 @@ if root not in sys.path: sys.path.append(root)
 if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
-import time                                     # noqa: E402
 print("Importing dependencies... ", end="", flush=True)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Remove tensorflow verbose
-start = time.time()
-import argparse                                 # noqa: E402
-from optimizer import algorithms, environments  # noqa: E402
-print(f"Took {time.time() - start:.2f} seconds")
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'            # Remove tensorflow verbose
+
+import time                                         # noqa: E402
+start = time.time()                                 # Start timer
+
+import argparse                                     # noqa: E402
+from optimizer import algorithms, environments      # noqa: E402
+
+print(f"Took {time.time() - start:.2f} seconds")    # Print timer results
 
 
 def parse_args():
