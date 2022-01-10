@@ -118,7 +118,7 @@ class DQN(object):
             f"{action_mode} - "
             f"Action: {int(action):2d} - "
             f"FA: {float(next_state[1]) * 180.:5.1f} - "
-            f"{self.metric.upper()}: {float(next_state[0]):5.2f} -"
+            f"{self.metric.upper()}: {float(next_state[0]) * 50.:5.2f} -"
             " Reward: "
             "" + reward_color + f"{float(reward):6.2f}" + end_str
         )
@@ -173,8 +173,8 @@ class DQN(object):
 
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
-        best_metric = recent_metrics[best_idx]
-        best_fa = recent_fa[best_idx]
+        best_metric = float(recent_metrics[best_idx]) * 50.
+        best_fa = float(recent_fa[best_idx]) * 180.
 
         # Log scalars
         self.logger.log_scalar(
@@ -342,7 +342,7 @@ class DDPG(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            n_episodes: int = 1000,
+            n_episodes: int = 2000,
             n_ticks: int = 30,
             batch_size: int = 64,
             pretrained_path: Union[str, os.PathLike, None] = None,
@@ -430,7 +430,7 @@ class DDPG(object):
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
             f"Action: {float(action):5.2f} - "
             f"FA: {float(next_state[1]) * 180.:5.1f} - "
-            f"{self.metric.upper()}: {float(next_state[0]):5.2f} -"
+            f"{self.metric.upper()}: {float(next_state[0]) * 50.:5.2f} -"
             " Reward: "
             "" + reward_color + f"{float(reward):6.2f}" + end_str
         )
@@ -510,8 +510,8 @@ class DDPG(object):
 
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
-        best_metric = recent_metrics[best_idx]
-        best_fa = recent_fa[best_idx]
+        best_metric = float(recent_metrics[best_idx]) * 50.
+        best_fa = float(recent_fa[best_idx]) * 180.
 
         # Log scalars
         self.logger.log_scalar(
