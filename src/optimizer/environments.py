@@ -114,7 +114,7 @@ class SimulationEnv(object):
             T1_range: list[float] = [0.100, 4.000],
             T2_range: list[float] = [0.005, 0.100],
             tr: float = 0.050,
-            noise_level: float = 0.005,
+            noise_level: float = 0.008,
             lock_material_params: bool = False,
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -395,11 +395,18 @@ class SimulationEnv(object):
         """Update normalized scan parameters"""
 
         # Perform normalisation for all parameters
-        # Only fa for now
-        self.fa_norm = float(
-            (self.fa - 0.)
-            / (180. - 0.)
-        )
+        # fa
+        if hasattr(self, "fa"):
+            self.fa_norm = float(
+                (self.fa - 0.)
+                / (180. - 0.)
+            )
+        # snr / cnr (just devide by 50 for now)
+        if hasattr(self, self.metric):
+            setattr(
+                self, f"{self.metric}_norm",
+                getattr(self, self.metric) / 50.
+            )
 
     def calculate_theoretical_optimum(self):
         """Determine the theoretical optimum for a set of parameters"""
@@ -601,7 +608,7 @@ class SimulationEnv(object):
         if not self.recurrent_model:
             self.state = torch.tensor(
                 [
-                    getattr(self, self.metric), self.fa_norm,
+                    getattr(self, f"{self.metric}_norm"), self.fa_norm,
                     float(self.old_state[0]), float(self.old_state[1])
                 ],
                 device=self.device
@@ -609,7 +616,7 @@ class SimulationEnv(object):
         else:
             self.state = torch.tensor(
                 [
-                    getattr(self, self.metric), self.fa_norm
+                    getattr(self, f"{self.metric}_norm"), self.fa_norm
                 ],
                 device=self.device
             )
@@ -692,18 +699,18 @@ class SimulationEnv(object):
                 self.T2_1 = float(np.mean(self.T2_range))
                 self.T2_2 = float(np.mean(self.T2_range))
 
-        # Normalize parameters
-        self.norm_parameters()
-
         # Determine theoretical optimum
         self.calculate_theoretical_optimum()
 
-        # Run single simulation step and define initial state
+        # Run single simulation step
         self.run_simulation()
+        # Normalize parameters
+        self.norm_parameters()
+        # Define state
         self.state = torch.tensor(
-            [getattr(self, self.metric), self.fa_norm, 0., 0.]
+            [getattr(self, f"{self.metric}_norm"), self.fa_norm, 0., 0.]
             if not self.recurrent_model else
-            [getattr(self, self.metric), self.fa_norm],
+            [getattr(self, f"{self.metric}_norm"), self.fa_norm],
             device=self.device
         )
 
@@ -905,11 +912,18 @@ class ScannerEnv(object):
         """Update normalized scan parameters"""
 
         # Perform normalisation for all parameters
-        # Only fa for now
-        self.fa_norm = float(
-            (self.fa - 0.)
-            / (180. - 0.)
-        )
+        # fa
+        if hasattr(self, "fa"):
+            self.fa_norm = float(
+                (self.fa - 0.)
+                / (180. - 0.)
+            )
+        # snr / cnr (just devide by 50 for now)
+        if hasattr(self, self.metric):
+            setattr(
+                self, f"{self.metric}_norm",
+                getattr(self, self.metric) / 50.
+            )
 
     def perform_scan(self, fa=None, pass_fa=True, verbose=True):
         """Perform scan by passing parameters to scanner"""
@@ -1094,7 +1108,7 @@ class ScannerEnv(object):
         if not self.recurrent_model:
             self.state = torch.tensor(
                 [
-                    getattr(self, self.metric), self.fa_norm,
+                    getattr(self, f"{self.metric}_norm"), self.fa_norm,
                     float(self.old_state[0]), float(self.old_state[1])
                 ],
                 device=self.device
@@ -1102,7 +1116,7 @@ class ScannerEnv(object):
         else:
             self.state = torch.tensor(
                 [
-                    getattr(self, self.metric), self.fa_norm
+                    getattr(self, f"{self.metric}_norm"), self.fa_norm
                 ],
                 device=self.device
             )
@@ -1152,10 +1166,11 @@ class ScannerEnv(object):
         # Run single simulation step and define initial state (if applicable)
         if run_scan:
             self.run_scan_and_update()
+            self.norm_parameters()
             self.state = torch.tensor(
-                [getattr(self, self.metric), self.fa_norm, 0., 0.]
+                [getattr(self, f"{self.metric}_norm"), self.fa_norm, 0., 0.]
                 if not self.recurrent_model else
-                [getattr(self, self.metric), self.fa_norm],
+                [getattr(self, f"{self.metric}_norm"), self.fa_norm],
                 device=self.device
             )
         else:
