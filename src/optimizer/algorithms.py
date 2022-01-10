@@ -744,8 +744,8 @@ class Validator(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            fa_range: list[int] = [1, 90],
-            n_ticks: int = 30,
+            fa_range: list[int] = [1, 40],
+            n_ticks: int = 39,
             device: Union[torch.device, None] = None):
         """Initializes and builds the attributes for this class
 
@@ -816,7 +816,10 @@ class Validator(object):
         # Lock parameters if environment is simulation
         if isinstance(self.env, environments.SimulationEnv):
             self.env.lock_material_params = True
-        self.env.reset()
+            self.env.reset()
+        # Set initial flip angle if in scanner environment
+        elif isinstance(self.env, environments.ScannerEnv):
+            self.env.reset(fa=self.fa_range[0])
 
         # Print start info
         print(

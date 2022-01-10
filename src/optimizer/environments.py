@@ -109,12 +109,12 @@ class SimulationEnv(object):
             recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[None, int] = None,
-            fa_range: list[float] = [20., 60.],
+            fa_range: list[float] = [5., 60.],
             Nfa: int = 100,
-            T1_range: list[float] = [0.100, 2.500],
+            T1_range: list[float] = [0.100, 4.000],
             T2_range: list[float] = [0.005, 0.100],
             tr: float = 0.050,
-            noise_level: float = 0.05,
+            noise_level: float = 0.015,
             lock_material_params: bool = False,
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -722,7 +722,7 @@ class ScannerEnv(object):
             recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[int, None] = None,
-            fa_range: list[float] = [20., 60.],
+            fa_range: list[float] = [5., 60.],
             overwrite_roi: bool = False,
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -847,6 +847,8 @@ class ScannerEnv(object):
         if not self.overwrite_roi and os.path.exists(self.roi_path):
             # Load ROI data
             self.roi = np.load(self.roi_path)
+            # Print "remove file"
+            print("Removed initial image")
         else:
             # Check whether appropriate directory exists
             if not os.path.exists(os.path.dirname(self.roi_path)):
@@ -904,27 +906,18 @@ class ScannerEnv(object):
 
         # If pass_fa, generate a flip angle file
         if pass_fa:
+            # Remove image if still there
+            if os.path.exists(self.data_path): os.remove(self.data_path)
+            if os.path.exists(self.lck_path): os.remove(self.lck_path)
+            if os.path.exists(self.txt_path): os.remove(self.txt_path)
+
             # Set flip angle we'll communicate to the scanner
             if not fa:
                 fa = self.fa
-
             # Write new flip angle to appropriate location
             with open(self.lck_path, 'w') as txt_file:
                 txt_file.write(f"{fa:.2f}")
             os.system(f"mv {self.lck_path} {self.txt_path}")
-        else:
-            # If not pass_fa, wait for some time and then just pass one
-            # anyway for good measure. This enables prototyping without
-            # having to restart the scanner before every run
-
-            if not os.path.exists(self.data_path):
-                # Wait 10 seconds
-                time.sleep(10.)
-            if not os.path.exists(self.data_path):
-                # Just pass an fa file anyway if still not there
-                with open(self.lck_path, 'w') as txt_file:
-                    txt_file.write(f"{float(np.mean(self.fa_range)):.2f}")
-                os.system(f"mv {self.lck_path} {self.txt_path}")
 
         # Wait for image to come back by checking the data file
         while not os.path.exists(self.data_path):
@@ -1104,7 +1097,7 @@ class ScannerEnv(object):
 
         return self.state, self.reward, self.done
 
-    def reset(self):
+    def reset(self, fa=None):
         """Reset environment for next episode"""
 
         # Update counters and reset done
@@ -1124,6 +1117,9 @@ class ScannerEnv(object):
             self.fa = random.uniform(
                 self.fa_range[0], self.fa_range[1]
             )
+
+        # If fa is passed, overwrite it
+        if fa: self.fa = fa
 
         # Normalize parameters
         self.norm_parameters()
