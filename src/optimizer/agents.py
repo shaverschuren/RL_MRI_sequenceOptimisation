@@ -258,7 +258,7 @@ class DDPGAgent(object):
             gamma: float = 0.99,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
-            epsilon_decay: float = 1. - 2e-3,
+            epsilon_decay: float = 1. - 1e-3,
             alpha_actor: float = 1e-4,
             alpha_critic: float = 1e-3,
             tau: float = 1e-2,
