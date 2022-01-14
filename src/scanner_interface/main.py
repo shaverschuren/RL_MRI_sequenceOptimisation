@@ -12,9 +12,9 @@ if src not in sys.path: sys.path.append(src)
 if root not in sys.path: sys.path.append(root)
 
 # File-specific imports
-import argparse                     # noqa: E402
-import json                         # noqa: E402
-import rmqReceiveImage as rmq       # noqa: E402
+import argparse                             # noqa: E402
+import json                                 # noqa: E402
+import rmqReceiveImage as rmq               # noqa: E402
 
 
 def get_args():
@@ -35,6 +35,14 @@ def get_args():
         help=(
             'check whether server connection can be established, '
             'test is succesful if "Image received" is printed.'
+        )
+    )
+    parser.add_argument(
+        '-c', '--keep_queue', metavar='keep_queue', type=bool, nargs='?',
+        default=False, const=True,
+        help=(
+            "Whether to keep or clear the queue. "
+            "If argument is passed, keep it."
         )
     )
     # Parse and return arguments
@@ -67,10 +75,20 @@ if __name__ == "__main__":
     args = get_args()
 
     # Define global variables for rmq
-    rmq.set_global_vars(img_number, args, config)
+    rmq.set_global_vars(img_number, args, config, None)
 
     # Setup channel to remote computer
     channel = rmq.rmq_setup_channel(args.m)
+
+    # Redefine global variables for rmq after channel opening
+    rmq.set_global_vars(img_number, args, config, channel)
+
+    # If we don't keep the queue (keep_queue is not passed), clear it
+    if not args.keep_queue:
+        # Clear queue
+        rmq.clear_channel_queue()
+        # Reopen channel
+        channel = rmq.rmq_setup_channel(args.m)
 
     # If -ut is passed, run a test
     if args.ut:

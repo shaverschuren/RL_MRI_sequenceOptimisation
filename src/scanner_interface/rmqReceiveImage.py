@@ -8,20 +8,23 @@ framework.
 # File-specific imports
 import os
 import sys
-import numpy as np              # noqa: E402
-import h5py                     # noqa: E402
-import pika                     # noqa: E402
-import dataobject_pb2 as pb     # noqa: E402 (pb = protobuf)
+import numpy as np
+import h5py
+import threading
+import time
+import pika
+import dataobject_pb2 as pb  # (pb = protobuf)
 
 
-def set_global_vars(img_number_, args_, config_):
+def set_global_vars(img_number_, args_, config_, channel_):
     """Set global variables"""
 
-    global img_number, args, config
+    global img_number, args, config, channel
 
     img_number = img_number_
     args = args_
     config = config_
+    channel = channel_
 
 
 def callback_image(ch, method, properties, body):
@@ -100,3 +103,55 @@ def rmq_unit_test(machine_id):
         ' -m ', machine_id, ' &'
     )
     os.system(''.join(test_str))
+
+
+def caught_channel_consumption():
+    """Start channel consumption but catch errors"""
+
+    # Define global vars
+    global channel
+
+    try:
+        channel.start_consuming()
+    except Exception:
+        pass
+
+
+def clear_channel_queue():
+    """Clear the image queue for the connected channel"""
+
+    # Declare global vars
+    global channel, img_number, config
+
+    # Print some info
+    print("Clearing scanner interface queue...")
+
+    # Call on queue, wait for a moment, then close it again
+    # We use multithreading for this (can't close if running on same thread)
+    channel_thread = threading.Thread(
+        name="clear_channel_queue",
+        target=caught_channel_consumption,
+        daemon=True
+    )
+
+    channel_thread.start()
+
+    # Wait for some time, then close the channel and kill the thread
+    time.sleep(2)
+    try:
+        channel.close()
+    except Exception:
+        pass
+    channel_thread.join()
+
+    # Remove the created data file
+    if os.path.exists(config["data_loc"]): os.remove(config["data_loc"])
+
+    # Delete its redundant output
+    for _ in range(img_number):
+        print("\033[A                             \033[A")
+    # Print some info
+    print(f"Found and removed {img_number} image(s).")
+
+    # Reset img_number
+    img_number = 0
