@@ -11,7 +11,7 @@ if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
 print("Importing dependencies... ", end="", flush=True)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'            # Remove tensorflow verbose
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'            # Remove tensorflow verbose
 
 import time                                         # noqa: E402
 start = time.time()                                 # Start timer
