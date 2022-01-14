@@ -11,7 +11,7 @@ if src not in sys.path: sys.path.append(src)
 
 # File-specific imports
 print("Importing dependencies... ", end="", flush=True)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'            # Remove tensorflow verbose
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'            # Remove tensorflow verbose
 
 import time                                         # noqa: E402
 start = time.time()                                 # Start timer
@@ -40,7 +40,7 @@ def parse_args():
     )
     required.add_argument(
         "--platform", "-p", type=str, required=True,
-        help="Type of platform/environment. Available: scanner/sim"
+        help="Type of platform/environment. Available: scan/epg"
     )
     required.add_argument(
         "--agent", "-a", type=str, required=True,
@@ -76,9 +76,9 @@ def parse_args():
             f"but got '{args.metric}'."
         )
     args.platform = args.platform.lower()
-    if args.platform not in ["scanner", "sim"]:
+    if args.platform not in ["scan", "epg"]:
         raise ValueError(
-            "The 'platform' argument options are ('scanner', 'sim'), "
+            "The 'platform' argument options are ('scan', 'epg'), "
             f"but got '{args.platform}'."
         )
     args.agent = args.agent.lower()
@@ -157,7 +157,7 @@ def init_environment(args: argparse.Namespace):
     validation_mode = (args.agent == "validation")
 
     # Initialize environment
-    if args.platform == "scanner":
+    if args.platform == "scan":
         env = environments.ScannerEnv(
             config_path=args.config_path,
             log_dir=args.log_dir,
@@ -165,7 +165,7 @@ def init_environment(args: argparse.Namespace):
             recurrent_model=recurrent_model,
             validation_mode=validation_mode
         )
-    elif args.platform == "sim":
+    elif args.platform == "epg":
         env = environments.SimulationEnv(
             mode=args.metric, action_space_type=action_space_type,
             recurrent_model=recurrent_model,

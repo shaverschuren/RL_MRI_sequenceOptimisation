@@ -744,7 +744,7 @@ class Validator(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            fa_range: list[int] = [1, 40],
+            fa_range: list[int] = [2, 40],
             n_ticks: int = 39,
             device: Union[torch.device, None] = None):
         """Initializes and builds the attributes for this class
