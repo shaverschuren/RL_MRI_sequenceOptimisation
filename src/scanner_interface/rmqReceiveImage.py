@@ -155,3 +155,14 @@ def clear_channel_queue():
 
     # Reset img_number
     img_number = 0
+
+
+def close_channel():
+    """Close channel"""
+
+    global channel
+
+    try:
+        channel.close()
+    except Exception:
+        print("Channel closed")

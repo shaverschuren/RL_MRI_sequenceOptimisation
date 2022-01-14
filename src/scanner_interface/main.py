@@ -13,6 +13,7 @@ if root not in sys.path: sys.path.append(root)
 
 # File-specific imports
 import argparse                             # noqa: E402
+import atexit                               # noqa: E402
 import json                                 # noqa: E402
 import rmqReceiveImage as rmq               # noqa: E402
 
@@ -38,7 +39,7 @@ def get_args():
         )
     )
     parser.add_argument(
-        '-c', '--keep_queue', metavar='keep_queue', type=bool, nargs='?',
+        '-k', '--keep_queue', metavar='keep_queue', type=bool, nargs='?',
         default=False, const=True,
         help=(
             "Whether to keep or clear the queue. "
@@ -93,6 +94,9 @@ if __name__ == "__main__":
     # If -ut is passed, run a test
     if args.ut:
         rmq.rmq_unit_test(args.m)
+
+    # Connect at-exit function (to close the channel at exit)
+    atexit.register(rmq.close_channel)
 
     # Start listening
     print('[*] Waiting for images on', args.m, '. Type CTRL+C to exit')
