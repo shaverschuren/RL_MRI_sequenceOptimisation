@@ -12,6 +12,7 @@ if src not in sys.path: sys.path.append(src)
 # File-specific imports
 import argparse                 # noqa: E402
 import subprocess               # noqa: E402
+import json                     # noqa: E402
 import atexit                   # noqa: E402
 from datetime import datetime   # noqa: E402
 
@@ -58,7 +59,15 @@ def parse_args():
         help="Optional: Override the number of episodes to train with"
     )
     optional.add_argument(
-        '--keep_queue', '-c', metavar='keep_queue', type=bool, nargs='?',
+        '--keep_files', '-kf', metavar='keep_files', type=bool, nargs='?',
+        default=False, const=True,
+        help=(
+            "Whether to keep or clear the communication files already there. "
+            "If argument is passed, keep them."
+        )
+    )
+    optional.add_argument(
+        '--keep_queue', '-kq', metavar='keep_queue', type=bool, nargs='?',
         default=False, const=True,
         help=(
             "Whether to keep or clear the RabbitMQ queue. "
@@ -71,6 +80,35 @@ def parse_args():
 
     # Return arguments
     return args
+
+
+def read_config():
+    """Read info from config file for scanner interaction"""
+
+    # Declare global variables
+    global root
+
+    # Read config file
+    with open(os.path.join(root, "config.json"), 'r') as f:
+        config = json.load(f)
+
+    return config
+
+
+def clear_files():
+    """Clear communication files (read from config file)"""
+
+    # Data files
+    if os.path.exists(config["data_loc"]):
+        os.remove(config["data_loc"])
+    if os.path.exists(config["data_loc"] + ".lck"):
+        os.remove(config["data_loc"] + ".lck")
+
+    # Parameter files
+    if os.path.exists(config["param_loc"]):
+        os.remove(config["param_loc"])
+    if os.path.exists(config["param_loc"] + ".lck"):
+        os.remove(config["param_loc"] + ".lck")
 
 
 def launch_processes(args):
@@ -140,6 +178,8 @@ def launch_processes(args):
         process_call.append(["--pretrained_path", args.pretrained_path])
     if args.episodes:
         process_call.append(["--episodes", args.episodes])
+    if args.keep_queue:
+        process_call.append(["-kq"])
 
     optimizer_process = subprocess.Popen(
         process_call
@@ -161,6 +201,13 @@ if __name__ == "__main__":
 
     # Parse arguments
     args = parse_args()
+
+    # Read config file
+    config = read_config()
+
+    # If applicable, clear files
+    if not args.keep_files:
+        clear_files()
 
     # Launch appropriate subprocesses
     scanner_process, optimizer_process = launch_processes(args)
