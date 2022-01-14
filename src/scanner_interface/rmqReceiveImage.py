@@ -1,63 +1,27 @@
-#!/usr/bin/python3
-''' Some remarks, protobuf (protoc) needs to be installed on your system '''
+"""Module implementing an image receiver for scanner-interface
 
-# Path setup
-import os
-import sys
-
-dir = os.path.dirname(os.path.realpath(__file__))
-src = os.path.dirname(os.path.dirname(dir))
-root = os.path.dirname(src)
-if dir not in sys.path: sys.path.append(dir)
-if src not in sys.path: sys.path.append(src)
-if root not in sys.path: sys.path.append(root)
+This is a necessary step in the communication between the
+MRI scanner and our PyTorch model. We use an RT-rabbit based
+framework.
+"""
 
 # File-specific imports
-import argparse                 # noqa: E402
+import os
+import sys
 import numpy as np              # noqa: E402
-import json                     # noqa: E402
 import h5py                     # noqa: E402
 import pika                     # noqa: E402
 import dataobject_pb2 as pb     # noqa: E402 (pb = protobuf)
 
 
-def get_args():
-    """Create argument parser and extract arguments"""
+def set_global_vars(img_number_, args_, config_):
+    """Set global variables"""
 
-    # Create parser
-    parser = argparse.ArgumentParser(
-        description='RMQ receive image inline python interface.'
-    )
-    # Add arguments
-    parser.add_argument(
-        '-m', metavar='machine_id', nargs='?',
-        default="rtrabbit", help='rtrabbit or trumer'
-    )
-    parser.add_argument(
-        '-ut', metavar='unit_test', type=bool, nargs='?',
-        default=False, const=True,
-        help=(
-            'check whether server connection can be established, '
-            'test is succesful if "Image received" is printed.'
-        )
-    )
-    # Parse and return arguments
-    args = parser.parse_args()
-    return args
+    global img_number, args, config
 
-
-def read_config():
-    """Read info from config file for scanner interaction"""
-
-    # Define config path
-    global root
-    config_path = os.path.join(root, "config.json")
-
-    # Read config file
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-
-    return config
+    img_number = img_number_
+    args = args_
+    config = config_
 
 
 def callback_image(ch, method, properties, body):
@@ -132,29 +96,7 @@ def rmq_unit_test(machine_id):
     # Create and run command
     test_str = (
         sys.executable, ' ',
-        str(script_path), '/rmqSendEmptyImage.py',
+        str(script_path), '/tests/rmqSendEmptyImage.py',
         ' -m ', machine_id, ' &'
     )
     os.system(''.join(test_str))
-
-
-if __name__ == "__main__":
-
-    # Define starting image number
-    img_number = 0
-
-    # Read config data
-    config = read_config()
-    # Get arguments
-    args = get_args()
-
-    # Setup channel to remote computer
-    channel = rmq_setup_channel(args.m)
-
-    # If -ut is passed, run a test
-    if args.ut:
-        rmq_unit_test(args.m)
-
-    # Start listening
-    print('[*] Waiting for images on', args.m, '. Type CTRL+C to exit')
-    channel.start_consuming()

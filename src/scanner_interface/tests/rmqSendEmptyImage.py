@@ -9,12 +9,13 @@ Created on Fri Jan 11 10:00:33 2022
 import os
 import sys
 sys.path.append('/nfs/arch11/researchData/USER/tbruijne/Projects_Main/ReconSocket/recon-socket-repo/recon-socket/python_scripts/')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import pika
 import numpy as np
 import argparse
 import dataobject_pb2 as pb
 import time
-     
+
 def get_args():
     parser = argparse.ArgumentParser(description='RMQ unit test empty image transmission.')
     parser.add_argument('-m',metavar='machine_id',nargs='?',default="trumer",help='rtrabbit or trumer')
