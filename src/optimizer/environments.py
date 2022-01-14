@@ -792,6 +792,8 @@ class ScannerEnv(object):
         self.init_actionspace()
         # Setup ROI
         self.setup_roi()
+        # Setup calibration
+        self.setup_calibration()
         # Set homogeneous initialization distributions
         if self.homogeneous_initialization: self.set_homogeneous_dists()
         # Set environment to starting state
@@ -856,7 +858,7 @@ class ScannerEnv(object):
 
         # Generate ROI path and calibration image
         self.roi_path = os.path.join(self.log_dir, "roi.npy")
-        calibration_image = self.perform_scan(pass_fa=False)
+        self.calibration_image = self.perform_scan(pass_fa=False)
 
         # Check for existence of ROI file
         if not self.overwrite_roi and os.path.exists(self.roi_path):
@@ -872,7 +874,7 @@ class ScannerEnv(object):
             if not os.path.exists(os.path.dirname(self.roi_path)):
                 os.mkdir(os.path.dirname(self.roi_path))
             # Generate new ROI data
-            self.roi = roi.generate_rois(calibration_image, self.roi_path)
+            self.roi = roi.generate_rois(self.calibration_image, self.roi_path)
 
         # Check whether number of ROIs is appropriate
         if self.metric == "snr":
@@ -889,6 +891,18 @@ class ScannerEnv(object):
                     f"{np.shape(self.roi)[0]}.\n"
                     f"ROIs are stored in {self.roi_path}"
                 )
+
+    def setup_calibration(self):
+        """Setup calibration data for expected image size
+        and intensity.
+        """
+
+        # Define expected size
+        self.img_size = np.shape(self.calibration_image)
+
+        # Define expected intensities
+        self.intensity_95 = np.percentile(self.calibration_image, 95)
+        self.intensity_scaling = 1 / float(self.intensity_95)
 
     def set_homogeneous_dists(self):
         """Determine a set of uniformly distributed lists
@@ -958,6 +972,10 @@ class ScannerEnv(object):
         # When the image is returned, load it and store the results
         with h5py.File(self.data_path, "r") as f:
             self.recent_img = np.asarray(f['/img'])
+
+        # If applicable, scale the image with the appropriate factor
+        if hasattr(self, "intensity_scaling"):
+            self.recent_img *= self.intensity_scaling
 
         # Remove the data file
         os.remove(self.data_path)
