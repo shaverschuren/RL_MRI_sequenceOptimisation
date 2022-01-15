@@ -648,3 +648,126 @@ class RDPGAgent(object):
 
         # Setup criterion
         self.critic_criterion = torch.nn.MSELoss()
+
+    def select_action(self, history, train=True):
+        """Select action based on episode history
+
+        Determine the action for this step
+        This is determined by the agent model and the
+        noise function passed earlier. This way, we
+        balance exploration/exploitation.
+        """
+
+        # Get action from actor model
+        pure_action = self.actor(history).detach().numpy()
+        # Add noise (if training)
+        noise = (
+            np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
+            if train else 0.
+        )
+        noisy_action = np.clip(
+            pure_action + noise,
+            self.action_space.low,
+            self.action_space.high
+        )
+
+        return torch.FloatTensor(noisy_action, device=self.device)
+
+    def update(self, batch):
+        """Updates the models based on a given batch"""
+
+        # Extract states, actions, rewards, next_states
+        states, actions, rewards = batch
+
+        # Cast to tensors
+        states = torch.cat(
+            [state.unsqueeze(0) for state in states]
+        ).to(self.device)
+        actions = torch.cat(
+            [action.unsqueeze(0) for action in actions]
+        ).to(self.device)
+        rewards = torch.cat(
+            [reward.unsqueeze(0) for reward in rewards]
+        ).to(self.device)
+
+        # Determine critic loss
+        Qvals = self.critic(torch.cat([states, actions], 1))
+        next_actions = self.actor_target(next_states)
+        next_Q = self.critic_target(
+            torch.cat([next_states, next_actions.detach()], 1)
+        )
+        Qprime = rewards + self.gamma * next_Q
+        critic_loss = self.critic_criterion(Qvals, Qprime)
+
+        # Determine actor loss
+        policy_loss = -self.critic(
+            torch.cat([states, self.actor(states)], 1)
+        ).mean()
+
+        # Update networks
+        self.actor_optimizer.zero_grad()
+        policy_loss.backward()
+        self.actor_optimizer.step()
+
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        self.critic_optimizer.step()
+
+        # Update target networks (lagging weights)
+        for target_param, param in zip(
+                self.actor_target.parameters(), self.actor.parameters()):
+            target_param.data.copy_(
+                param.data * self.tau + target_param.data * (1.0 - self.tau)
+            )
+        for target_param, param in zip(
+                self.critic_target.parameters(), self.critic.parameters()):
+            target_param.data.copy_(
+                param.data * self.tau + target_param.data * (1.0 - self.tau)
+            )
+
+        return float(policy_loss.detach()), float(critic_loss.detach())
+
+    def update_epsilon(self):
+        """Update epsilon (called at the end of an episode)"""
+
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
+    def load(self, path):
+        """Loads models from a file"""
+
+        # Load stored dict
+        pretrained_dict = torch.load(path)
+
+        # Set model states
+        self.actor.load_state_dict(
+            pretrained_dict["actor"]
+        )
+        self.critic.load_state_dict(
+            pretrained_dict["critic"]
+        )
+        self.actor_target.load_state_dict(
+            pretrained_dict["actor_target"]
+        )
+        self.critic_target.load_state_dict(
+            pretrained_dict["critic_target"]
+        )
+        # Set optimizer states
+        self.actor_optimizer.load_state_dict(
+            pretrained_dict["actor_optimizer"]
+        )
+        self.critic_optimizer.load_state_dict(
+            pretrained_dict["critic_optimizer"]
+        )
+
+    def save(self, path):
+        """Saves models to a file"""
+
+        torch.save({
+            'actor': self.actor.state_dict(),
+            'critic': self.critic.state_dict(),
+            'actor_target': self.actor_target.state_dict(),
+            'critic_target': self.critic_target.state_dict(),
+            'actor_optimizer': self.actor_optimizer.state_dict(),
+            'critic_optimizer': self.critic_optimizer.state_dict()
+        }, path)
