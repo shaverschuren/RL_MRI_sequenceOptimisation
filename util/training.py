@@ -168,3 +168,91 @@ class LongTermMemory(object):
         """Return iterator"""
 
         return list(self.memory)
+
+
+class EpisodicMemory(object):
+    """Class implementing an episodic memory object used for RDPG.
+
+    We use this in the training of RL models. This object
+    is also sometimes referred to as 'replay memory'.
+    """
+
+    def __init__(
+            self,
+            capacity: int,
+            transition_contents: tuple[str, ...] =
+            ('state', 'action', 'reward')):
+        """Constructs this memory object
+
+        Parameters
+        ----------
+            capacity : int
+                Maximum capacity of the memory object.
+                If full, overflow.
+            transition_contents : tuple[str, ...]
+                Contents of each stored transition state.
+        """
+
+        # Construct attributes
+        self.capacity = capacity
+        self.transition_contents = transition_contents
+
+        # Construct memory
+        self.memory = deque([], maxlen=capacity)
+        # Construct transition template
+        self.Transition = namedtuple(
+            'Transition', transition_contents
+        )
+
+    def push(self, history, rewards):
+        """Save an episode worth of transitions"""
+
+        # Check if the right amount of args are passed
+        if not len(history) == len(rewards):
+            raise ValueError(
+                "The number of datapoints passed"
+                " is incorrect. 'history' and 'rewards' should "
+                f"be the same length but got {len(history)} and {len(rewards)}"
+            )
+
+        # If OK, append history and rewards to memory
+        for i in range(len(history)):
+            # Extract action, state, reward per step
+            action = history[i][0]
+            state = history[i][1]
+            reward = rewards[i]
+            # Append data to memory
+            self.memory.append(
+                self.Transition(state, action, reward)
+            )
+
+    def sample(self, batch_size):
+        """Sample a random batch of samples from the memory"""
+
+        # Check whether batch size isn't larger than memory
+        if self.__len__() < batch_size:
+            raise IndexError(
+                "Batch size is larger then memory size!\n"
+                f"Batch size: {batch_size}\nMemory size: {self.__len__()}"
+            )
+
+        # Randomly sample batch from memory
+        batch = random.sample(self.memory, batch_size)
+
+        # Return batch
+        return batch
+
+    def get_recent_memory(self, length: int):
+        """Extract recent memory"""
+
+        return list(self.memory)[-length:]
+
+    def __len__(self):
+        """Return length"""
+
+        return len(self.memory)
+
+    def __iter__(self):
+        """Return iterator"""
+
+        return list(self.memory)
