@@ -762,7 +762,7 @@ class RDPGAgent(object):
 
         return (
             float(policy_loss_total.detach()),
-            float(policy_loss_total.detach())
+            float(critic_loss_total.detach())
         )
 
     def update_epsilon(self):
