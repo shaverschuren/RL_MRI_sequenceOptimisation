@@ -760,7 +760,10 @@ class RDPGAgent(object):
                 param.data * self.tau + target_param.data * (1.0 - self.tau)
             )
 
-        return float(np.mean(policy_losses)), float(np.mean(critic_losses))
+        return (
+            float(policy_loss_total.detach()),
+            float(policy_loss_total.detach())
+        )
 
     def update_epsilon(self):
         """Update epsilon (called at the end of an episode)"""
