@@ -260,8 +260,8 @@ class RecurrentModel_LSTM(nn.Module):
 
         return x    # , (hx, cx)
 
-    def reset_hidden_state(self):
+    def reset_hidden_state(self, batch_size=1):
         """Reset hidden state of the lstm module"""
 
-        self.hx = Variable(torch.zeros(1, self.hidden_size))
-        self.cx = Variable(torch.zeros(1, self.hidden_size))
+        self.hx = Variable(torch.zeros(batch_size, self.hidden_size))
+        self.cx = Variable(torch.zeros(batch_size, self.hidden_size))

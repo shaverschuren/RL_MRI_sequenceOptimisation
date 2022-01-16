@@ -981,6 +981,9 @@ class RDPG(object):
             )
             actions = torch.FloatTensor([0.], device=self.device)
             rewards = torch.FloatTensor([0.], device=self.device)
+            next_states = torch.FloatTensor(
+                [[0.] * self.env.n_states], device=self.device
+            )
 
             # Print some info
             self.verbose_episode()
@@ -1002,6 +1005,9 @@ class RDPG(object):
                 states = torch.cat((states, torch.unsqueeze(state, 0)))
                 actions = torch.cat((actions, action))
                 rewards = torch.cat((rewards, reward))
+                next_states = torch.cat(
+                    (next_states, torch.unsqueeze(next_state, 0))
+                )
 
                 # Log step results
                 self.log_step(state, action, reward, next_state, done)
@@ -1011,13 +1017,14 @@ class RDPG(object):
                     break
 
             # Update memory with previous episode (remove first step)
-            self.memory.push(states[1:], actions[1:], rewards[1:])
+            self.memory.push(
+                states[1:], actions[1:], rewards[1:], next_states[1:]
+            )
 
             # If training, update model
-            if train and self.batch_size <= len(self.memory):
-                batch = self.memory.sample(self.batch_size)
-                self.policy_loss, self.critic_loss = \
-                    self.agent.update(batch)
+            batch = self.memory.sample(self.batch_size)
+            self.policy_loss, self.critic_loss = \
+                self.agent.update(batch)
 
             # Log episode results
             if train:

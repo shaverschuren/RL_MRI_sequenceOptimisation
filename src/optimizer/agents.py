@@ -599,11 +599,11 @@ class RDPGAgent(object):
             device=self.device
         )
         self.critic = models.RecurrentModel_LSTM(
-            input_size=self.n_states,
+            input_size=self.n_states + self.n_actions,
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states, 64, 64, hidden_size
+                self.n_states + self.n_actions, 64, 64, hidden_size
             ],
             output_activation="none",
             device=self.device
@@ -620,11 +620,11 @@ class RDPGAgent(object):
             device=self.device
         )
         self.critic_target = models.RecurrentModel_LSTM(
-            input_size=self.n_states,
+            input_size=self.n_states + self.n_actions,
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states, 64, 64, hidden_size
+                self.n_states + self.n_actions, 64, 64, hidden_size
             ],
             output_activation="none",
             device=self.device
@@ -678,42 +678,75 @@ class RDPGAgent(object):
     def update(self, batch):
         """Updates the models based on a given batch"""
 
-        # Extract states, actions, rewards, next_states
-        states, actions, rewards = batch
+        # Reset model hidden states
+        self.reset(batch_size=len(batch[0]))
 
-        # Cast to tensors
-        states = torch.cat(
-            [state.unsqueeze(0) for state in states]
-        ).to(self.device)
-        actions = torch.cat(
-            [action.unsqueeze(0) for action in actions]
-        ).to(self.device)
-        rewards = torch.cat(
-            [reward.unsqueeze(0) for reward in rewards]
-        ).to(self.device)
+        # Create lists for policy and critic loss
+        policy_loss_total = None
+        critic_loss_total = None
 
-        # Determine critic loss
-        Qvals = self.critic(torch.cat([states, actions], 1))
-        next_actions = self.actor_target(next_states)
-        next_Q = self.critic_target(
-            torch.cat([next_states, next_actions.detach()], 1)
-        )
-        Qprime = rewards + self.gamma * next_Q
-        critic_loss = self.critic_criterion(Qvals, Qprime)
+        # Loop over timesteps of the trajectories
+        # Process all trajectories in parallel, however
+        for t in range(len(batch)):
 
-        # Determine actor loss
-        policy_loss = -self.critic(
-            torch.cat([states, self.actor(states)], 1)
-        ).mean()
+            # Extract states, actions, rewards, next_states
+            states = [transition.state for transition in batch[t]]
+            actions = [transition.action for transition in batch[t]]
+            rewards = [transition.reward for transition in batch[t]]
+            next_states = [transition.next_state for transition in batch[t]]
+
+            # Cast to tensors
+            states = torch.cat(
+                [state.unsqueeze(0) for state in states]
+            ).to(self.device)
+            actions = torch.unsqueeze(torch.cat(
+                [action.unsqueeze(0) for action in actions]
+            ).to(self.device), 1)
+            rewards = torch.unsqueeze(torch.cat(
+                [reward.unsqueeze(0) for reward in rewards]
+            ).to(self.device), 1)
+            next_states = torch.cat(
+                [next_state.unsqueeze(0) for next_state in next_states]
+            ).to(self.device)
+
+            # Determine critic loss
+            Qvals = self.critic(torch.cat([states, actions], 1))
+            next_actions = self.actor_target(next_states)
+            next_Q = self.critic_target(
+                torch.cat([next_states, next_actions.detach()], 1)
+            )
+            Qprime = rewards + self.gamma * next_Q
+            critic_loss = self.critic_criterion(Qvals, Qprime)
+
+            # Determine actor loss
+            policy_loss = -self.critic(
+                torch.cat([states, self.actor(states)], 1)
+            ).mean()
+
+            # Store losses
+            if policy_loss_total is not None and critic_loss_total is not None:
+                policy_loss_total += policy_loss
+                critic_loss_total += critic_loss
+            else:
+                policy_loss_total = policy_loss
+                critic_loss_total = critic_loss
 
         # Update networks
-        self.actor_optimizer.zero_grad()
-        policy_loss.backward()
-        self.actor_optimizer.step()
+        if policy_loss_total is not None and critic_loss_total is not None:
+            # Scale losses with batch size
+            policy_loss_total /= len(batch)
+            critic_loss_total /= len(batch)
 
-        self.critic_optimizer.zero_grad()
-        critic_loss.backward()
-        self.critic_optimizer.step()
+            # Update models
+            self.actor_optimizer.zero_grad()
+            policy_loss_total.backward()
+            self.actor_optimizer.step()
+
+            self.critic_optimizer.zero_grad()
+            critic_loss_total.backward()
+            self.critic_optimizer.step()
+        else:
+            raise RuntimeError("Updating failed")
 
         # Update target networks (lagging weights)
         for target_param, param in zip(
@@ -727,7 +760,7 @@ class RDPGAgent(object):
                 param.data * self.tau + target_param.data * (1.0 - self.tau)
             )
 
-        return float(policy_loss.detach()), float(critic_loss.detach())
+        return float(np.mean(policy_losses)), float(np.mean(critic_losses))
 
     def update_epsilon(self):
         """Update epsilon (called at the end of an episode)"""
@@ -735,13 +768,13 @@ class RDPGAgent(object):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-    def reset(self):
+    def reset(self, batch_size=1):
         """Reset hidden states of the models, ready for a new episode"""
 
         for model in (
             self.actor, self.actor_target, self.critic, self.critic_target
         ):
-            model.reset_hidden_state()
+            model.reset_hidden_state(batch_size=batch_size)
 
     def load(self, path):
         """Loads models from a file"""

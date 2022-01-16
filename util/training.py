@@ -181,7 +181,7 @@ class EpisodicMemory(object):
             self,
             capacity: int,
             transition_contents: tuple[str, ...] =
-            ('state', 'action', 'reward')):
+            ('state', 'action', 'reward', 'next_state')):
         """Constructs this memory object
 
         Parameters
@@ -204,7 +204,7 @@ class EpisodicMemory(object):
             'Transition', transition_contents
         )
 
-    def push(self, states, actions, rewards):
+    def push(self, states, actions, rewards, next_states):
         """Save an episode worth of transitions"""
 
         # Define amount of transitions passed
@@ -225,9 +225,10 @@ class EpisodicMemory(object):
             state = states[i]
             action = actions[i]
             reward = rewards[i]
+            next_state = next_states[i]
             # Append data to memory
             trajectory.append(
-                self.Transition(state, action, reward)
+                self.Transition(state, action, reward, next_state)
             )
         self.memory.append(trajectory)
 
@@ -237,9 +238,19 @@ class EpisodicMemory(object):
         # Sample random trajectories from memory
         # If smaller than batch size, just return the full memory (scrambled)
         if self.__len__() < batch_size:
-            batch = random.sample(self.memory, len(self.memory))
+            trajectories = random.sample(self.memory, len(self.memory))
         else:
-            batch = random.sample(self.memory, batch_size)
+            trajectories = random.sample(self.memory, batch_size)
+
+        # Extract the minimal length of the sampled trajectories
+        min_len = min([len(trajectory) for trajectory in trajectories])
+        # Truncate trajectories to minimal size
+        trajectories = [trajectory[:min_len] for trajectory in trajectories]
+
+        # Zip trajectories so that timesteps are packed together
+        # This allows us to perform training of the batch in parallel
+        # (much quicker and more stable)
+        batch = list(map(list, zip(*trajectories)))
 
         # Return batch
         return batch
