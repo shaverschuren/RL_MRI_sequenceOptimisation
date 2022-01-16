@@ -512,7 +512,7 @@ class RDPGAgent(object):
     def __init__(
             self,
             action_space: environments.ActionSpace,
-            n_states: int = 4,
+            n_states: int = 2,
             n_actions: int = 1,
             gamma: float = 0.99,
             epsilon: float = 1.,
@@ -593,7 +593,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                hidden_size, 128, 128, self.n_actions
+                self.n_states, 64, 64, hidden_size
             ],
             output_activation="tanh",
             device=self.device
@@ -603,7 +603,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                hidden_size, 128, 128, self.n_actions
+                self.n_states, 64, 64, hidden_size
             ],
             output_activation="none",
             device=self.device
@@ -614,7 +614,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                hidden_size, 128, 128, self.n_actions
+                self.n_states, 64, 64, hidden_size
             ],
             output_activation="tanh",
             device=self.device
@@ -624,7 +624,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                hidden_size, 128, 128, self.n_actions
+                self.n_states, 64, 64, hidden_size
             ],
             output_activation="none",
             device=self.device
@@ -649,8 +649,8 @@ class RDPGAgent(object):
         # Setup criterion
         self.critic_criterion = torch.nn.MSELoss()
 
-    def select_action(self, history, train=True):
-        """Select action based on episode history
+    def select_action(self, state, train=True):
+        """Select action based on current state
 
         Determine the action for this step
         This is determined by the agent model and the
@@ -659,7 +659,7 @@ class RDPGAgent(object):
         """
 
         # Get action from actor model
-        pure_action = self.actor(history).detach().numpy()
+        pure_action = self.actor(torch.unsqueeze(state, 0)).detach().numpy()
         # Add noise (if training)
         noise = (
             np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
@@ -732,6 +732,14 @@ class RDPGAgent(object):
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+    def reset(self):
+        """Reset hidden states of the models, ready for a new episode"""
+
+        for model in (
+            self.actor, self.actor_target, self.critic, self.critic_target
+        ):
+            model.reset_hidden_state()
 
     def load(self, path):
         """Loads models from a file"""

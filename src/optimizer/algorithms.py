@@ -971,12 +971,13 @@ class RDPG(object):
             # Reset environment
             self.env.reset()
 
+            # Reset agent
+            self.agent.reset()
+
             # Create episodic memory element (history) and
             # define initial action/reward
             history = []
             rewards = []
-            action = torch.FloatTensor([0.], device=self.device)
-            reward = torch.FloatTensor([0.], device=self.device)
 
             # Print some info
             self.verbose_episode()
@@ -987,16 +988,16 @@ class RDPG(object):
                 # Extract current state
                 state = self.env.state
 
+                # Choose action
+                action = self.agent.select_action(state, train)
+
+                # Simulate step
+                next_state, reward, done = self.env.step(action)
+
                 # Add previous state and action/reward for previous transition
                 # to the history and reward history
                 history.append([action, state])
                 rewards.append(reward)
-
-                # Choose action
-                action = self.agent.select_action(history, train)
-
-                # Simulate step
-                next_state, reward, done = self.env.step(action)
 
                 # Log step results
                 self.log_step(state, action, reward, next_state, done)
