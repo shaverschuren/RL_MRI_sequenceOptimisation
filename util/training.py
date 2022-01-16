@@ -204,48 +204,50 @@ class EpisodicMemory(object):
             'Transition', transition_contents
         )
 
-    def push(self, history, rewards):
+    def push(self, states, actions, rewards):
         """Save an episode worth of transitions"""
 
+        # Define amount of transitions passed
+        n_transitions = len(states)
+
         # Check if the right amount of args are passed
-        if not len(history) == len(rewards):
+        if not n_transitions == len(actions) and n_transitions == len(rewards):
             raise ValueError(
                 "The number of datapoints passed"
-                " is incorrect. 'history' and 'rewards' should "
-                f"be the same length but got {len(history)} and {len(rewards)}"
+                " is incorrect. 'states', 'actions' and 'rewards' should "
+                f"be the same length."
             )
 
         # If OK, append history and rewards to memory
-        for i in range(len(history)):
+        trajectory = []
+        for i in range(n_transitions):
             # Extract action, state, reward per step
-            action = history[i][0]
-            state = history[i][1]
+            state = states[i]
+            action = actions[i]
             reward = rewards[i]
             # Append data to memory
-            self.memory.append(
+            trajectory.append(
                 self.Transition(state, action, reward)
             )
+        self.memory.append(trajectory)
 
     def sample(self, batch_size):
         """Sample a random batch of samples from the memory"""
 
-        # Check whether batch size isn't larger than memory
+        # Sample random trajectories from memory
+        # If smaller than batch size, just return the full memory (scrambled)
         if self.__len__() < batch_size:
-            raise IndexError(
-                "Batch size is larger then memory size!\n"
-                f"Batch size: {batch_size}\nMemory size: {self.__len__()}"
-            )
-
-        # Randomly sample batch from memory
-        batch = random.sample(self.memory, batch_size)
+            batch = random.sample(self.memory, len(self.memory))
+        else:
+            batch = random.sample(self.memory, batch_size)
 
         # Return batch
         return batch
 
     def get_recent_memory(self, length: int):
-        """Extract recent memory"""
+        """Extract recent memory (from last episode)"""
 
-        return list(self.memory)[-length:]
+        return list(self.memory[-1])[-length:]
 
     def __len__(self):
         """Return length"""

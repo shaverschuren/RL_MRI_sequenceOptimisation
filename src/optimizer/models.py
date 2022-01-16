@@ -188,10 +188,9 @@ class RecurrentModel_LSTM(nn.Module):
         architecture_list.append(
             (
                 "lstm",
-                nn.LSTM(
+                nn.LSTMCell(
                     input_size=self.fully_connected_architecture[-1],
-                    hidden_size=self.hidden_size,
-                    batch_first=True
+                    hidden_size=self.hidden_size
                 )
             )
         )
@@ -259,7 +258,7 @@ class RecurrentModel_LSTM(nn.Module):
         x = hx
         x = self.stack[self.lstm_idx + 1:](x)
 
-        return x, (hx, cx)
+        return x    # , (hx, cx)
 
     def reset_hidden_state(self):
         """Reset hidden state of the lstm module"""

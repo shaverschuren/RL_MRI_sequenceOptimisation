@@ -731,7 +731,7 @@ class RDPG(object):
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
-        self.memory = training.LongTermMemory(10000)
+        self.memory = training.EpisodicMemory(10000)
         # Setup logger
         self.setup_logger()
 
@@ -845,10 +845,10 @@ class RDPG(object):
         """Log a single episode"""
 
         # Extract recent memory
-        recent_memory = self.memory.get_recent_memory(5)
-        recent_states = [transition.next_state for transition in recent_memory]
-        recent_metrics = [float(state[0]) for state in recent_states]
-        recent_fa = [float(state[1]) for state in recent_states]
+        recent_memory = self.memory.get_recent_memory(6)
+        recent_states = [transition.state for transition in recent_memory]
+        recent_metrics = [float(state[0]) for state in recent_states[1:]]
+        recent_fa = [float(state[1]) for state in recent_states[1:]]
 
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
@@ -976,8 +976,11 @@ class RDPG(object):
 
             # Create episodic memory element (history) and
             # define initial action/reward
-            history = []
-            rewards = []
+            states = torch.FloatTensor(
+                [[0.] * self.env.n_states], device=self.device
+            )
+            actions = torch.FloatTensor([0.], device=self.device)
+            rewards = torch.FloatTensor([0.], device=self.device)
 
             # Print some info
             self.verbose_episode()
@@ -994,10 +997,11 @@ class RDPG(object):
                 # Simulate step
                 next_state, reward, done = self.env.step(action)
 
-                # Add previous state and action/reward for previous transition
-                # to the history and reward history
-                history.append([action, state])
-                rewards.append(reward)
+                # Add action/reward for previous transition
+                # to the history
+                states = torch.cat((states, torch.unsqueeze(state, 0)))
+                actions = torch.cat((actions, action))
+                rewards = torch.cat((rewards, reward))
 
                 # Log step results
                 self.log_step(state, action, reward, next_state, done)
@@ -1007,7 +1011,7 @@ class RDPG(object):
                     break
 
             # Update memory with previous episode (remove first step)
-            self.memory.push(history[1:], rewards[1:])
+            self.memory.push(states[1:], actions[1:], rewards[1:])
 
             # If training, update model
             if train and self.batch_size <= len(self.memory):

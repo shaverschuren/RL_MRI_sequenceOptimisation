@@ -659,7 +659,9 @@ class RDPGAgent(object):
         """
 
         # Get action from actor model
-        pure_action = self.actor(torch.unsqueeze(state, 0)).detach().numpy()
+        pure_action = torch.squeeze(
+            self.actor(torch.unsqueeze(state, 0)), 0
+        ).detach().numpy()
         # Add noise (if training)
         noise = (
             np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
