@@ -258,7 +258,7 @@ class RecurrentModel_LSTM(nn.Module):
         x = hx
         x = self.stack[self.lstm_idx + 1:](x)
 
-        return x    # , (hx, cx)
+        return x, (hx, cx)
 
     def reset_hidden_state(self, batch_size=1):
         """Reset hidden state of the lstm module"""

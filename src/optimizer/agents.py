@@ -12,6 +12,7 @@ import numpy as np
 import torch
 from torch import optim
 import torch.nn.functional as F
+from torch.autograd import Variable
 from optimizer import environments, models
 
 
@@ -659,9 +660,8 @@ class RDPGAgent(object):
         """
 
         # Get action from actor model
-        pure_action = torch.squeeze(
-            self.actor(torch.unsqueeze(state, 0)), 0
-        ).detach().numpy()
+        pure_action, _ = self.actor(torch.unsqueeze(state, 0))
+        pure_action = torch.squeeze(pure_action, 0).detach().numpy()
         # Add noise (if training)
         noise = (
             np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
@@ -678,7 +678,7 @@ class RDPGAgent(object):
     def update(self, batch):
         """Updates the models based on a given batch"""
 
-        # Reset model hidden states
+        # Reset hidden states
         self.reset(batch_size=len(batch[0]))
 
         # Create lists for policy and critic loss
@@ -710,9 +710,9 @@ class RDPGAgent(object):
             ).to(self.device)
 
             # Determine critic loss
-            Qvals = self.critic(torch.cat([states, actions], 1))
-            next_actions = self.actor_target(next_states)
-            next_Q = self.critic_target(
+            Qvals, _ = self.critic(torch.cat([states, actions], 1))
+            next_actions, _ = self.actor_target(next_states)
+            next_Q, _ = self.critic_target(
                 torch.cat([next_states, next_actions.detach()], 1)
             )
             Qprime = rewards + self.gamma * next_Q
@@ -720,8 +720,8 @@ class RDPGAgent(object):
 
             # Determine actor loss
             policy_loss = -self.critic(
-                torch.cat([states, self.actor(states)], 1)
-            ).mean()
+                torch.cat([states, self.actor(states)[0]], 1)
+            )[0].mean()
 
             # Store losses
             if policy_loss_total is not None and critic_loss_total is not None:
@@ -731,22 +731,16 @@ class RDPGAgent(object):
                 policy_loss_total = policy_loss
                 critic_loss_total = critic_loss
 
-        # Update networks
-        if policy_loss_total is not None and critic_loss_total is not None:
-            # Scale losses with batch size
-            policy_loss_total /= len(batch)
-            critic_loss_total /= len(batch)
-
-            # Update models
+            # Update networks
+            self.detach_hidden()
             self.actor_optimizer.zero_grad()
-            policy_loss_total.backward()
+            policy_loss.backward(retain_graph=True)
             self.actor_optimizer.step()
 
+            self.detach_hidden()
             self.critic_optimizer.zero_grad()
-            critic_loss_total.backward()
+            critic_loss.backward(retain_graph=True)
             self.critic_optimizer.step()
-        else:
-            raise RuntimeError("Updating failed")
 
         # Update target networks (lagging weights)
         for target_param, param in zip(
@@ -760,16 +754,31 @@ class RDPGAgent(object):
                 param.data * self.tau + target_param.data * (1.0 - self.tau)
             )
 
-        return (
-            float(policy_loss_total.detach()),
-            float(critic_loss_total.detach())
-        )
+        if policy_loss_total is not None and critic_loss_total is not None:
+            return (
+                float(policy_loss_total.detach() / len(batch)),
+                float(critic_loss_total.detach() / len(batch))
+            )
+        else:
+            raise RuntimeError("Updating failed")
 
     def update_epsilon(self):
         """Update epsilon (called at the end of an episode)"""
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+    def detach_hidden(self):
+        """Detach hidden states"""
+
+        self.actor.hx = Variable(self.actor.hx.data)
+        self.actor.cx = Variable(self.actor.cx.data)
+        self.critic.hx = Variable(self.critic.hx.data)
+        self.critic.cx = Variable(self.critic.cx.data)
+        self.actor_target.hx = Variable(self.actor_target.hx.data)
+        self.actor_target.cx = Variable(self.actor_target.cx.data)
+        self.critic_target.hx = Variable(self.critic_target.hx.data)
+        self.critic_target.cx = Variable(self.critic_target.cx.data)
 
     def reset(self, batch_size=1):
         """Reset hidden states of the models, ready for a new episode"""
