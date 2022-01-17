@@ -36,19 +36,19 @@ def parse_args():
     )
     optional.add_argument(
         "--T1a", default=4.000, type=float,
-        help="T1 to simulate phantom with [s]. Default: 4.000"
+        help="T1 to simulate phantom with [s]. Default: 4.000 (water)"
     )
     optional.add_argument(
         "--T2a", default=2.000, type=float,
-        help="T1 to simulate phantom with [s]. Default: 2.000"
+        help="T1 to simulate phantom with [s]. Default: 2.000 (water)"
     )
     optional.add_argument(
-        "--T1b", default=1.000, type=float,
-        help="T1 to simulate second phantom with [s]. Default: 1.000"
+        "--T1b", default=0.900, type=float,
+        help="T1 to simulate second phantom with [s]. Default: Grey matter"
     )
     optional.add_argument(
-        "--T2b", default=0.050, type=float,
-        help="T2 to simulate second phantom with [s]. Default: 0.050"
+        "--T2b", default=0.090, type=float,
+        help="T2 to simulate second phantom with [s]. Default: Grey matter"
     )
 
     # Parse arguments
