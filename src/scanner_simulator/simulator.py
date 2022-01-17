@@ -17,8 +17,8 @@ class Simulator(object):
             config_path: Union[str, os.PathLike],
             n_phantoms: int = 1,
             resolution: int = 256,
-            T1a: float = 0.500,
-            T2a: float = 0.050,
+            T1a: float = 4.000,
+            T2a: float = 2.000,
             T1b: Union[float, None] = None,
             T2b: Union[float, None] = None,
             noise_level: float = 0.02):
