@@ -175,11 +175,11 @@ def launch_processes(args):
         "--mode", args.mode
     ]
     if args.pretrained_path:
-        process_call.append(["--pretrained_path", args.pretrained_path])
+        process_call.extend(["--pretrained_path", args.pretrained_path])
     if args.episodes:
-        process_call.append(["--episodes", args.episodes])
+        process_call.extend(["--episodes", args.episodes])
     if args.keep_queue:
-        process_call.append(["-kq"])
+        process_call.extend(["-kq"])
 
     optimizer_process = subprocess.Popen(
         process_call
