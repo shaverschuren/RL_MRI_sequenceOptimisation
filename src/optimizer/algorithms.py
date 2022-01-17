@@ -1022,9 +1022,10 @@ class RDPG(object):
             )
 
             # If training, update model
-            batch = self.memory.sample(self.batch_size)
-            self.policy_loss, self.critic_loss = \
-                self.agent.update(batch)
+            if train:
+                batch = self.memory.sample(self.batch_size)
+                self.policy_loss, self.critic_loss = \
+                    self.agent.update(batch)
 
             # Log episode results
             if train:
