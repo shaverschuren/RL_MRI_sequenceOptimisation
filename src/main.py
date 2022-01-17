@@ -55,7 +55,7 @@ def parse_args():
         help="Optional: Path to pretrained model"
     )
     optional.add_argument(
-        "--episodes", metavar="episodes", type=int,
+        "--episodes", metavar="episodes", type=str,
         help="Optional: Override the number of episodes to train with"
     )
     optional.add_argument(
