@@ -164,7 +164,7 @@ def generate_rois(
 
 def extract_rois(
         image: np.ndarray,
-        rois: np.ndarray) -> np.ndarray:
+        rois: np.ndarray) -> list:
     """Extract the appropriate parts of the image
     by using previously defined ROIs.
 
@@ -197,4 +197,4 @@ def extract_rois(
         roi_images.append(roi_image)
 
     # Return list
-    return np.array(roi_images)
+    return roi_images

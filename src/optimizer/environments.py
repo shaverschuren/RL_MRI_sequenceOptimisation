@@ -998,15 +998,16 @@ class ScannerEnv(object):
         # Determine either snr or cnr (based on mode)
         if self.metric == "snr":
             # Check ROI validity
-            if not np.shape(img_roi)[0] == 1:
+            if not len(img_roi) == 1:
                 raise UserWarning(
                     "In snr mode, only one ROI should be selected."
                 )
             # Calculate SNR
+            img_roi = np.array(img_roi)
             self.snr = float(np.mean(img_roi) / np.std(img_roi))
         elif self.metric == "cnr":
             # Check ROI validity
-            if not np.shape(img_roi)[0] == 2:
+            if not len(img_roi) == 2:
                 raise UserWarning(
                     "In cnr mode, two ROIs should be selected."
                 )

@@ -155,93 +155,113 @@ class RecurrentModel_LSTM(nn.Module):
             self.stack = nn.Sequential(self.architecture_dict)
 
     def build_architecture_dict(self):
-        """Build model layer stack"""
+        """Build model layer stack
+
+        By default, we take a certain number of linear layers,
+        then an LSTM block and finally the output layer.
+        """
 
         # Init architecture list
         architecture_list = []
 
-        # Add LSTM module and initial relu layer
-        architecture_list.append(
-            (
-                "lstm0",
-                nn.LSTM(
-                    input_size=self.input_size,
-                    hidden_size=self.hidden_size,
-                    batch_first=True
-                )
-            )
-        )
-        architecture_list.append(
-            (
-                "relu0", nn.ReLU()
-            )
-        )
-
-        # Append list with  layers
-        for layer_i in range(len(self.fully_connected_architecture)):
+        # Append list with layers
+        layer_i = 0
+        for layer_i in range(len(self.fully_connected_architecture) - 1):
             # Define layer name
-            if layer_i == len(self.fully_connected_architecture) - 1:
-                layer_name = "output"
-            else:
-                layer_name = f'fc{layer_i + 1}'
+            layer_name = f'fc{layer_i + 1}'
             # Add linear layer
             architecture_list.append(
                 (
                     layer_name,
                     nn.Linear(
-                        self.fully_connected_architecture[max(0, layer_i - 1)],
-                        self.fully_connected_architecture[layer_i])
+                        self.fully_connected_architecture[layer_i],
+                        self.fully_connected_architecture[layer_i + 1])
                 )
             )
-
             # Add activation function
-            if not layer_name == "output":
-                architecture_list.append(
-                    (f"relu{layer_i + 1}", nn.ReLU())
+            architecture_list.append(
+                (f"relu{layer_i + 1}", nn.ReLU())
+            )
+
+        # Add LSTM module and concurrent relu layer
+        self.lstm_idx = 2 * (layer_i + 1)
+        architecture_list.append(
+            (
+                "lstm",
+                nn.LSTMCell(
+                    input_size=self.fully_connected_architecture[-1],
+                    hidden_size=self.hidden_size
                 )
-            else:
-                if str(self.output_activation).lower() == 'relu':
-                    architecture_list.append(
-                        (f"relu{layer_i + 1}", nn.ReLU())
-                    )
-                elif str(self.output_activation).lower() == 'leaky_relu':
-                    architecture_list.append(
-                        (f"leaky_relu{layer_i + 1}", nn.LeakyReLU())
-                    )
-                elif str(self.output_activation).lower() == 'tanh':
-                    architecture_list.append(
-                        (f"tanh{layer_i + 1}", nn.Tanh())
-                    )
-                elif str(self.output_activation).lower() == 'sigmoid':
-                    architecture_list.append(
-                        (f"sigmoid{layer_i + 1}", nn.Sigmoid())
-                    )
-                elif str(self.output_activation).lower() == 'softmax':
-                    architecture_list.append(
-                        (f"softmax{layer_i + 1}", nn.Softmax())
-                    )
-                elif str(self.output_activation).lower() == 'none':
-                    pass
-                else:
-                    raise ValueError(
-                        "Activation function not supported. "
-                        "Expected either 'relu', 'leaky_relu', 'tanh', "
-                        "'sigmoid' or 'softmax', but got "
-                        f"'{self.output_activation}'."
-                    )
+            )
+        )
+        architecture_list.append(
+            (
+                f"relu_lstm", nn.ReLU()
+            )
+        )
+
+        # Add final output layer and its activation function
+        architecture_list.append(
+            (
+                "output",
+                nn.Linear(
+                    self.hidden_size,
+                    self.output_size)
+            )
+        )
+        if str(self.output_activation).lower() == 'relu':
+            architecture_list.append(
+                (f"relu_output", nn.ReLU())
+            )
+        elif str(self.output_activation).lower() == 'leaky_relu':
+            architecture_list.append(
+                (f"leaky_relu_output", nn.LeakyReLU())
+            )
+        elif str(self.output_activation).lower() == 'tanh':
+            architecture_list.append(
+                (f"tanh_output", nn.Tanh())
+            )
+        elif str(self.output_activation).lower() == 'sigmoid':
+            architecture_list.append(
+                (f"sigmoid_output", nn.Sigmoid())
+            )
+        elif str(self.output_activation).lower() == 'softmax':
+            architecture_list.append(
+                (f"softmax_output", nn.Softmax())
+            )
+        elif str(self.output_activation).lower() == 'none':
+            pass
+        else:
+            raise ValueError(
+                "Activation function not supported. "
+                "Expected either 'relu', 'leaky_relu', 'tanh', "
+                "'sigmoid' or 'softmax', but got "
+                f"'{self.output_activation}'."
+            )
 
         # Fill ordered dict
         self.architecture_dict = OrderedDict(architecture_list)
 
-    def forward(self, history, hidden):
+    def forward(self, x, hidden=None):
         """Implement forward pass"""
 
-        # Pass through LSTM and extract hidden state
-        x, hidden = self.stack["lstm"](history)
+        # Pass through the first fully connected layers
+        x = self.stack[:self.lstm_idx](x)
+        # Pass through the LSTM module and extract x, hidden states
+        if hidden is None:
+            hx, cx = self.stack[self.lstm_idx](x, (self.hx, self.cx))
+            self.hx = hx
+            self.cx = cx
+        else:
+            hx, cx = self.stack[self.lstm_idx](x, hidden)
         # Pass through rest of the stack and extract output
-        x = self.stack[1:](x)
+        x = hx
+        x = self.stack[self.lstm_idx + 1:](x)
 
-        return x, hidden
+        return x, (hx, cx)
 
-    def init_hidden(self):
-        return Variable(torch.zeros(1, self.hidden_size))
+    def reset_hidden_state(self, batch_size=1):
+        """Reset hidden state of the lstm module"""
+
+        self.hx = Variable(torch.zeros(batch_size, self.hidden_size))
+        self.cx = Variable(torch.zeros(batch_size, self.hidden_size))

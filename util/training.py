@@ -168,3 +168,104 @@ class LongTermMemory(object):
         """Return iterator"""
 
         return list(self.memory)
+
+
+class EpisodicMemory(object):
+    """Class implementing an episodic memory object used for RDPG.
+
+    We use this in the training of RL models. This object
+    is also sometimes referred to as 'replay memory'.
+    """
+
+    def __init__(
+            self,
+            capacity: int,
+            transition_contents: tuple[str, ...] =
+            ('state', 'action', 'reward', 'next_state')):
+        """Constructs this memory object
+
+        Parameters
+        ----------
+            capacity : int
+                Maximum capacity of the memory object.
+                If full, overflow.
+            transition_contents : tuple[str, ...]
+                Contents of each stored transition state.
+        """
+
+        # Construct attributes
+        self.capacity = capacity
+        self.transition_contents = transition_contents
+
+        # Construct memory
+        self.memory = deque([], maxlen=capacity)
+        # Construct transition template
+        self.Transition = namedtuple(
+            'Transition', transition_contents
+        )
+
+    def push(self, states, actions, rewards, next_states):
+        """Save an episode worth of transitions"""
+
+        # Define amount of transitions passed
+        n_transitions = len(states)
+
+        # Check if the right amount of args are passed
+        if not n_transitions == len(actions) and n_transitions == len(rewards):
+            raise ValueError(
+                "The number of datapoints passed"
+                " is incorrect. 'states', 'actions' and 'rewards' should "
+                f"be the same length."
+            )
+
+        # If OK, append history and rewards to memory
+        trajectory = []
+        for i in range(n_transitions):
+            # Extract action, state, reward per step
+            state = states[i]
+            action = actions[i]
+            reward = rewards[i]
+            next_state = next_states[i]
+            # Append data to memory
+            trajectory.append(
+                self.Transition(state, action, reward, next_state)
+            )
+        self.memory.append(trajectory)
+
+    def sample(self, batch_size):
+        """Sample a random batch of samples from the memory"""
+
+        # Sample random trajectories from memory
+        # If smaller than batch size, just return the full memory (scrambled)
+        if self.__len__() < batch_size:
+            trajectories = random.sample(self.memory, len(self.memory))
+        else:
+            trajectories = random.sample(self.memory, batch_size)
+
+        # Extract the minimal length of the sampled trajectories
+        min_len = min([len(trajectory) for trajectory in trajectories])
+        # Truncate trajectories to minimal size
+        trajectories = [trajectory[:min_len] for trajectory in trajectories]
+
+        # Zip trajectories so that timesteps are packed together
+        # This allows us to perform training of the batch in parallel
+        # (much quicker and more stable)
+        batch = list(map(list, zip(*trajectories)))
+
+        # Return batch
+        return batch
+
+    def get_recent_memory(self, length: int):
+        """Extract recent memory (from last episode)"""
+
+        return list(self.memory[-1])[-length:]
+
+    def __len__(self):
+        """Return length"""
+
+        return len(self.memory)
+
+    def __iter__(self):
+        """Return iterator"""
+
+        return list(self.memory)
