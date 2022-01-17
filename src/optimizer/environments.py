@@ -1011,13 +1011,15 @@ class ScannerEnv(object):
                 raise UserWarning(
                     "In cnr mode, two ROIs should be selected."
                 )
-            # Calculate CNR
+            # Calculate CNR (signal difference / weighted avg. over variance)
             self.cnr = float(
                 np.abs(
                     np.mean(img_roi[0]) - np.mean(img_roi[1])
-                ) / np.std(np.concatenate(
-                    (img_roi[0].flatten(), img_roi[1].flatten())
-                ))
+                ) / ((
+                    float(img_roi[0].size) * np.std(img_roi[0])
+                    + float(img_roi[1].size) * np.std(img_roi[1])
+                ) / float(img_roi[0].size + img_roi[1].size)
+                )
             )
 
     def define_reward(self):
