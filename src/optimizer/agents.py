@@ -522,7 +522,6 @@ class RDPGAgent(object):
             alpha_actor: float = 1e-4,
             alpha_critic: float = 1e-3,
             tau: float = 1e-2,
-            hidden_layers: list[int] = [16, 64, 32],
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
@@ -548,8 +547,6 @@ class RDPGAgent(object):
                 Learning rate for Adam optimizer  for critic model
             tau : float
                 Measure of "lag" between policy and target models
-            hidden_layers : list[int]
-                Number of neurons of each hidden layer
             device : torch.device | None
                 The torch device. If None, assign one.
         """
@@ -565,7 +562,6 @@ class RDPGAgent(object):
         self.alpha_actor = alpha_actor
         self.alpha_critic = alpha_critic
         self.tau = tau
-        self.hidden_layers = hidden_layers
 
         # Setup device
         if not device:
@@ -594,7 +590,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states, 64, 64, hidden_size
+                self.n_states, 64, 128, hidden_size
             ],
             output_activation="tanh",
             device=self.device
@@ -604,7 +600,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states + self.n_actions, 64, 64, hidden_size
+                self.n_states + self.n_actions, 64, 128, hidden_size
             ],
             output_activation="none",
             device=self.device
@@ -615,7 +611,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states, 64, 64, hidden_size
+                self.n_states, 64, 128, hidden_size
             ],
             output_activation="tanh",
             device=self.device
@@ -625,7 +621,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states + self.n_actions, 64, 64, hidden_size
+                self.n_states + self.n_actions, 64, 128, hidden_size
             ],
             output_activation="none",
             device=self.device

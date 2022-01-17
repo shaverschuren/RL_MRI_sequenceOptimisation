@@ -726,7 +726,7 @@ class RDPG(object):
         # Setup agent
         self.agent = agents.RDPGAgent(
             env.action_space,
-            epsilon_decay=1 - 5e-3 if self.metric == "snr" else 1 - 2e-3
+            epsilon_decay=1 - 1e-2 if self.metric == "snr" else 1 - 5e-3
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
 

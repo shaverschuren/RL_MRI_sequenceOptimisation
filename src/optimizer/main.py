@@ -212,7 +212,7 @@ def init_optimizer(env, args: argparse.Namespace):
         if args.episodes:
             n_episodes = args.episodes
         else:
-            n_episodes = 1500 if args.metric == "snr" else 2500
+            n_episodes = 300 if args.metric == "snr" else 1000
         # Define optimizer
         optimizer = algorithms.RDPG(
             env=env, log_dir=args.log_dir,
