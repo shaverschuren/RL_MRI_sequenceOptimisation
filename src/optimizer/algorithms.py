@@ -66,7 +66,7 @@ class DQN(object):
         self.agent = agents.DQNAgent(
             env.n_states, env.n_actions,
             hidden_layers=[8, 8] if self.metric == "snr" else [64, 256, 32],
-            epsilon_decay=1 - 5e-3 if self.metric == "snr" else 1 - 2e-3
+            epsilon_decay=1. - (4. / float(self.n_episodes))
         )
         if pretrained_path: self.agent.load(pretrained_path)
 
@@ -384,7 +384,7 @@ class DDPG(object):
         # Setup agent
         self.agent = agents.DDPGAgent(
             env.action_space, env.n_states, env.n_actions,
-            epsilon_decay=1 - 5e-3 if self.metric == "snr" else 1 - 2e-3
+            epsilon_decay=1. - (4. / float(self.n_episodes))
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
 
@@ -726,7 +726,7 @@ class RDPG(object):
         # Setup agent
         self.agent = agents.RDPGAgent(
             env.action_space,
-            epsilon_decay=1 - 1e-2 if self.metric == "snr" else 1 - 5e-3
+            epsilon_decay=1. - (4. / float(self.n_episodes))
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
 
