@@ -169,6 +169,7 @@ def init_environment(args: argparse.Namespace):
         env = environments.SimulationEnv(
             mode=args.metric, action_space_type=action_space_type,
             recurrent_model=recurrent_model,
+            lock_material_params=validation_mode,
             validation_mode=validation_mode
         )
     else:
