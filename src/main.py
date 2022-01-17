@@ -46,9 +46,9 @@ def parse_args():
         "--agent", "-a", metavar="agent", type=str,
         help=(
             "Type of optimizer agent. "
-            "Available: dqn/ddpg*/rdpg/validation"
+            "Available: dqn/ddpg/rdpg*/validation"
         ),
-        default="ddpg"
+        default="rdpg"
     )
     optional.add_argument(
         "--pretrained_path", metavar="pretrained_path", type=str,
