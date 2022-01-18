@@ -727,16 +727,20 @@ class RDPGAgent(object):
                 policy_loss_total = policy_loss
                 critic_loss_total = critic_loss
 
-            # Update networks
+            # Detach hidden states
             self.detach_hidden()
+
+        # Update networks
+        if policy_loss_total is not None and critic_loss_total is not None:
             self.actor_optimizer.zero_grad()
-            policy_loss.backward(retain_graph=True)
+            (policy_loss_total / len(batch)).backward(retain_graph=True)
             self.actor_optimizer.step()
 
-            self.detach_hidden()
             self.critic_optimizer.zero_grad()
-            critic_loss.backward(retain_graph=True)
+            (critic_loss_total / len(batch)).backward(retain_graph=True)
             self.critic_optimizer.step()
+        else:
+            raise RuntimeError("Updating failed")
 
         # Update target networks (lagging weights)
         for target_param, param in zip(
@@ -750,13 +754,10 @@ class RDPGAgent(object):
                 param.data * self.tau + target_param.data * (1.0 - self.tau)
             )
 
-        if policy_loss_total is not None and critic_loss_total is not None:
-            return (
-                float(policy_loss_total.detach() / len(batch)),
-                float(critic_loss_total.detach() / len(batch))
-            )
-        else:
-            raise RuntimeError("Updating failed")
+        return (
+            float(policy_loss_total.detach() / len(batch)),
+            float(critic_loss_total.detach() / len(batch))
+        )
 
     def update_epsilon(self):
         """Update epsilon (called at the end of an episode)"""
