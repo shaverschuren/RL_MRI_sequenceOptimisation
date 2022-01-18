@@ -754,7 +754,7 @@ class RDPG(object):
         # Define datafields
         self.logs_fields = [
             "img", "fa", "fa_norm", self.metric, "error", "done", "epsilon",
-            "critic_loss", "policy_loss", "n_scans", "reward"
+            "critic_loss", "policy_loss", "n_scans", "reward", "performance"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -797,6 +797,21 @@ class RDPG(object):
             value=float(getattr(self.env, self.metric)),
             step=-1
         )
+
+        # Log accuracy (if applicable)
+        if isinstance(self.env, environments.SimulationEnv):
+            # Extract optimal metric
+            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+            # Calculate performance (how much of optimal SNR/CNR do we have)
+            performance = getattr(self.env, self.metric) / optimal_metric
+
+            # Log the error
+            self.logger.log_scalar(
+                field="performance",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=performance,
+                step=-1
+            )
 
     def log_step(self, state, action, reward, next_state, done):
         """Log a single step"""
@@ -860,6 +875,21 @@ class RDPG(object):
             value=float(self.env.done),
             step=self.tick
         )
+
+        # Log accuracy (if applicable)
+        if isinstance(self.env, environments.SimulationEnv):
+            # Extract optimal metric
+            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+            # Calculate performance (how much of optimal SNR/CNR do we have)
+            performance = getattr(self.env, self.metric) / optimal_metric
+
+            # Log the error
+            self.logger.log_scalar(
+                field="performance",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=performance,
+                step=self.tick
+            )
 
         # Log losses (if applicable)
         if (
