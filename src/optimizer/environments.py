@@ -546,11 +546,6 @@ class SimulationEnv(object):
             )
             reward_gain = snr_diff * 100.
 
-            # If reward is lower than 0.01, penalise
-            # the system for taking steps that are too small.
-            if reward_gain < 0.01:
-                reward_float = -1.0
-                reward_gain = 0.01
             # If reward gain is higher than 20, use 20
             # We do this to prevent blowing up rewards near the edges
             if reward_gain > 20.: reward_gain = 20.
@@ -566,6 +561,12 @@ class SimulationEnv(object):
         # Only scale the positives, though.
         if reward_float > 0.:
             reward_float *= np.exp(-self.tick / 20.)
+
+        # If the flip angle is changed less than 0.1 deg, penalize the model
+        # for waiting too long without stopping TODO: This does not have the
+        # desired effect yet
+        if abs(self.state[1] - self.old_state[1]) < (0.1 / 180.):
+            reward_float -= 0.5
 
         # If the "done" criterion is passed, tweak the reward based on
         # how close we are to the theretical optimum
