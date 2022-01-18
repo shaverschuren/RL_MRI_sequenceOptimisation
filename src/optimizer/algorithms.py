@@ -754,7 +754,7 @@ class RDPG(object):
         # Define datafields
         self.logs_fields = [
             "img", "fa", "fa_norm", self.metric, "error", "done", "epsilon",
-            "critic_loss", "policy_loss"
+            "critic_loss", "policy_loss", "n_scans"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -875,6 +875,12 @@ class RDPG(object):
             field="epsilon",
             tag=f"{self.logs_tag}_train_episodes",
             value=self.agent.epsilon,
+            step=self.episode
+        )
+        self.logger.log_scalar(
+            field="n_scans",
+            tag=f"{self.logs_tag}_train_episodes",
+            value=self.tick,
             step=self.episode
         )
 
