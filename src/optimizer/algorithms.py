@@ -731,7 +731,7 @@ class RDPG(object):
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
-        self.memory = training.EpisodicMemory(10000)
+        self.memory = training.EpisodicMemory(500)
         # Setup logger
         self.setup_logger()
 
@@ -754,11 +754,48 @@ class RDPG(object):
         # Define datafields
         self.logs_fields = [
             "img", "fa", "fa_norm", self.metric, "error", "done", "epsilon",
-            "critic_loss", "policy_loss", "n_scans"
+            "critic_loss", "policy_loss", "n_scans", "reward"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
             self.logs_path, self.logs_fields
+        )
+
+    def log_initiation(self):
+        """Log episode initialisation to tensorboard"""
+
+        run_type = "train" if self.train else "test"
+
+        # Image
+        if (
+            isinstance(self.env, environments.ScannerEnv)
+            and hasattr(self.env, 'recent_img')
+        ):
+            self.logger.log_image(
+                field="img",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                image=np.array(self.env.recent_img),
+                step=-1
+            )
+
+        # Scalars (first state if applicable -> state0)
+        self.logger.log_scalar(
+            field="fa",
+            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            value=float(self.env.fa),
+            step=-1
+        )
+        self.logger.log_scalar(
+            field="fa_norm",
+            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            value=float(self.env.fa_norm),
+            step=-1
+        )
+        self.logger.log_scalar(
+            field=self.metric,
+            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            value=float(getattr(self.env, self.metric)),
+            step=-1
         )
 
     def log_step(self, state, action, reward, next_state, done):
@@ -780,6 +817,7 @@ class RDPG(object):
         # Log this step to tensorboard
         run_type = "train" if self.train else "test"
 
+        # Image
         if (
             isinstance(self.env, environments.ScannerEnv)
             and hasattr(self.env, 'recent_img')
@@ -788,9 +826,10 @@ class RDPG(object):
                 field="img",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
                 image=np.array(self.env.recent_img),
-                step=self.tick
+                step=self.tick + 1
             )
 
+        # Scalars (current state -> state1)
         self.logger.log_scalar(
             field="fa",
             tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
@@ -807,6 +846,12 @@ class RDPG(object):
             field=self.metric,
             tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
             value=float(getattr(self.env, self.metric)),
+            step=self.tick
+        )
+        self.logger.log_scalar(
+            field="reward",
+            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            value=float(reward),
             step=self.tick
         )
         self.logger.log_scalar(
@@ -858,6 +903,13 @@ class RDPG(object):
         best_metric = float(recent_metrics[best_idx]) * 50.
         best_fa = float(recent_fa[best_idx]) * 180.
 
+        # Find cumulative reward
+        previous_trajectory = self.memory.memory[-1]
+        rewards = [
+            float(transition.reward) for transition in previous_trajectory
+        ]
+        cumulative_reward = sum(rewards)
+
         # Log scalars
         self.logger.log_scalar(
             field="fa",
@@ -881,6 +933,12 @@ class RDPG(object):
             field="n_scans",
             tag=f"{self.logs_tag}_train_episodes",
             value=self.tick + 1,
+            step=self.episode
+        )
+        self.logger.log_scalar(
+            field="reward",
+            tag=f"{self.logs_tag}_train_episodes",
+            value=cumulative_reward,
             step=self.episode
         )
 
@@ -984,8 +1042,9 @@ class RDPG(object):
         # Episode loop
         for self.episode in range(self.n_episodes) if train else range(10):
 
-            # Reset environment
+            # Reset environment and log start
             self.env.reset()
+            self.log_initiation()
 
             # Reset agent
             self.agent.reset()
@@ -1030,11 +1089,14 @@ class RDPG(object):
                 self.log_step(state, action, reward, next_state, done)
 
                 # Check if done and actually stop only if
-                # we're not in first couple of episodes
+                # we're far enough into the episode.
+                done_threshold = (
+                    float(self.tick + 1) / float(self.n_ticks)
+                    > 1. - 2 * float(self.episode + 1) / float(self.n_episodes)
+                )
                 if (
-                    done and (
-                        self.episode > self.n_episodes // 2
-                        or not self.train
+                    done and self.tick > 1 and (
+                        done_threshold or not self.train
                     )
                 ):
                     print("Stopping criterion met!")
