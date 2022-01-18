@@ -1033,7 +1033,7 @@ class RDPG(object):
                 # we're not in first couple of episodes
                 if (
                     done and (
-                        self.episode > self.n_episodes // 20
+                        self.episode > self.n_episodes // 2
                         or not self.train
                     )
                 ):

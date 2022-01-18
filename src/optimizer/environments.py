@@ -585,9 +585,10 @@ class SimulationEnv(object):
                         20.,
                         ((
                             (
-                                5.0 * float(self.episode)
-                                / float(self.n_episodes)
-                                + 0.5
+                                4.8 * (
+                                    float(self.episode)
+                                    / float(self.n_episodes)) ** 3
+                                + 0.2
                             )
                             * max(1., self.error)) ** -1) - 20.
                     )
