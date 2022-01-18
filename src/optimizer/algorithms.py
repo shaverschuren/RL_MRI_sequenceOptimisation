@@ -731,7 +731,7 @@ class RDPG(object):
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
-        self.memory = training.EpisodicMemory(500)
+        self.memory = training.EpisodicMemory(self.n_episodes // 4)
         # Setup logger
         self.setup_logger()
 
