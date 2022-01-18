@@ -112,7 +112,7 @@ class SimulationEnv(object):
             fa_range: list[float] = [5., 60.],
             Nfa: int = 100,
             T1_range: list[float] = [0.100, 4.000],
-            T2_range: list[float] = [0.005, 0.100],
+            T2_range: list[float] = [0.025, 0.150],
             tr: float = 0.050,
             noise_level: float = 0.008,
             lock_material_params: bool = False,
