@@ -770,7 +770,7 @@ class RDPG(object):
 
         print(
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-            f"Action: {float(action):5.2f} - "
+            f"Action: {float(action[0]):5.2f} - "
             f"FA: {float(next_state[1]) * 180.:5.1f} - "
             f"{self.metric.upper()}: {float(next_state[0]) * 50.:5.2f} -"
             " Reward: "
@@ -845,10 +845,13 @@ class RDPG(object):
         """Log a single episode"""
 
         # Extract recent memory
-        recent_memory = self.memory.get_recent_memory(6)
+        recent_memory = self.memory.get_recent_memory(5)
         recent_states = [transition.state for transition in recent_memory]
-        recent_metrics = [float(state[0]) for state in recent_states[1:]]
-        recent_fa = [float(state[1]) for state in recent_states[1:]]
+        recent_next_states = [
+            transition.next_state for transition in recent_memory
+        ]
+        recent_metrics = [float(state[0]) for state in recent_next_states]
+        recent_fa = [float(state[1]) for state in recent_next_states]
 
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
@@ -888,11 +891,18 @@ class RDPG(object):
                     optimal_metric - best_metric
                 ) / best_metric
 
+            # Log the error
             self.logger.log_scalar(
                 field="error",
                 tag=f"{self.logs_tag}_train_episodes",
                 value=min(relative_error, 1.),
                 step=self.episode
+            )
+            # Print the error
+            print(
+                f"(Step {self.tick + 2 + (best_idx - len(recent_memory))}) "
+                "Error relative to actual optimum: "
+                f"{relative_error * 100.:.2f}%"
             )
 
     def verbose_episode(self):
@@ -979,7 +989,8 @@ class RDPG(object):
             states = torch.FloatTensor(
                 [[0.] * self.env.n_states], device=self.device
             )
-            actions = torch.FloatTensor([0.], device=self.device)
+            actions = torch.FloatTensor(
+                [[0.] * self.env.n_actions], device=self.device)
             rewards = torch.FloatTensor([0.], device=self.device)
             next_states = torch.FloatTensor(
                 [[0.] * self.env.n_states], device=self.device
@@ -1003,7 +1014,7 @@ class RDPG(object):
                 # Add action/reward for previous transition
                 # to the history
                 states = torch.cat((states, torch.unsqueeze(state, 0)))
-                actions = torch.cat((actions, action))
+                actions = torch.cat((actions, torch.unsqueeze(action, 0)))
                 rewards = torch.cat((rewards, reward))
                 next_states = torch.cat(
                     (next_states, torch.unsqueeze(next_state, 0))
@@ -1012,8 +1023,15 @@ class RDPG(object):
                 # Log step results
                 self.log_step(state, action, reward, next_state, done)
 
-                # Check if done
-                if done:
+                # Check if done and actually stop only if
+                # we're not in first couple of episodes
+                if (
+                    done and (
+                        self.episode > self.n_episodes // 20
+                        or not self.train
+                    )
+                ):
+                    print("Stopping criterion met!")
                     break
 
             # Update memory with previous episode (remove first step)
