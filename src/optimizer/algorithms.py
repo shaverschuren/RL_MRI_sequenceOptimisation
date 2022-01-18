@@ -880,7 +880,7 @@ class RDPG(object):
         self.logger.log_scalar(
             field="n_scans",
             tag=f"{self.logs_tag}_train_episodes",
-            value=self.tick,
+            value=self.tick + 1,
             step=self.episode
         )
 
