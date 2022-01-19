@@ -767,8 +767,9 @@ class SimulationEnv(object):
         # If lock_material_params, we simply don't vary T1/T2s
         if self.lock_material_params:
             if self.metric == "snr":
-                self.T1 = float(np.mean(self.T1_range))
-                self.T2 = float(np.mean(self.T2_range))
+                # Set to approximate phantom for testing purposes
+                self.T1 = 0.600  # float(np.mean(self.T1_range))
+                self.T2 = 0.300  # float(np.mean(self.T2_range))
             elif self.metric == "cnr":
                 # Set to WM/GM for testing purposes
                 self.T1_1 = 0.700   # float(np.percentile(self.T1_range, 25))
