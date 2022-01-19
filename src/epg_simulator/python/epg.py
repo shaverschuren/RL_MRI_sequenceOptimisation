@@ -420,17 +420,16 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
     """Example function for using epg()"""
 
     # Import timing
-    if verbose:
-        import time
+    import time
 
     # Define parameters
-    T1 = .500           # T1 relaxation time of the spin [s]
-    T2 = 0.025          # T2 relaxation time of the spin [s]
+    T1 = 0.600          # T1 relaxation time of the spin [s]
+    T2 = 0.300          # T2 relaxation time of the spin [s]
     fa = 25             # Flip angle of the sequence [deg] (Can also be array)
-    Nfa = 500           # Number of flip angles to achieve a steady state [-]
-    tr = 50E-03         # Repetition time [s]
+    Nfa = 1000          # Number of flip angles to achieve a steady state [-]
+    tr = 5E-03          # Repetition time [s]
     SP = complex(1, 0)  # Slice profile (1+0j)
-    spoil = 1           # 0 = balanced, 1 = spoiled
+    spoil = True        # 0 = balanced, 1 = spoiled
 
     # Perform EPG Simulation (either in numpy or torch format)
     if format == "numpy":
@@ -440,7 +439,7 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
                 f"Simulating EPG in {format} format... ",
                 end="", flush=True
             )
-            start = time.time()
+        start = time.time()
         # Run simulation
         F0, Xi_F, Xi_Z = epg_as_numpy(Nfa, fa, tr, T1, T2, SP, spoil)
         # If applicable, print some info
@@ -458,7 +457,7 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
                 f"Simulating EPG in {format} format... ",
                 end="", flush=True
             )
-            start = time.time()
+        start = time.time()
         # Run simulation
         F0, Xi_F, Xi_Z = epg_as_torch(
             Nfa, fa, tr, T1, T2, SP, spoil, device=device)
@@ -510,5 +509,5 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
 
 
 if __name__ == "__main__":
-    example(format="torch", plot=False)
+    # example(format="torch", plot=False)
     example(format="numpy", plot=False)
