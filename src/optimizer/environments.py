@@ -321,16 +321,18 @@ class SimulationEnv(object):
                         f"of {optimal_fa:.2f} [deg] not found!"
                         "\nWe're skipping this flip angle."
                     )
-                    # Replace non-viable flip angle
+                    # Replace non-viable flip angle (if possible)
                     optimal_fa_list.pop(fa_idx)
-                    optimal_fa_list.append(
-                        optimal_fa_list[
-                            random.randint(0, len(optimal_fa_list) - 1)
-                        ]
-                    )
-                    # Call upon this function to try with another fa
-                    # and break loop
-                    self.set_t1_from_distribution(optimal_fa_list)
+                    if len(optimal_fa_list) > 0:
+                        optimal_fa_list.append(
+                            optimal_fa_list[
+                                random.randint(0, len(optimal_fa_list) - 1)
+                            ]
+                        )
+                        # Call upon this function to try with another fa
+                        self.set_t1_from_distribution(optimal_fa_list)
+
+                    # Break loop
                     break
 
                 # Set T1_1
