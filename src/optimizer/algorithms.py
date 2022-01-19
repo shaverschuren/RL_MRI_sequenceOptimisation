@@ -1122,10 +1122,10 @@ class RDPG(object):
                 # we're far enough into the episode.
                 done_threshold = (
                     float(self.tick + 1) / float(self.n_ticks)
-                    > 1. - 2 * float(self.episode + 1) / float(self.n_episodes)
+                    > 1. - 3 * float(self.episode + 1) / float(self.n_episodes)
                 )
                 if (
-                    done and self.tick > 1 and (
+                    done and (
                         done_threshold or not self.train
                     )
                 ):
@@ -1161,8 +1161,8 @@ class Validator(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            fa_range: list[int] = [2, 40],
-            n_ticks: int = 39,
+            fa_range: list[int] = [1, 60],
+            n_ticks: int = 60,
             device: Union[torch.device, None] = None):
         """Initializes and builds the attributes for this class
 

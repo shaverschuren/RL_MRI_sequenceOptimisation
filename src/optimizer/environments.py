@@ -110,7 +110,7 @@ class SimulationEnv(object):
             recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[None, int] = None,
-            fa_range: list[float] = [5., 60.],
+            fa_range: list[float] = [10., 60.],
             Nfa: int = 100,
             T1_range: list[float] = [0.100, 4.000],
             T2_range: list[float] = [0.025, 0.150],
@@ -309,6 +309,9 @@ class SimulationEnv(object):
             # Loop until we find a proper match
             loop = 0
             done = False
+            T1_1_list = list(np.linspace(
+                self.T1_range[0], self.T1_range[1], 10000
+            ))
             while not done:
                 # Check whether we have surpassed the max count
                 if loop >= 9999:
@@ -320,13 +323,18 @@ class SimulationEnv(object):
                     )
                     # Replace non-viable flip angle
                     optimal_fa_list.pop(fa_idx)
-                    optimal_fa_list.append(optimal_fa_list[0])
-                    # Break loop
+                    optimal_fa_list.append(
+                        optimal_fa_list[
+                            random.randint(0, len(optimal_fa_list) - 1)
+                        ]
+                    )
+                    # Call upon this function to try with another fa
+                    # and break loop
+                    self.set_t1_from_distribution(optimal_fa_list)
                     break
 
                 # Set T1_1
-                T1_1 = random.uniform(
-                    self.T1_range[0], self.T1_range[1])
+                T1_1 = T1_1_list.pop(random.randint(0, len(T1_1_list) - 1))
 
                 # Calculate T1_2 based on these parameters.
                 T1_2 = self.calculate_2nd_T1(optimal_fa, T1_1)
@@ -760,10 +768,11 @@ class SimulationEnv(object):
                 self.T1 = float(np.mean(self.T1_range))
                 self.T2 = float(np.mean(self.T2_range))
             elif self.metric == "cnr":
-                self.T1_1 = float(np.percentile(self.T1_range, 25))
-                self.T1_2 = float(np.percentile(self.T1_range, 75))
-                self.T2_1 = float(np.mean(self.T2_range))
-                self.T2_2 = float(np.mean(self.T2_range))
+                # Set to WM/GM for testing purposes
+                self.T1_1 = 0.700   # float(np.percentile(self.T1_range, 25))
+                self.T1_2 = 1.400   # float(np.percentile(self.T1_range, 75))
+                self.T2_1 = 0.070   # float(np.mean(self.T2_range))
+                self.T2_2 = 0.100   # float(np.mean(self.T2_range))
 
         # Determine theoretical optimum
         self.calculate_theoretical_optimum()
