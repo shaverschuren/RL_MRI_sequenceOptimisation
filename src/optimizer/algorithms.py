@@ -1007,7 +1007,7 @@ class RDPG(object):
             print_str = (
                 "\n========== "
                 f"Episode {self.episode + 1:3d}/"
-                f"{self.n_episodes if self.train else 10:3d}"
+                f"{self.n_episodes if self.train else 20:3d}"
                 " ==========\n"
                 "\n-----------------------------------"
                 "\nRunning episode with "
@@ -1063,14 +1063,14 @@ class RDPG(object):
         # Create training initial condition distributions
         if train:
             self.env.n_episodes = self.n_episodes
-            self.env.homogeneous_initialization = True
-            self.env.set_homogeneous_dists()
         else:
-            self.env.n_episodes = None
-            self.env.homogeneous_initialization = False
+            self.env.n_episodes = 20
+
+        self.env.homogeneous_initialization = True
+        self.env.set_homogeneous_dists()
 
         # Episode loop
-        for self.episode in range(self.n_episodes) if train else range(10):
+        for self.episode in range(self.n_episodes) if train else range(20):
 
             # Reset environment and log start
             self.env.reset()
