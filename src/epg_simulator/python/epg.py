@@ -202,12 +202,6 @@ def epg_as_numpy(
             # generate conjugate pendant F+0 from F-0, see EPG-R
             Omega_preRF[0, 0] = np.conj(Omega_preRF[1, 0])
 
-    # Output: "make nice zeros"
-    # Erase some float point accuracy errors
-    # TODO: actually necessary? Very expensive
-    # Xi_F_out[np.abs(Xi_F_out) < 1e-8] = 0
-    # Xi_Z_out[np.abs(Xi_Z_out) < 1e-8] = 0
-
     # Output: define "echoes" separately
     F0_vector_out = Xi_F_out[N - 1, :]
 
