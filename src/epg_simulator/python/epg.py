@@ -11,7 +11,8 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from numba import njit
-import numba 
+import numba
+
 
 @njit
 def get_t(fa, phi, pn):
@@ -33,6 +34,8 @@ def get_t(fa, phi, pn):
     T[2, 2] = np.cos(fa[pn - 1])
 
     return T
+
+
 def epg_as_numpy(
         N_in: int,
         alpha: Union[float, np.ndarray],
@@ -459,7 +462,7 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
         # If applicable, print some info
         if verbose:
             print(
-                f"Took {time.time() - start} seconds"
+                f"Took {time.time() - start:.5f} seconds"
             )
 
     elif format == "torch":
@@ -478,7 +481,7 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
         # If applicable, print some info
         if verbose:
             print(
-                f"Took {time.time() - start} seconds"
+                f"Took {time.time() - start:.5f} seconds"
             )
         # Export to numpy
         F0 = np.array(F0.cpu())
@@ -526,4 +529,3 @@ if __name__ == "__main__":
     # example(format="torch", plot=False)
     for i in range(10):
         example(format="numpy", plot=False)
-
