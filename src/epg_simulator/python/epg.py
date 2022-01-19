@@ -10,6 +10,30 @@ from typing import Union, Tuple
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+from numba import njit
+import numba
+
+
+@njit
+def get_t(fa, phi, pn):
+    T = np.zeros((3, 3), dtype=numba.complex64)
+    cos_fa_sq = np.cos(fa[pn - 1] / 2) ** 2
+    sin_fa_sq = np.sin(fa[pn - 1] / 2) ** 2
+    sin_fa = np.sin(fa[pn - 1])
+    exp_min_fa = np.exp(-1j * phi[pn - 1]) * sin_fa
+    exp_plus_fa = np.exp(+1j * phi[pn - 1]) * sin_fa
+
+    T[0, 0] = cos_fa_sq
+    T[0, 1] = np.exp(+2j * phi[pn - 1]) * sin_fa_sq
+    T[0, 2] = -1.0j * exp_plus_fa
+    T[1, 0] = np.exp(-2j * phi[pn - 1]) * sin_fa_sq
+    T[1, 1] = cos_fa_sq
+    T[1, 2] = +1.0j * exp_min_fa
+    T[2, 0] = -0.5j * exp_min_fa
+    T[2, 1] = +0.5j * exp_plus_fa
+    T[2, 2] = np.cos(fa[pn - 1])
+
+    return T
 
 
 def epg_as_numpy(
@@ -70,10 +94,12 @@ def epg_as_numpy(
         phi = np.array(-np.angle(SP))
         fa = np.array(abs(SP) * alpha)
         # The flip angle is repeated N_in times
-        fa_arr = np.zeros((N_in))
+        fa_arr = np.repeat([alpha], N_in)
         fa_arr[0] = fa
-        for pn in range(1, N_in):
-            fa_arr[pn] = alpha
+        # fa_arr = np.zeros((N_in))
+        # fa_arr[0] = fa
+        # for pn in range(1, N_in):
+        #     fa_arr[pn] = alpha
         fa = fa_arr
     else:
         raise TypeError("alpha should be either an array or float!")
@@ -131,17 +157,7 @@ def epg_as_numpy(
         # Eq.[15] or Eq.[18] in EPG-R
         # Since this generic SSFP example may change RF flip angle and/or
         # phase, the T matrix has to be updated within the RF pulse loop:
-        T = np.zeros((3, 3), dtype=complex)
-        T[0, 0] = np.cos(fa[pn - 1] / 2) ** 2
-        T[0, 1] = np.exp(+2j * phi[pn - 1]) * np.sin(fa[pn - 1] / 2) ** 2
-        T[0, 2] = -1.0j * np.exp(+1j * phi[pn - 1]) * np.sin(fa[pn - 1])
-        T[1, 0] = np.exp(-2j * phi[pn - 1]) * np.sin(fa[pn - 1] / 2) ** 2
-        T[1, 1] = np.cos(fa[pn - 1] / 2) ** 2
-        T[1, 2] = +1.0j * np.exp(-1j * phi[pn - 1]) * np.sin(fa[pn - 1])
-        T[2, 0] = -0.5j * np.exp(-1j * phi[pn - 1]) * np.sin(fa[pn - 1])
-        T[2, 1] = +0.5j * np.exp(+1j * phi[pn - 1]) * np.sin(fa[pn - 1])
-        T[2, 2] = np.cos(fa[pn - 1])
-
+        T = get_t(fa, phi, pn)
         # In the following, further loops over the states' dephasing k will be
         # needed to realize operators T, E, and S.
         # --> Note that we deal with integral k units here, see EPG-R
@@ -153,11 +169,11 @@ def epg_as_numpy(
             k = range(pn)  # "k loop index" with limit pn
         else:
             k = range(maxstate)
-        k = np.array(list(k), dtype=int) + 1
+        k = np.asarray(list(k), dtype=int) + 1
 
         # T matrix operator: RF pulse acting, mixing of F+, F-, and Z states
         # Expand T matrix relations from Eq.[15] or Eq.[18] in EPG-R
-        Omega_postRF[:, k - 1] = np.matmul(T, Omega_preRF[:, k - 1])
+        Omega_postRF[:, k - 1] = np.einsum('ij,jk->ik', T, Omega_preRF[:, k - 1])# np.matmul(T, Omega_preRF[:, k - 1])
 
         # Store these post-RF states of the current Omega state matrix in
         # the Xi state evolution matrices
@@ -185,11 +201,6 @@ def epg_as_numpy(
             Omega_preRF[1, k - 1] = Omega_preRF[1, k]       # dephase F-
             # generate conjugate pendant F+0 from F-0, see EPG-R
             Omega_preRF[0, 0] = np.conj(Omega_preRF[1, 0])
-
-    # Output: "make nice zeros"
-    # Erase some float point accuracy errors
-    Xi_F_out[np.abs(Xi_F_out) < 1e-8] = 0
-    Xi_Z_out[np.abs(Xi_Z_out) < 1e-8] = 0
 
     # Output: define "echoes" separately
     F0_vector_out = Xi_F_out[N - 1, :]
@@ -420,17 +431,16 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
     """Example function for using epg()"""
 
     # Import timing
-    if verbose:
-        import time
+    import time
 
     # Define parameters
-    T1 = .500           # T1 relaxation time of the spin [s]
-    T2 = 0.025          # T2 relaxation time of the spin [s]
+    T1 = 0.600          # T1 relaxation time of the spin [s]
+    T2 = 0.300          # T2 relaxation time of the spin [s]
     fa = 25             # Flip angle of the sequence [deg] (Can also be array)
-    Nfa = 500           # Number of flip angles to achieve a steady state [-]
-    tr = 50E-03         # Repetition time [s]
+    Nfa = 1000          # Number of flip angles to achieve a steady state [-]
+    tr = 5E-03          # Repetition time [s]
     SP = complex(1, 0)  # Slice profile (1+0j)
-    spoil = 1           # 0 = balanced, 1 = spoiled
+    spoil = True        # 0 = balanced, 1 = spoiled
 
     # Perform EPG Simulation (either in numpy or torch format)
     if format == "numpy":
@@ -440,13 +450,13 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
                 f"Simulating EPG in {format} format... ",
                 end="", flush=True
             )
-            start = time.time()
+        start = time.time()
         # Run simulation
         F0, Xi_F, Xi_Z = epg_as_numpy(Nfa, fa, tr, T1, T2, SP, spoil)
         # If applicable, print some info
         if verbose:
             print(
-                f"Took {time.time() - start} seconds"
+                f"Took {time.time() - start:.5f} seconds"
             )
 
     elif format == "torch":
@@ -458,14 +468,14 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
                 f"Simulating EPG in {format} format... ",
                 end="", flush=True
             )
-            start = time.time()
+        start = time.time()
         # Run simulation
         F0, Xi_F, Xi_Z = epg_as_torch(
             Nfa, fa, tr, T1, T2, SP, spoil, device=device)
         # If applicable, print some info
         if verbose:
             print(
-                f"Took {time.time() - start} seconds"
+                f"Took {time.time() - start:.5f} seconds"
             )
         # Export to numpy
         F0 = np.array(F0.cpu())
@@ -510,5 +520,6 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
 
 
 if __name__ == "__main__":
-    example(format="torch", plot=False)
-    example(format="numpy", plot=False)
+    # example(format="torch", plot=False)
+    for i in range(10):
+        example(format="numpy", plot=False)
