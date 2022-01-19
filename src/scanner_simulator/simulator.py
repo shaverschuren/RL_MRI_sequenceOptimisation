@@ -139,7 +139,7 @@ class Simulator(object):
             T2: float,
             TR: float,
             flip_angle: float,
-            n_pulse_train: int = 100):
+            n_pulse_train: int = 1000):
         """Run EPG simulator for a set of scan and material parameters"""
 
         # Run EPG and extract F0

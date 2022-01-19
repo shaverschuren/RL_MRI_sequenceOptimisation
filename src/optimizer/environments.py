@@ -111,7 +111,7 @@ class SimulationEnv(object):
             homogeneous_initialization: bool = False,
             n_episodes: Union[None, int] = None,
             fa_range: list[float] = [5., 30.],
-            Nfa: int = 100,
+            Nfa: int = 1000,
             T1_range: list[float] = [0.100, 3.000],
             T2_range: list[float] = [0.025, 0.150],
             tr: float = 0.005,
