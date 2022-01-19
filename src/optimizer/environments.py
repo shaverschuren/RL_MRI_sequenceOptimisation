@@ -106,14 +106,15 @@ class SimulationEnv(object):
             self,
             mode: str = "snr",
             action_space_type: Union[str, None] = "continuous",
+            model_done: bool = True,
             recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[None, int] = None,
-            fa_range: list[float] = [5., 60.],
+            fa_range: list[float] = [5., 30.],
             Nfa: int = 100,
-            T1_range: list[float] = [0.100, 4.000],
+            T1_range: list[float] = [0.100, 3.000],
             T2_range: list[float] = [0.025, 0.150],
-            tr: float = 0.050,
+            tr: float = 0.005,
             noise_level: float = 0.008,
             lock_material_params: bool = False,
             validation_mode: bool = False,
@@ -126,6 +127,9 @@ class SimulationEnv(object):
                     Optimization mode (either snr or cnr)
                 action_space_type : str
                     Type of action space. Either discrete or continuous
+                model_done : bool
+                    Whether the model may give the "done" command as part
+                    of the action space
                 recurrent_model : bool
                     Whether we use a recurrent optimizer. This influences
                     the state we'll pass to the model.
@@ -158,6 +162,7 @@ class SimulationEnv(object):
         # Setup attributes
         self.metric = mode
         self.action_space_type = action_space_type
+        self.model_done = model_done
         self.recurrent_model = recurrent_model
         self.homogeneous_initialization = homogeneous_initialization
         self.n_episodes = n_episodes
@@ -196,31 +201,51 @@ class SimulationEnv(object):
 
         For continuous mode, use 1 output (fa)
         For discrete mode, use 4 outputs (fa up down, small big)
+
+        If model_done, add the "done" command to the action space
         """
 
         if not self.validation_mode:
+            # Set base action space variables for continuous or discrete mode
             if self.action_space_type == "continuous":
-                self.action_space = ActionSpace(
-                    ["Change FA"],
-                    action_ranges=np.array([[-1., 1.]]),
-                    _type="continuous"
-                )
+                _type = "continuous"
+                action_names = ["Change FA"]
+                action_ranges = np.array([[-1., 1.]])
+                action_deltas = None
             elif self.action_space_type == "discrete":
-                self.action_space = ActionSpace(
-                    [
-                        "Decrease FA by 1 [deg]",
-                        "Increase FA by 1 [deg]",
-                        "Decrease FA by 5 [deg]",
-                        "Increase FA by 5 [deg]"
-                    ],
-                    action_deltas=np.array([-1., 1., 5., -5.]),
-                    _type="discrete"
-                )
+                _type = "discrete"
+                action_names = [
+                    "Decrease FA by 1 [deg]",
+                    "Increase FA by 1 [deg]",
+                    "Decrease FA by 5 [deg]",
+                    "Increase FA by 5 [deg]"
+                ]
+                action_deltas = np.array([-1., 1., 5., -5.])
+                action_ranges = None
             else:
                 raise UserWarning(
                     "action_space_type should be either 'continuous'"
                     " or 'discrete'"
                 )
+
+            # Append action space with "done" if applicable
+            if self.model_done:
+                if _type == "continuous":
+                    action_names.append("Done")
+                    action_ranges = np.concatenate(
+                        (action_ranges, np.array([[-1., 1.]])), axis=0
+                    )
+                else:
+                    raise UserWarning(
+                        "DQN model isn't equipped to give a done signal"
+                    )
+
+            self.action_space = ActionSpace(
+                action_names=action_names,
+                action_ranges=action_ranges,
+                action_deltas=action_deltas,
+                _type=_type
+            )
 
     def set_homogeneous_dists(self):
         """Determine a set of uniformly distributed lists
@@ -284,6 +309,9 @@ class SimulationEnv(object):
             # Loop until we find a proper match
             loop = 0
             done = False
+            T1_1_list = list(np.linspace(
+                self.T1_range[0], self.T1_range[1], 10000
+            ))
             while not done:
                 # Check whether we have surpassed the max count
                 if loop >= 9999:
@@ -293,15 +321,22 @@ class SimulationEnv(object):
                         f"of {optimal_fa:.2f} [deg] not found!"
                         "\nWe're skipping this flip angle."
                     )
-                    # Replace non-viable flip angle
+                    # Replace non-viable flip angle (if possible)
                     optimal_fa_list.pop(fa_idx)
-                    optimal_fa_list.append(optimal_fa_list[0])
+                    if len(optimal_fa_list) > 0:
+                        optimal_fa_list.append(
+                            optimal_fa_list[
+                                random.randint(0, len(optimal_fa_list) - 1)
+                            ]
+                        )
+                        # Call upon this function to try with another fa
+                        self.set_t1_from_distribution(optimal_fa_list)
+
                     # Break loop
                     break
 
                 # Set T1_1
-                T1_1 = random.uniform(
-                    self.T1_range[0], self.T1_range[1])
+                T1_1 = T1_1_list.pop(random.randint(0, len(T1_1_list) - 1))
 
                 # Calculate T1_2 based on these parameters.
                 T1_2 = self.calculate_2nd_T1(optimal_fa, T1_1)
@@ -521,11 +556,6 @@ class SimulationEnv(object):
             )
             reward_gain = snr_diff * 100.
 
-            # If reward is lower than 0.01, penalise
-            # the system for taking steps that are too small.
-            if reward_gain < 0.01:
-                reward_float = -1.0
-                reward_gain = 0.05
             # If reward gain is higher than 20, use 20
             # We do this to prevent blowing up rewards near the edges
             if reward_gain > 20.: reward_gain = 20.
@@ -542,16 +572,61 @@ class SimulationEnv(object):
         if reward_float > 0.:
             reward_float *= np.exp(-self.tick / 20.)
 
+        # If the flip angle is changed less than 0.1 deg, penalize the model
+        # for waiting too long without stopping TODO: This does not have the
+        # desired effect yet
+        if abs(self.state[1] - self.old_state[1]) < (0.1 / 180.):
+            reward_float -= 0.5
+
+        # If the "done" criterion is passed, tweak the reward based on
+        # how close we are to the theretical optimum
+        if self.done:
+            # Check whether the theoretical optimum is available
+            if hasattr(self, f"optimal_{self.metric}"):
+                # Extract optimal metric and define error
+                optimal_metric = getattr(self, f"optimal_{self.metric}")
+                self.error = abs(float(
+                    (optimal_metric - self.state[0] * 50.)
+                    / optimal_metric
+                ))
+                # Tweak reward based on error
+                if self.error > 0.:
+                    if self.n_episodes is not None:
+                        reward_delta = min(
+                            20.,
+                            ((
+                                (
+                                    4.80 * (
+                                        float(self.episode)
+                                        / float(self.n_episodes)) ** 2
+                                    + 0.20
+                                )
+                                * min(1., self.error)) ** -1) * 2 - 40.
+                        )
+                    else:
+                        reward_delta = min(
+                            20., 2. / (0.2 * min(1., self.error)) - 40.
+                        )
+                else:
+                    reward_delta = 20.
+
+                reward_float += reward_delta
+
         # Store reward in tensor
         self.reward = torch.tensor(
             [float(reward_float)], device=self.device
         )
 
-    def define_done(self):
+    def define_done(self, action):
         """Define done for last step"""
 
-        # Would like to do this through the agent in the future
-        self.done = torch.tensor(0, device=self.device)
+        # If not model_done, pass 0. Else, use the action
+        if self.model_done:
+            self.done = torch.tensor(
+                0 if action[1] < 0. else 1,
+                device=self.device)
+        else:
+            self.done = torch.tensor(0, device=self.device)
 
     def step(self, action):
         """Run a single step of the RL loop
@@ -622,11 +697,11 @@ class SimulationEnv(object):
                 device=self.device
             )
 
+        # Define done
+        self.define_done(action_np)
+
         # Define reward
         self.define_reward()
-
-        # Define done
-        self.define_done()
 
         return self.state, self.reward, self.done
 
@@ -692,13 +767,15 @@ class SimulationEnv(object):
         # If lock_material_params, we simply don't vary T1/T2s
         if self.lock_material_params:
             if self.metric == "snr":
-                self.T1 = float(np.mean(self.T1_range))
-                self.T2 = float(np.mean(self.T2_range))
+                # Set to approximate phantom for testing purposes
+                self.T1 = 0.600  # float(np.mean(self.T1_range))
+                self.T2 = 0.300  # float(np.mean(self.T2_range))
             elif self.metric == "cnr":
-                self.T1_1 = float(np.percentile(self.T1_range, 25))
-                self.T1_2 = float(np.percentile(self.T1_range, 75))
-                self.T2_1 = float(np.mean(self.T2_range))
-                self.T2_2 = float(np.mean(self.T2_range))
+                # Set to WM/GM for testing purposes
+                self.T1_1 = 0.700   # float(np.percentile(self.T1_range, 25))
+                self.T1_2 = 1.400   # float(np.percentile(self.T1_range, 75))
+                self.T2_1 = 0.070   # float(np.mean(self.T2_range))
+                self.T2_2 = 0.100   # float(np.mean(self.T2_range))
 
         # Determine theoretical optimum
         self.calculate_theoretical_optimum()
@@ -727,6 +804,7 @@ class ScannerEnv(object):
             log_dir: Union[str, os.PathLike],
             metric: str = "snr",
             action_space_type: Union[str, None] = "continuous",
+            model_done: bool = True,
             recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[int, None] = None,
@@ -746,6 +824,9 @@ class ScannerEnv(object):
                     Path to log directory
                 action_space_type : str
                     Type of action space. Either discrete or continuous
+                model_done : bool
+                    Whether the model may give the "done" command as part
+                    of the action space
                 recurrent_model : bool
                     Whether we use a recurrent optimizer. This influences
                     the state we'll pass to the model.
@@ -770,6 +851,7 @@ class ScannerEnv(object):
         self.log_dir = log_dir
         self.metric = metric
         self.action_space_type = action_space_type
+        self.model_done = model_done
         self.recurrent_model = recurrent_model
         self.homogeneous_initialization = homogeneous_initialization
         self.n_episodes = n_episodes
@@ -820,31 +902,51 @@ class ScannerEnv(object):
 
         For continuous mode, use 1 output (fa)
         For discrete mode, use 4 outputs (fa up down, small big)
+
+        If model_done, add the "done" command to the action space
         """
 
         if not self.validation_mode:
+            # Set base action space variables for continuous or discrete mode
             if self.action_space_type == "continuous":
-                self.action_space = ActionSpace(
-                    ["Change FA"],
-                    action_ranges=np.array([[-1., 1.]]),
-                    _type="continuous"
-                )
+                _type = "continuous"
+                action_names = ["Change FA"]
+                action_ranges = np.array([[-1., 1.]])
+                action_deltas = None
             elif self.action_space_type == "discrete":
-                self.action_space = ActionSpace(
-                    [
-                        "Decrease FA by 1 [deg]",
-                        "Increase FA by 1 [deg]",
-                        "Decrease FA by 5 [deg]",
-                        "Increase FA by 5 [deg]"
-                    ],
-                    action_deltas=np.array([-1., 1., 5., -5.]),
-                    _type="discrete"
-                )
+                _type = "discrete"
+                action_names = [
+                    "Decrease FA by 1 [deg]",
+                    "Increase FA by 1 [deg]",
+                    "Decrease FA by 5 [deg]",
+                    "Increase FA by 5 [deg]"
+                ]
+                action_deltas = np.array([-1., 1., 5., -5.])
+                action_ranges = None
             else:
                 raise UserWarning(
                     "action_space_type should be either 'continuous'"
                     " or 'discrete'"
                 )
+
+            # Append action space with "done" if applicable
+            if self.model_done:
+                if _type == "continuous":
+                    action_names.append("Done")
+                    action_ranges = np.concatenate(
+                        (action_ranges, np.array([[-1., 1.]])), axis=0
+                    )
+                else:
+                    raise UserWarning(
+                        "DQN model isn't equipped to give a done signal"
+                    )
+
+            self.action_space = ActionSpace(
+                action_names=action_names,
+                action_ranges=action_ranges,
+                action_deltas=action_deltas,
+                _type=_type
+            )
 
     def setup_roi(self, verbose=True):
         """Setup ROI for this environment"""
@@ -1069,11 +1171,16 @@ class ScannerEnv(object):
             [float(reward_float)], device=self.device
         )
 
-    def define_done(self):
+    def define_done(self, action):
         """Define done for last step"""
 
-        # Would like to do this through the agent in the future
-        self.done = torch.tensor(0, device=self.device)
+        # If not model_done, pass 0. Else, use the action
+        if self.model_done:
+            self.done = torch.tensor(
+                0 if action[1] < 0. else 1,
+                device=self.device)
+        else:
+            self.done = torch.tensor(0, device=self.device)
 
     def step(self, action):
         """Run a single step of the RL loop
@@ -1148,7 +1255,7 @@ class ScannerEnv(object):
         self.define_reward()
 
         # Define done
-        self.define_done()
+        self.define_done(action_np)
 
         return self.state, self.reward, self.done
 

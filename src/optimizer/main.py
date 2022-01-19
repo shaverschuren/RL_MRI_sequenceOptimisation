@@ -58,6 +58,10 @@ def parse_args():
         "--episodes", type=int,
         help="Optional: Override the number of episodes to train with"
     )
+    optional.add_argument(
+        "--suppress_done", type=bool, default=False,
+        help="Optional: Override the 'done' signal given by the model"
+    )
 
     # Parse arguments
     args = parser.parse_args()
@@ -162,12 +166,14 @@ def init_environment(args: argparse.Namespace):
             config_path=args.config_path,
             log_dir=args.log_dir,
             metric=args.metric, action_space_type=action_space_type,
+            model_done=not args.suppress_done,
             recurrent_model=recurrent_model,
             validation_mode=validation_mode
         )
     elif args.platform == "epg":
         env = environments.SimulationEnv(
             mode=args.metric, action_space_type=action_space_type,
+            model_done=not args.suppress_done,
             recurrent_model=recurrent_model,
             lock_material_params=validation_mode,
             validation_mode=validation_mode
@@ -213,7 +219,7 @@ def init_optimizer(env, args: argparse.Namespace):
         if args.episodes:
             n_episodes = args.episodes
         else:
-            n_episodes = 300 if args.metric == "snr" else 1000
+            n_episodes = 3000 if args.metric == "snr" else 7500
         # Define optimizer
         optimizer = algorithms.RDPG(
             env=env, log_dir=args.log_dir,

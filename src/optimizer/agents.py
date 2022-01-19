@@ -514,7 +514,7 @@ class RDPGAgent(object):
             self,
             action_space: environments.ActionSpace,
             n_states: int = 2,
-            n_actions: int = 1,
+            n_actions: int = 2,
             gamma: float = 0.99,
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
@@ -695,9 +695,9 @@ class RDPGAgent(object):
             states = torch.cat(
                 [state.unsqueeze(0) for state in states]
             ).to(self.device)
-            actions = torch.unsqueeze(torch.cat(
+            actions = torch.cat(
                 [action.unsqueeze(0) for action in actions]
-            ).to(self.device), 1)
+            ).to(self.device)
             rewards = torch.unsqueeze(torch.cat(
                 [reward.unsqueeze(0) for reward in rewards]
             ).to(self.device), 1)
@@ -727,13 +727,14 @@ class RDPGAgent(object):
                 policy_loss_total = policy_loss
                 critic_loss_total = critic_loss
 
-            # Update networks
+            # Detach hidden states
             self.detach_hidden()
+
+            # Update networks
             self.actor_optimizer.zero_grad()
             policy_loss.backward(retain_graph=True)
             self.actor_optimizer.step()
 
-            self.detach_hidden()
             self.critic_optimizer.zero_grad()
             critic_loss.backward(retain_graph=True)
             self.critic_optimizer.step()
@@ -756,7 +757,7 @@ class RDPGAgent(object):
                 float(critic_loss_total.detach() / len(batch))
             )
         else:
-            raise RuntimeError("Updating failed")
+            raise RuntimeError("Updating failed...")
 
     def update_epsilon(self):
         """Update epsilon (called at the end of an episode)"""

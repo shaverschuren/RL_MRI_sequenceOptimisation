@@ -163,7 +163,7 @@ class Simulator(object):
         if self.n_phantoms == 1:
             # Run epg simulation and get signal
             signal = self.run_epg(
-                self.T1a, self.T2a, 0.050, fa
+                self.T1a, self.T2a, 0.005, fa
             )
             # Get image contribution of phantom
             phantom_image = \
@@ -173,12 +173,12 @@ class Simulator(object):
         elif self.n_phantoms == 2:
             # Run epg simulation and get signal
             signal_a = self.run_epg(
-                self.T1a, self.T2a, 0.050, fa
+                self.T1a, self.T2a, 0.005, fa
             )
             signal_b = self.run_epg(
                 self.T1b if self.T1b else 0.0,
                 self.T2b if self.T2b else 0.0,
-                0.050, fa
+                0.005, fa
             )
             # Get image contribution of phantoms
             phantom_image_a = \

@@ -731,7 +731,7 @@ class RDPG(object):
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
-        self.memory = training.EpisodicMemory(10000)
+        self.memory = training.EpisodicMemory(self.n_episodes // 4)
         # Setup logger
         self.setup_logger()
 
@@ -754,12 +754,64 @@ class RDPG(object):
         # Define datafields
         self.logs_fields = [
             "img", "fa", "fa_norm", self.metric, "error", "done", "epsilon",
-            "critic_loss", "policy_loss"
+            "critic_loss", "policy_loss", "n_scans", "reward", "performance"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
             self.logs_path, self.logs_fields
         )
+
+    def log_initiation(self):
+        """Log episode initialisation to tensorboard"""
+
+        run_type = "train" if self.train else "test"
+
+        # Image
+        if (
+            isinstance(self.env, environments.ScannerEnv)
+            and hasattr(self.env, 'recent_img')
+        ):
+            self.logger.log_image(
+                field="img",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                image=np.array(self.env.recent_img),
+                step=-1
+            )
+
+        # Scalars (first state if applicable -> state0)
+        self.logger.log_scalar(
+            field="fa",
+            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            value=float(self.env.fa),
+            step=-1
+        )
+        self.logger.log_scalar(
+            field="fa_norm",
+            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            value=float(self.env.fa_norm),
+            step=-1
+        )
+        self.logger.log_scalar(
+            field=self.metric,
+            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            value=float(getattr(self.env, self.metric)),
+            step=-1
+        )
+
+        # Log accuracy (if applicable)
+        if isinstance(self.env, environments.SimulationEnv):
+            # Extract optimal metric
+            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+            # Calculate performance (how much of optimal SNR/CNR do we have)
+            performance = getattr(self.env, self.metric) / optimal_metric
+
+            # Log the error
+            self.logger.log_scalar(
+                field="performance",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=performance,
+                step=-1
+            )
 
     def log_step(self, state, action, reward, next_state, done):
         """Log a single step"""
@@ -770,7 +822,7 @@ class RDPG(object):
 
         print(
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-            f"Action: {float(action):5.2f} - "
+            f"Action: {float(action[0]):5.2f} - "
             f"FA: {float(next_state[1]) * 180.:5.1f} - "
             f"{self.metric.upper()}: {float(next_state[0]) * 50.:5.2f} -"
             " Reward: "
@@ -780,6 +832,7 @@ class RDPG(object):
         # Log this step to tensorboard
         run_type = "train" if self.train else "test"
 
+        # Image
         if (
             isinstance(self.env, environments.ScannerEnv)
             and hasattr(self.env, 'recent_img')
@@ -788,9 +841,10 @@ class RDPG(object):
                 field="img",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
                 image=np.array(self.env.recent_img),
-                step=self.tick
+                step=self.tick + 1
             )
 
+        # Scalars (current state -> state1)
         self.logger.log_scalar(
             field="fa",
             tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
@@ -810,11 +864,32 @@ class RDPG(object):
             step=self.tick
         )
         self.logger.log_scalar(
+            field="reward",
+            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            value=float(reward),
+            step=self.tick
+        )
+        self.logger.log_scalar(
             field="done",
             tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
             value=float(self.env.done),
             step=self.tick
         )
+
+        # Log accuracy (if applicable)
+        if isinstance(self.env, environments.SimulationEnv):
+            # Extract optimal metric
+            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+            # Calculate performance (how much of optimal SNR/CNR do we have)
+            performance = getattr(self.env, self.metric) / optimal_metric
+
+            # Log the error
+            self.logger.log_scalar(
+                field="performance",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=performance,
+                step=self.tick
+            )
 
         # Log losses (if applicable)
         if (
@@ -845,15 +920,25 @@ class RDPG(object):
         """Log a single episode"""
 
         # Extract recent memory
-        recent_memory = self.memory.get_recent_memory(6)
+        recent_memory = self.memory.get_recent_memory(5)
         recent_states = [transition.state for transition in recent_memory]
-        recent_metrics = [float(state[0]) for state in recent_states[1:]]
-        recent_fa = [float(state[1]) for state in recent_states[1:]]
+        recent_next_states = [
+            transition.next_state for transition in recent_memory
+        ]
+        recent_metrics = [float(state[0]) for state in recent_next_states]
+        recent_fa = [float(state[1]) for state in recent_next_states]
 
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
         best_metric = float(recent_metrics[best_idx]) * 50.
         best_fa = float(recent_fa[best_idx]) * 180.
+
+        # Find cumulative reward
+        previous_trajectory = self.memory.memory[-1]
+        rewards = [
+            float(transition.reward) for transition in previous_trajectory
+        ]
+        cumulative_reward = sum(rewards)
 
         # Log scalars
         self.logger.log_scalar(
@@ -874,6 +959,18 @@ class RDPG(object):
             value=self.agent.epsilon,
             step=self.episode
         )
+        self.logger.log_scalar(
+            field="n_scans",
+            tag=f"{self.logs_tag}_train_episodes",
+            value=self.tick + 1,
+            step=self.episode
+        )
+        self.logger.log_scalar(
+            field="reward",
+            tag=f"{self.logs_tag}_train_episodes",
+            value=cumulative_reward,
+            step=self.episode
+        )
 
         # If theoretical optimum is known, log the error
         if isinstance(self.env, environments.SimulationEnv):
@@ -888,11 +985,18 @@ class RDPG(object):
                     optimal_metric - best_metric
                 ) / best_metric
 
+            # Log the error
             self.logger.log_scalar(
                 field="error",
                 tag=f"{self.logs_tag}_train_episodes",
                 value=min(relative_error, 1.),
                 step=self.episode
+            )
+            # Print the error
+            print(
+                f"(Step {self.tick + 2 + (best_idx - len(recent_memory))}) "
+                "Error relative to actual optimum: "
+                f"{relative_error * 100.:.2f}%"
             )
 
     def verbose_episode(self):
@@ -968,8 +1072,9 @@ class RDPG(object):
         # Episode loop
         for self.episode in range(self.n_episodes) if train else range(10):
 
-            # Reset environment
+            # Reset environment and log start
             self.env.reset()
+            self.log_initiation()
 
             # Reset agent
             self.agent.reset()
@@ -979,7 +1084,8 @@ class RDPG(object):
             states = torch.FloatTensor(
                 [[0.] * self.env.n_states], device=self.device
             )
-            actions = torch.FloatTensor([0.], device=self.device)
+            actions = torch.FloatTensor(
+                [[0.] * self.env.n_actions], device=self.device)
             rewards = torch.FloatTensor([0.], device=self.device)
             next_states = torch.FloatTensor(
                 [[0.] * self.env.n_states], device=self.device
@@ -1003,7 +1109,7 @@ class RDPG(object):
                 # Add action/reward for previous transition
                 # to the history
                 states = torch.cat((states, torch.unsqueeze(state, 0)))
-                actions = torch.cat((actions, action))
+                actions = torch.cat((actions, torch.unsqueeze(action, 0)))
                 rewards = torch.cat((rewards, reward))
                 next_states = torch.cat(
                     (next_states, torch.unsqueeze(next_state, 0))
@@ -1012,8 +1118,18 @@ class RDPG(object):
                 # Log step results
                 self.log_step(state, action, reward, next_state, done)
 
-                # Check if done
-                if done:
+                # Check if done and actually stop only if
+                # we're far enough into the episode.
+                done_threshold = (
+                    float(self.tick + 1) / float(self.n_ticks)
+                    > 1. - 3 * float(self.episode + 1) / float(self.n_episodes)
+                )
+                if (
+                    done and (
+                        done_threshold or not self.train
+                    )
+                ):
+                    print("Stopping criterion met!")
                     break
 
             # Update memory with previous episode (remove first step)
@@ -1045,8 +1161,8 @@ class Validator(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            fa_range: list[int] = [2, 40],
-            n_ticks: int = 39,
+            fa_range: list[int] = [1, 60],
+            n_ticks: int = 60,
             device: Union[torch.device, None] = None):
         """Initializes and builds the attributes for this class
 
