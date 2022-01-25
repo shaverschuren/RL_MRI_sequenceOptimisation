@@ -601,11 +601,11 @@ class SimulationEnv(object):
                                         / float(self.n_episodes)) ** 2
                                     + 0.20
                                 )
-                                * min(1., self.error)) ** -1) * 2 - 20.
+                                * min(1., self.error)) ** -1) * 2 - 30.
                         )
                     else:
                         reward_delta = min(
-                            20., 2. / (0.2 * min(1., self.error)) - 20.
+                            20., 2. / (0.2 * min(1., self.error)) - 30.
                         )
                 else:
                     reward_delta = 20.
