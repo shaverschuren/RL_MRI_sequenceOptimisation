@@ -110,7 +110,7 @@ class SimulationEnv(object):
             recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[None, int] = None,
-            fa_range: list[float] = [5., 30.],
+            fa_range: list[float] = [10., 40.],
             Nfa: int = 1000,
             T1_range: list[float] = [0.100, 2.000],
             T2_range: list[float] = [0.025, 0.150],
