@@ -160,11 +160,17 @@ def init_environment(args: argparse.Namespace):
     # Check whether in validation mode or not
     validation_mode = (args.agent == "validation")
 
+    # Determine fa range
+    if args.metric == "snr": fa_range = [3., 30.]
+    elif args.metric == "cnr": fa_range = [10., 40.]
+    else: raise RuntimeError()
+
     # Initialize environment
     if args.platform == "scan":
         env = environments.ScannerEnv(
             config_path=args.config_path,
             log_dir=args.log_dir,
+            fa_range=fa_range,
             metric=args.metric, action_space_type=action_space_type,
             model_done=not args.suppress_done,
             recurrent_model=recurrent_model,
@@ -172,7 +178,8 @@ def init_environment(args: argparse.Namespace):
         )
     elif args.platform == "epg":
         env = environments.SimulationEnv(
-            mode=args.metric, action_space_type=action_space_type,
+            mode=args.metric, fa_range=fa_range,
+            action_space_type=action_space_type,
             model_done=not args.suppress_done,
             recurrent_model=recurrent_model,
             lock_material_params=validation_mode,
@@ -219,7 +226,7 @@ def init_optimizer(env, args: argparse.Namespace):
         if args.episodes:
             n_episodes = args.episodes
         else:
-            n_episodes = 3000   # if args.metric == "snr" else 5000
+            n_episodes = 2000   # if args.metric == "snr" else 5000
         # Define optimizer
         optimizer = algorithms.RDPG(
             env=env, log_dir=args.log_dir,

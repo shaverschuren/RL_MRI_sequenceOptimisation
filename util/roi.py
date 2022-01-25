@@ -190,8 +190,8 @@ def extract_rois(
         r = rois[i]
         # Crop ROI image
         roi_image = image[
-            int(r[0]):int(r[1]),
-            int(r[2]):int(r[3])
+            int(r[2]):int(r[3]),
+            int(r[0]):int(r[1])
         ]
         # Append ROI list
         roi_images.append(roi_image)

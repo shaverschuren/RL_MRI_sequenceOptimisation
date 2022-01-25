@@ -118,7 +118,8 @@ class DQN(object):
             f"{action_mode} - "
             f"Action: {int(action):2d} - "
             f"FA: {float(next_state[1]) * 180.:5.1f} - "
-            f"{self.metric.upper()}: {float(next_state[0]) * 50.:5.2f} -"
+            f"{self.metric.upper()}: "
+            f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
             " Reward: "
             "" + reward_color + f"{float(reward):6.2f}" + end_str
         )
@@ -173,7 +174,7 @@ class DQN(object):
 
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
-        best_metric = float(recent_metrics[best_idx]) * 50.
+        best_metric = float(recent_metrics[best_idx])
         best_fa = float(recent_fa[best_idx]) * 180.
 
         # Log scalars
@@ -430,7 +431,8 @@ class DDPG(object):
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
             f"Action: {float(action):5.2f} - "
             f"FA: {float(next_state[1]) * 180.:5.1f} - "
-            f"{self.metric.upper()}: {float(next_state[0]) * 50.:5.2f} -"
+            f"{self.metric.upper()}: "
+            f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
             " Reward: "
             "" + reward_color + f"{float(reward):6.2f}" + end_str
         )
@@ -510,7 +512,10 @@ class DDPG(object):
 
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
-        best_metric = float(recent_metrics[best_idx]) * 50.
+        best_metric = (
+            float(recent_metrics[best_idx])
+            * self.env.metric_calibration
+        )
         best_fa = float(recent_fa[best_idx]) * 180.
 
         # Log scalars
@@ -824,7 +829,8 @@ class RDPG(object):
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
             f"Action: {float(action[0]):5.2f} - "
             f"FA: {float(next_state[1]) * 180.:5.1f} - "
-            f"{self.metric.upper()}: {float(next_state[0]) * 50.:5.2f} -"
+            f"{self.metric.upper()}: "
+            f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
             " Reward: "
             "" + reward_color + f"{float(reward):6.2f}" + end_str
         )
@@ -840,7 +846,7 @@ class RDPG(object):
             self.logger.log_image(
                 field="img",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                image=np.array(self.env.recent_img),
+                image=np.array(self.env.recent_img) / 5.,
                 step=self.tick + 1
             )
 
@@ -930,7 +936,10 @@ class RDPG(object):
 
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
-        best_metric = float(recent_metrics[best_idx]) * 50.
+        best_metric = (
+            float(recent_metrics[best_idx])
+            * self.env.metric_calibration
+        )
         best_fa = float(recent_fa[best_idx]) * 180.
 
         # Find cumulative reward
@@ -1161,8 +1170,8 @@ class Validator(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            fa_range: list[int] = [1, 90],
-            n_ticks: int = 45,
+            fa_range: list[int] = [1, 50],
+            n_ticks: int = 50,
             device: Union[torch.device, None] = None):
         """Initializes and builds the attributes for this class
 
@@ -1291,7 +1300,7 @@ class Validator(object):
                 self.logger.log_image(
                     field="img",
                     tag=f"{self.logs_tag}_validation",
-                    image=np.array(self.env.recent_img),
+                    image=np.array(self.env.recent_img) / 5.,
                     step=step
                 )
 

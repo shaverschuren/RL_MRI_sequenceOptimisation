@@ -115,7 +115,7 @@ class SimulationEnv(object):
             T1_range: list[float] = [0.100, 2.000],
             T2_range: list[float] = [0.025, 0.150],
             tr: float = 0.010,
-            noise_level: float = 0.008,
+            noise_level: float = 0.050,
             lock_material_params: bool = False,
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -436,11 +436,11 @@ class SimulationEnv(object):
                 (self.fa - 0.)
                 / (180. - 0.)
             )
-        # snr / cnr (just devide by 50 for now)
+        # snr / cnr (just devide by 50 for now) TODO: debug
         if hasattr(self, self.metric):
             setattr(
                 self, f"{self.metric}_norm",
-                getattr(self, self.metric) / 50.
+                getattr(self, self.metric) / self.metric_calibration
             )
 
     def calculate_theoretical_optimum(self):
@@ -601,11 +601,11 @@ class SimulationEnv(object):
                                         / float(self.n_episodes)) ** 2
                                     + 0.20
                                 )
-                                * min(1., self.error)) ** -1) * 2 - 30.
+                                * min(1., self.error)) ** -1) * 2 - 35.
                         )
                     else:
                         reward_delta = min(
-                            20., 2. / (0.2 * min(1., self.error)) - 30.
+                            20., 2. / (0.2 * min(1., self.error)) - 35.
                         )
                 else:
                     reward_delta = 20.
@@ -782,6 +782,10 @@ class SimulationEnv(object):
 
         # Run single simulation step
         self.run_simulation()
+
+        # Perform metric calibration
+        self.metric_calibration = getattr(self, f"{self.metric}")
+
         # Normalize parameters
         self.norm_parameters()
         # Define state
@@ -808,7 +812,7 @@ class ScannerEnv(object):
             recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[int, None] = None,
-            fa_range: list[float] = [5., 60.],
+            fa_range: list[float] = [10., 40.],
             overwrite_roi: bool = False,
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -1039,7 +1043,7 @@ class ScannerEnv(object):
         if hasattr(self, self.metric):
             setattr(
                 self, f"{self.metric}_norm",
-                getattr(self, self.metric) / 50.
+                getattr(self, self.metric) / self.metric_calibration
             )
 
     def perform_scan(self, fa=None, pass_fa=True, verbose=True):
@@ -1106,7 +1110,7 @@ class ScannerEnv(object):
                 )
             # Calculate SNR
             img_roi = np.array(img_roi)
-            self.snr = float(np.mean(img_roi) / np.std(img_roi))
+            self.snr = float(np.mean(img_roi))
         elif self.metric == "cnr":
             # Check ROI validity
             if not len(img_roi) == 2:
@@ -1117,10 +1121,6 @@ class ScannerEnv(object):
             self.cnr = float(
                 np.abs(
                     np.mean(img_roi[0]) - np.mean(img_roi[1])
-                ) / ((
-                    float(img_roi[0].size) * np.std(img_roi[0])
-                    + float(img_roi[1].size) * np.std(img_roi[1])
-                ) / float(img_roi[0].size + img_roi[1].size)
                 )
             )
 
@@ -1295,8 +1295,13 @@ class ScannerEnv(object):
 
         # Run single simulation step and define initial state (if applicable)
         if run_scan:
+            # Run scan
             self.run_scan_and_update()
+            # Perform metric calibration
+            self.metric_calibration = getattr(self, f"{self.metric}")
+            # Normalize parameters
             self.norm_parameters()
+            # Set state
             self.state = torch.tensor(
                 [getattr(self, f"{self.metric}_norm"), self.fa_norm, 0., 0.]
                 if not self.recurrent_model else
