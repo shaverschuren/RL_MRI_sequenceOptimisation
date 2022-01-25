@@ -112,9 +112,9 @@ class SimulationEnv(object):
             n_episodes: Union[None, int] = None,
             fa_range: list[float] = [5., 30.],
             Nfa: int = 1000,
-            T1_range: list[float] = [0.100, 3.000],
+            T1_range: list[float] = [0.100, 2.000],
             T2_range: list[float] = [0.025, 0.150],
-            tr: float = 0.005,
+            tr: float = 0.010,
             noise_level: float = 0.008,
             lock_material_params: bool = False,
             validation_mode: bool = False,
@@ -585,10 +585,10 @@ class SimulationEnv(object):
             if hasattr(self, f"optimal_{self.metric}"):
                 # Extract optimal metric and define error
                 optimal_metric = getattr(self, f"optimal_{self.metric}")
-                self.error = abs(float(
+                self.error = max(0., float(
                     (optimal_metric - self.state[0] * 50.)
-                    / optimal_metric
-                ))
+                    / optimal_metric)
+                )
                 # Tweak reward based on error
                 if self.error > 0.:
                     if self.n_episodes is not None:
@@ -753,16 +753,16 @@ class SimulationEnv(object):
                 self.T1 = random.uniform(
                     self.T1_range[0], self.T1_range[1])
                 self.T2 = random.uniform(
-                    self.T2_range[0], self.T2_range[1])
+                    self.T2_range[0], min(self.T2_range[1], self.T1))
             elif self.metric == "cnr":
                 self.T1_1 = random.uniform(
                     self.T1_range[0], self.T1_range[1])
                 self.T1_2 = random.uniform(
                     self.T1_range[0], self.T1_range[1])
                 self.T2_1 = random.uniform(
-                    self.T2_range[0], self.T2_range[1])
+                    self.T2_range[0], min(self.T2_range[1], self.T1_1))
                 self.T2_2 = random.uniform(
-                    self.T2_range[0], self.T2_range[1])
+                    self.T2_range[0], min(self.T2_range[1], self.T1_2))
 
         # If lock_material_params, we simply don't vary T1/T2s
         if self.lock_material_params:

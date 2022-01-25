@@ -434,10 +434,10 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
     import time
 
     # Define parameters
-    T1 = 0.600          # T1 relaxation time of the spin [s]
-    T2 = 0.300          # T2 relaxation time of the spin [s]
-    fa = 25             # Flip angle of the sequence [deg] (Can also be array)
-    Nfa = 1000          # Number of flip angles to achieve a steady state [-]
+    T1 = 3.000          # T1 relaxation time of the spin [s]
+    T2 = 0.100          # T2 relaxation time of the spin [s]
+    fa = 45             # Flip angle of the sequence [deg] (Can also be array)
+    Nfa = 2500          # Number of flip angles to achieve a steady state [-]
     tr = 5E-03          # Repetition time [s]
     SP = complex(1, 0)  # Slice profile (1+0j)
     spoil = True        # 0 = balanced, 1 = spoiled
@@ -521,5 +521,5 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
 
 if __name__ == "__main__":
     # example(format="torch", plot=False)
-    for i in range(10):
-        example(format="numpy", plot=False)
+    for i in range(1):
+        example(format="numpy", plot=True)
