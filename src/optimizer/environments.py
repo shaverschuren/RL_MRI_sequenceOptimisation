@@ -18,7 +18,7 @@ import warnings
 import numpy as np
 import random
 import torch
-from epg_simulator.python import epg
+import epg_simulator.python.epg_numba as epg
 from util import roi
 
 

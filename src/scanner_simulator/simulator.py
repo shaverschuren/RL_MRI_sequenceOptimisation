@@ -6,7 +6,7 @@ import h5py
 import time
 import json
 import numpy as np
-from epg_simulator.python import epg
+import epg_simulator.python.epg_numba as epg
 
 
 class Simulator(object):
