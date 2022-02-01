@@ -436,7 +436,7 @@ class SimulationEnv(object):
                 (self.fa - 0.)
                 / (180. - 0.)
             )
-        # snr / cnr (just devide by 50 for now) TODO: debug
+        # snr / cnr
         if hasattr(self, self.metric):
             setattr(
                 self, f"{self.metric}_norm",
@@ -573,8 +573,7 @@ class SimulationEnv(object):
             reward_float *= np.exp(-self.tick / 20.)
 
         # If the flip angle is changed less than 0.1 deg, penalize the model
-        # for waiting too long without stopping TODO: This does not have the
-        # desired effect yet
+        # for waiting too long without stopping
         if abs(self.state[1] - self.old_state[1]) < (0.1 / 180.):
             reward_float -= 0.5
 
@@ -601,11 +600,11 @@ class SimulationEnv(object):
                                         / float(self.n_episodes)) ** 2
                                     + 0.20
                                 )
-                                * min(1., self.error)) ** -1) * 2 - 35.
+                                * min(1., self.error)) ** -1) * 2 - 40.
                         )
                     else:
                         reward_delta = min(
-                            20., 2. / (0.2 * min(1., self.error)) - 35.
+                            20., 2. / (0.2 * min(1., self.error)) - 40.
                         )
                 else:
                     reward_delta = 20.

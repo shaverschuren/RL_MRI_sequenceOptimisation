@@ -690,8 +690,9 @@ class RDPG(object):
             env,
             log_dir: Union[str, os.PathLike],
             n_episodes: int = 1000,
-            n_ticks: int = 30,
+            n_ticks: int = 10,
             batch_size: int = 64,
+            model_done: bool = True,
             pretrained_path: Union[str, os.PathLike, None] = None,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
@@ -708,6 +709,8 @@ class RDPG(object):
                 Maximum number of ticks in an episode
             batch_size: int
                 Batch size used for optimization
+            model_done: bool
+                Whether model should give "done" command
             pretrained_path : str | os.PathLike | None
                 Path to pretrained model
         """
@@ -719,6 +722,7 @@ class RDPG(object):
         self.n_episodes = n_episodes
         self.n_ticks = n_ticks
         self.batch_size = batch_size
+        self.model_done = model_done
         self.pretrained_path = pretrained_path
 
         # Setup device
@@ -731,6 +735,7 @@ class RDPG(object):
         # Setup agent
         self.agent = agents.RDPGAgent(
             env.action_space,
+            n_actions=2 if model_done else 1,
             epsilon_decay=1. - (4. / float(self.n_episodes))
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
@@ -779,7 +784,7 @@ class RDPG(object):
             self.logger.log_image(
                 field="img",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                image=np.array(self.env.recent_img),
+                image=np.array(self.env.recent_img) / 5.,
                 step=-1
             )
 

@@ -231,6 +231,7 @@ def init_optimizer(env, args: argparse.Namespace):
         optimizer = algorithms.RDPG(
             env=env, log_dir=args.log_dir,
             n_episodes=n_episodes,
+            model_done=not args.suppress_done,
             pretrained_path=args.pretrained_path
         )
     elif args.agent == "validation":

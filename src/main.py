@@ -74,6 +74,10 @@ def parse_args():
             "If argument is passed, keep it."
         )
     )
+    optional.add_argument(
+        "--suppress_done", type=bool, default=False,
+        help="Optional: Override the 'done' signal given by the model"
+    )
 
     # Parse arguments
     args = parser.parse_args()
@@ -178,6 +182,8 @@ def launch_processes(args):
         process_call.extend(["--pretrained_path", args.pretrained_path])
     if args.episodes:
         process_call.extend(["--episodes", args.episodes])
+    if args.suppress_done:
+        process_call.extend(["--suppress_done", "True"])
     if args.keep_queue:
         process_call.extend(["-kq"])
 
