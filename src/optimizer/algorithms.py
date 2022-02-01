@@ -690,7 +690,7 @@ class RDPG(object):
             env,
             log_dir: Union[str, os.PathLike],
             n_episodes: int = 1000,
-            n_ticks: int = 10,
+            n_ticks: int = 30,
             batch_size: int = 64,
             model_done: bool = True,
             pretrained_path: Union[str, os.PathLike, None] = None,
@@ -931,7 +931,7 @@ class RDPG(object):
         """Log a single episode"""
 
         # Extract recent memory
-        recent_memory = self.memory.get_recent_memory(5)
+        recent_memory = self.memory.get_recent_memory(6)
         recent_states = [transition.state for transition in recent_memory]
         recent_next_states = [
             transition.next_state for transition in recent_memory
@@ -1138,11 +1138,12 @@ class RDPG(object):
                     float(self.tick + 1) / float(self.n_ticks)
                     > 1. - 3 * float(self.episode + 1) / float(self.n_episodes)
                 )
-                if (
-                    done and (
-                        done_threshold or not self.train
-                    )
-                ):
+                # if (
+                #     done and (
+                #         done_threshold or not self.train
+                #     )
+                # ):
+                if done:
                     print("Stopping criterion met!")
                     break
 

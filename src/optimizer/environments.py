@@ -585,7 +585,7 @@ class SimulationEnv(object):
                 # Extract optimal metric and define error
                 optimal_metric = getattr(self, f"optimal_{self.metric}")
                 self.error = max(0., float(
-                    (optimal_metric - self.state[0] * 50.)
+                    (optimal_metric - self.state[0] * self.metric_calibration)
                     / optimal_metric)
                 )
                 # Tweak reward based on error
@@ -619,13 +619,28 @@ class SimulationEnv(object):
     def define_done(self, action):
         """Define done for last step"""
 
-        # If not model_done, pass 0. Else, use the action
+        # If not model_done, use hard-coded criterion. Else, use the action
         if self.model_done:
             self.done = torch.tensor(
                 0 if action[1] < 0. else 1,
                 device=self.device)
         else:
-            self.done = torch.tensor(0, device=self.device)
+            # Extract history of this episode
+            metric_history = [float(state[0]) for state in self.history]
+            # Define patience
+            patience = 5 if len(metric_history) > 4 else len(metric_history)
+
+            # Determine whether snr/cnr has improved in our patience period
+            done = 0
+            max_idx = metric_history.index(max(metric_history))
+
+            if max_idx >= len(metric_history) - patience:
+                done = 0
+            else:
+                done = 1
+
+            # Define done
+            self.done = torch.tensor(done, device=self.device)
 
     def step(self, action):
         """Run a single step of the RL loop
@@ -695,6 +710,8 @@ class SimulationEnv(object):
                 ],
                 device=self.device
             )
+        # Store in history
+        self.history.append(self.state)
 
         # Define done
         self.define_done(action_np)
@@ -711,6 +728,7 @@ class SimulationEnv(object):
         self.episode += 1
         self.tick = 0
         self.done = False
+        self.history = []
 
         # Set new T1, T2, fa, fa_initial
         if self.homogeneous_initialization:
@@ -794,6 +812,8 @@ class SimulationEnv(object):
             [getattr(self, f"{self.metric}_norm"), self.fa_norm],
             device=self.device
         )
+        # Store in history
+        self.history.append(self.state)
 
 
 class ScannerEnv(object):
@@ -1173,13 +1193,28 @@ class ScannerEnv(object):
     def define_done(self, action):
         """Define done for last step"""
 
-        # If not model_done, pass 0. Else, use the action
+        # If not model_done, use hard-coded criterion. Else, use the action
         if self.model_done:
             self.done = torch.tensor(
                 0 if action[1] < 0. else 1,
                 device=self.device)
         else:
-            self.done = torch.tensor(0, device=self.device)
+            # Extract history of this episode
+            metric_history = [float(state[0]) for state in self.history]
+            # Define patience
+            patience = 5 if len(metric_history) > 4 else len(metric_history)
+
+            # Determine whether snr/cnr has improved in our patience period
+            done = 0
+            max_idx = metric_history.index(max(metric_history))
+
+            if max_idx >= len(metric_history) - patience:
+                done = 0
+            else:
+                done = 1
+
+            # Define done
+            self.done = torch.tensor(done, device=self.device)
 
     def step(self, action):
         """Run a single step of the RL loop
@@ -1249,6 +1284,8 @@ class ScannerEnv(object):
                 ],
                 device=self.device
             )
+        # Store in history
+        self.history.append(self.state)
 
         # Define reward
         self.define_reward()
@@ -1272,6 +1309,7 @@ class ScannerEnv(object):
         self.episode += 1
         self.tick = 0
         self.done = False
+        self.history = []
 
         # Set new fa_initial
         if self.homogeneous_initialization:
@@ -1314,6 +1352,9 @@ class ScannerEnv(object):
                 [0., 0.],
                 device=self.device
             )
+
+        # Store in history
+        self.history.append(self.state)
 
         # If applicable, print line
         if verbose:
