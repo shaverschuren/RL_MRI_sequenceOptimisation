@@ -200,21 +200,21 @@ class RecurrentModel_LSTM(nn.Module):
             )
         )
 
-        # Define layer name TODO: this is a test. Might remove.
-        layer_name = f'fc{layer_i + 2}'
-        # Add linear layer
-        architecture_list.append(
-            (
-                layer_name,
-                nn.Linear(
-                    self.hidden_size,
-                    self.hidden_size)
-            )
-        )
-        # Add activation function
-        architecture_list.append(
-            (f"relu{layer_i + 2}", nn.ReLU())
-        )
+        # # Define layer name TODO: this is a test. Might remove.
+        # layer_name = f'fc{layer_i + 2}'
+        # # Add linear layer
+        # architecture_list.append(
+        #     (
+        #         layer_name,
+        #         nn.Linear(
+        #             self.hidden_size,
+        #             self.hidden_size)
+        #     )
+        # )
+        # # Add activation function
+        # architecture_list.append(
+        #     (f"relu{layer_i + 2}", nn.ReLU())
+        # )
 
         # Add final output layer and its activation function
         architecture_list.append(

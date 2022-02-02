@@ -582,7 +582,7 @@ class RDPGAgent(object):
         """
 
         # Define hidden size
-        hidden_size = 64
+        hidden_size = 256
 
         # Construct actor models (network + target network)
         self.actor = models.RecurrentModel_LSTM(
@@ -590,7 +590,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states, 64, hidden_size
+                self.n_states, 64, 128, hidden_size
             ],
             output_activation="tanh",
             device=self.device
@@ -600,7 +600,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states + self.n_actions, 64, hidden_size
+                self.n_states + self.n_actions, 64, 128, hidden_size
             ],
             output_activation="none",
             device=self.device
@@ -611,7 +611,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states, 64, hidden_size
+                self.n_states, 64, 128, hidden_size
             ],
             output_activation="tanh",
             device=self.device
@@ -621,7 +621,7 @@ class RDPGAgent(object):
             output_size=self.n_actions,
             hidden_size=hidden_size,
             fully_connected_architecture=[
-                self.n_states + self.n_actions, 64, hidden_size
+                self.n_states + self.n_actions, 64, 128, hidden_size
             ],
             output_activation="none",
             device=self.device
