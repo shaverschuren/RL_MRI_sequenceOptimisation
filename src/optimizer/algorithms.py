@@ -117,7 +117,7 @@ class DQN(object):
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
             f"{action_mode} - "
             f"Action: {int(action):2d} - "
-            f"FA: {float(next_state[1]) * 180.:5.1f} - "
+            f"FA: {float(next_state[1]) * 90.:5.1f} - "
             f"{self.metric.upper()}: "
             f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
             " Reward: "
@@ -175,7 +175,7 @@ class DQN(object):
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
         best_metric = float(recent_metrics[best_idx])
-        best_fa = float(recent_fa[best_idx]) * 180.
+        best_fa = float(recent_fa[best_idx]) * 90.
 
         # Log scalars
         self.logger.log_scalar(
@@ -430,7 +430,7 @@ class DDPG(object):
         print(
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
             f"Action: {float(action):5.2f} - "
-            f"FA: {float(next_state[1]) * 180.:5.1f} - "
+            f"FA: {float(next_state[1]) * 90.:5.1f} - "
             f"{self.metric.upper()}: "
             f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
             " Reward: "
@@ -516,7 +516,7 @@ class DDPG(object):
             float(recent_metrics[best_idx])
             * self.env.metric_calibration
         )
-        best_fa = float(recent_fa[best_idx]) * 180.
+        best_fa = float(recent_fa[best_idx]) * 90.
 
         # Log scalars
         self.logger.log_scalar(
@@ -833,7 +833,7 @@ class RDPG(object):
         print(
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
             f"Action: {float(action[0]):5.2f} - "
-            f"FA: {float(next_state[1]) * 180.:5.1f} - "
+            f"FA: {float(next_state[1]) * 90.:5.1f} - "
             f"{self.metric.upper()}: "
             f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
             " Reward: "
@@ -945,7 +945,7 @@ class RDPG(object):
             float(recent_metrics[best_idx])
             * self.env.metric_calibration
         )
-        best_fa = float(recent_fa[best_idx]) * 180.
+        best_fa = float(recent_fa[best_idx]) * 90.
 
         # Find cumulative reward
         previous_trajectory = self.memory.memory[-1]

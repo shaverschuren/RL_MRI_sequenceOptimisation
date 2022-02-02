@@ -434,7 +434,7 @@ class SimulationEnv(object):
         if hasattr(self, "fa"):
             self.fa_norm = float(
                 (self.fa - 0.)
-                / (180. - 0.)
+                / (90. - 0.)
             )
         # snr / cnr
         if hasattr(self, self.metric):
@@ -574,7 +574,7 @@ class SimulationEnv(object):
 
         # If the flip angle is changed less than 0.1 deg, penalize the model
         # for waiting too long without stopping
-        if abs(self.state[1] - self.old_state[1]) < (0.1 / 180.):
+        if abs(self.state[1] - self.old_state[1]) < (0.1 / 90.):
             reward_float -= 0.5
 
         # If the "done" criterion is passed, tweak the reward based on
@@ -1056,7 +1056,7 @@ class ScannerEnv(object):
         if hasattr(self, "fa"):
             self.fa_norm = float(
                 (self.fa - 0.)
-                / (180. - 0.)
+                / (90. - 0.)
             )
         # snr / cnr (just devide by 50 for now)
         if hasattr(self, self.metric):
