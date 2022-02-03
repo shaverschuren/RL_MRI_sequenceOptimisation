@@ -355,6 +355,11 @@ class SimulationEnv(object):
                 # Update loop counter
                 loop += 1
 
+        else:
+            raise RuntimeError()
+
+        self.optimal_fa = optimal_fa
+
         return optimal_fa_list
 
     def calculate_2nd_T1(self, optimal_fa, T1_1):
@@ -584,8 +589,12 @@ class SimulationEnv(object):
             if hasattr(self, f"optimal_{self.metric}"):
                 # Extract optimal metric and define error
                 optimal_metric = getattr(self, f"optimal_{self.metric}")
+                # Extract optimum reached during trajectory
+                metric_history = [float(state[0]) for state in self.history]
+                reached_optimum = max(metric_history) * self.metric_calibration
+                # Define error between theoretical and reached optimum
                 self.error = max(0., float(
-                    (optimal_metric - self.state[0] * self.metric_calibration)
+                    (optimal_metric - reached_optimum)
                     / optimal_metric)
                 )
                 # Tweak reward based on error
@@ -613,7 +622,7 @@ class SimulationEnv(object):
 
         # Store reward in tensor
         self.reward = torch.tensor(
-            [float(reward_float)], device=self.device
+            [float(reward_float / 10.)], device=self.device
         )
 
     def define_done(self, action):
@@ -625,19 +634,24 @@ class SimulationEnv(object):
                 0 if action[1] < 0. else 1,
                 device=self.device)
         else:
-            # Extract history of this episode
-            metric_history = [float(state[0]) for state in self.history]
-            # Define patience
-            patience = 5 if len(metric_history) > 4 else len(metric_history)
+            # # Extract history of this episode
+            # metric_history = [float(state[0]) for state in self.history]
+            # # Define patience
+            # patience = 3 if len(metric_history) > 2 else len(metric_history)
 
-            # Determine whether snr/cnr has improved in our patience period
-            done = 0
-            max_idx = metric_history.index(max(metric_history))
+            # # Determine whether snr/cnr has improved in our patience period
+            # done = 0
+            # max_idx = metric_history.index(max(metric_history))
 
-            if max_idx >= len(metric_history) - patience:
-                done = 0
-            else:
+            # if max_idx >= len(metric_history) - patience:
+            #     done = 0
+            # else:
+            #     done = 1
+            # TODO: Testing
+            if len(self.history) > 29:
                 done = 1
+            else:
+                done = 0
 
             # Define done
             self.done = torch.tensor(done, device=self.device)
@@ -732,16 +746,21 @@ class SimulationEnv(object):
 
         # Set new T1, T2, fa, fa_initial
         if self.homogeneous_initialization:
-            # Set initial flip angle. Here, we randomly sample from the
-            # uniformly distributed list we created earlier.
-            self.fa = float(self.initial_fa_list.pop(
-                random.randint(0, len(self.initial_fa_list) - 1)
-            ))
             # Set the T1s for this episode. Here, we randomly sample
             # T1_1 from the uniform distribution and then calculate T1_2
             # based on the desired optimum flip angle
             self.optimal_fa_list = \
                 self.set_t1_from_distribution(self.optimal_fa_list)
+            # Set initial fa (optimal fa +/- 10 [deg])
+            self.fa = self.optimal_fa + random.random() * 30. - 15.
+            if self.fa < min(self.fa_range): self.fa = min(self.fa_range)
+            if self.fa > max(self.fa_range): self.fa = max(self.fa_range)
+            self.fa = float(self.fa)
+            # # Set initial flip angle. Here, we randomly sample from the
+            # # uniformly distributed list we created earlier.
+            # self.fa = float(self.initial_fa_list.pop(
+            #     random.randint(0, len(self.initial_fa_list) - 1)
+            # ))
 
             if self.metric == "snr":
                 # Set T2 for this episode. We randomly sample this
