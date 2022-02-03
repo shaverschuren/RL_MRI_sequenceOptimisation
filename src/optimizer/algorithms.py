@@ -741,7 +741,7 @@ class RDPG(object):
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
-        self.memory = training.EpisodicMemory(self.n_episodes // 4)
+        self.memory = training.EpisodicMemory(self.n_episodes // 2)
         # Setup logger
         self.setup_logger()
 
@@ -902,31 +902,6 @@ class RDPG(object):
                 step=self.tick
             )
 
-        # Log losses (if applicable)
-        if (
-            self.train
-            and hasattr(self, "policy_loss")
-            and hasattr(self, "critic_loss")
-        ):
-            # Create or update training tick
-            if not hasattr(self, "train_tick"):
-                self.train_tick = 0
-            else:
-                self.train_tick += 1
-            # Log losses
-            self.logger.log_scalar(
-                field="policy_loss",
-                tag=f"{self.logs_tag}_train_losses",
-                value=self.policy_loss,
-                step=self.train_tick
-            )
-            self.logger.log_scalar(
-                field="critic_loss",
-                tag=f"{self.logs_tag}_train_losses",
-                value=self.critic_loss,
-                step=self.train_tick
-            )
-
     def log_episode(self):
         """Log a single episode"""
 
@@ -985,6 +960,26 @@ class RDPG(object):
             value=cumulative_reward,
             step=self.episode
         )
+
+        # Log losses (if applicable)
+        if (
+            self.train
+            and hasattr(self, "policy_loss")
+            and hasattr(self, "critic_loss")
+        ):
+            # Log losses
+            self.logger.log_scalar(
+                field="policy_loss",
+                tag=f"{self.logs_tag}_train_episodes",
+                value=self.policy_loss,
+                step=self.episode
+            )
+            self.logger.log_scalar(
+                field="critic_loss",
+                tag=f"{self.logs_tag}_train_episodes",
+                value=self.critic_loss,
+                step=self.episode
+            )
 
         # If theoretical optimum is known, log the error
         if isinstance(self.env, environments.SimulationEnv):
