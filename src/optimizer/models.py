@@ -164,96 +164,162 @@ class RecurrentModel_LSTM(nn.Module):
         # Init architecture list
         architecture_list = []
 
-        # Append list with layers
-        layer_i = 0
-        for layer_i in range(len(self.fully_connected_architecture) - 1):
-            # Define layer name
-            layer_name = f'fc{layer_i + 1}'
-            # Add linear layer
-            architecture_list.append(
-                (
-                    layer_name,
-                    nn.Linear(
-                        self.fully_connected_architecture[layer_i],
-                        self.fully_connected_architecture[layer_i + 1])
-                )
-            )
-            # Add activation function
-            architecture_list.append(
-                (f"relu{layer_i + 1}", nn.ReLU())
-            )
+        # TODO: Testing
+        self.lstm_idx = 2
 
-        # Add LSTM module and concurrent relu layer
-        self.lstm_idx = 2 * (layer_i + 1)
+        architecture_list.append(
+            (
+                "fc1",
+                nn.Linear(self.input_size, self.hidden_size)
+            )
+        )
+        architecture_list.append(
+            (
+                "relu1",
+                nn.ReLU()
+            )
+        )
         architecture_list.append(
             (
                 "lstm",
                 nn.LSTMCell(
-                    input_size=self.fully_connected_architecture[-1],
+                    input_size=self.hidden_size,
                     hidden_size=self.hidden_size
                 )
             )
         )
         architecture_list.append(
             (
-                f"relu_lstm", nn.ReLU()
+                "fc2",
+                nn.Linear(self.hidden_size, 128)
+            )
+        )
+        architecture_list.append(
+            (
+                "relu2",
+                nn.ReLU()
+            )
+        )
+        architecture_list.append(
+            (
+                "fc3",
+                nn.Linear(128, 128)
+            )
+        )
+        architecture_list.append(
+            (
+                "relu3",
+                nn.ReLU()
             )
         )
 
-        # # Define layer name TODO: this is a test. Might remove.
-        # layer_name = f'fc{layer_i + 2}'
-        # # Add linear layer
-        # architecture_list.append(
-        #     (
-        #         layer_name,
-        #         nn.Linear(
-        #             self.hidden_size,
-        #             self.hidden_size)
-        #     )
-        # )
-        # # Add activation function
-        # architecture_list.append(
-        #     (f"relu{layer_i + 2}", nn.ReLU())
-        # )
-
-        # Add final output layer and its activation function
         architecture_list.append(
             (
                 "output",
-                nn.Linear(
-                    self.hidden_size,
-                    self.output_size)
+                nn.Linear(128, self.output_size)
             )
         )
-        if str(self.output_activation).lower() == 'relu':
+        if self.output_activation.lower() == "tanh":
             architecture_list.append(
-                (f"relu_output", nn.ReLU())
+                (
+                    "tanh",
+                    nn.Tanh()
+                )
             )
-        elif str(self.output_activation).lower() == 'leaky_relu':
-            architecture_list.append(
-                (f"leaky_relu_output", nn.LeakyReLU())
-            )
-        elif str(self.output_activation).lower() == 'tanh':
-            architecture_list.append(
-                (f"tanh_output", nn.Tanh())
-            )
-        elif str(self.output_activation).lower() == 'sigmoid':
-            architecture_list.append(
-                (f"sigmoid_output", nn.Sigmoid())
-            )
-        elif str(self.output_activation).lower() == 'softmax':
-            architecture_list.append(
-                (f"softmax_output", nn.Softmax())
-            )
-        elif str(self.output_activation).lower() == 'none':
+        elif self.output_activation.lower() == "none":
             pass
         else:
-            raise ValueError(
-                "Activation function not supported. "
-                "Expected either 'relu', 'leaky_relu', 'tanh', "
-                "'sigmoid' or 'softmax', but got "
-                f"'{self.output_activation}'."
-            )
+            raise RuntimeError()
+        # # Append list with layers
+        # layer_i = -1
+        # for layer_i in range(len(self.fully_connected_architecture) - 1):
+        #     # Define layer name
+        #     layer_name = f'fc{layer_i + 1}'
+        #     # Add linear layer
+        #     architecture_list.append(
+        #         (
+        #             layer_name,
+        #             nn.Linear(
+        #                 self.fully_connected_architecture[layer_i],
+        #                 self.fully_connected_architecture[layer_i + 1])
+        #         )
+        #     )
+        #     # Add activation function
+        #     architecture_list.append(
+        #         (f"relu{layer_i + 1}", nn.ReLU())
+        #     )
+
+        # # Add LSTM module and concurrent relu layer
+        # self.lstm_idx = 2 * (layer_i + 1)
+        # architecture_list.append(
+        #     (
+        #         "lstm",
+        #         nn.LSTMCell(
+        #             input_size=self.fully_connected_architecture[-1],
+        #             hidden_size=self.hidden_size
+        #         )
+        #     )
+        # )
+        # architecture_list.append(
+        #     (
+        #         f"relu_lstm", nn.ReLU()
+        #     )
+        # )
+
+        # # # Define layer name
+        # # layer_name = f'fc{layer_i + 2}'
+        # # # Add linear layer
+        # # architecture_list.append(
+        # #     (
+        # #         layer_name,
+        # #         nn.Linear(
+        # #             self.hidden_size,
+        # #             self.hidden_size)
+        # #     )
+        # # )
+        # # # Add activation function
+        # # architecture_list.append(
+        # #     (f"relu{layer_i + 2}", nn.ReLU())
+        # # )
+
+        # # Add final output layer and its activation function
+        # architecture_list.append(
+        #     (
+        #         "output",
+        #         nn.Linear(
+        #             self.hidden_size,
+        #             self.output_size)
+        #     )
+        # )
+        # if str(self.output_activation).lower() == 'relu':
+        #     architecture_list.append(
+        #         (f"relu_output", nn.ReLU())
+        #     )
+        # elif str(self.output_activation).lower() == 'leaky_relu':
+        #     architecture_list.append(
+        #         (f"leaky_relu_output", nn.LeakyReLU())
+        #     )
+        # elif str(self.output_activation).lower() == 'tanh':
+        #     architecture_list.append(
+        #         (f"tanh_output", nn.Tanh())
+        #     )
+        # elif str(self.output_activation).lower() == 'sigmoid':
+        #     architecture_list.append(
+        #         (f"sigmoid_output", nn.Sigmoid())
+        #     )
+        # elif str(self.output_activation).lower() == 'softmax':
+        #     architecture_list.append(
+        #         (f"softmax_output", nn.Softmax())
+        #     )
+        # elif str(self.output_activation).lower() == 'none':
+        #     pass
+        # else:
+        #     raise ValueError(
+        #         "Activation function not supported. "
+        #         "Expected either 'relu', 'leaky_relu', 'tanh', "
+        #         "'sigmoid' or 'softmax', but got "
+        #         f"'{self.output_activation}'."
+        #     )
 
         # Fill ordered dict
         self.architecture_dict = OrderedDict(architecture_list)
