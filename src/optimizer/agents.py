@@ -582,7 +582,7 @@ class RDPGAgent(object):
         """
 
         # Define hidden size
-        hidden_size = 256
+        hidden_size = 64
 
         # Construct actor models (network + target network)
         self.actor = models.RecurrentModel_LSTM(
@@ -644,7 +644,7 @@ class RDPGAgent(object):
         )
 
         # Setup criterion
-        self.critic_criterion = torch.nn.MSELoss()
+        self.critic_criterion = torch.nn.L1Loss()
 
     def select_action(self, state, train=True):
         """Select action based on current state
@@ -676,10 +676,17 @@ class RDPGAgent(object):
 
         # Reset hidden states
         self.reset(batch_size=len(batch[0]))
+        # Extract initial hidden states
+        # We manually keep track of hidden states because we'll
+        # need to do several passes through the same model per timestep
+        hidden_critic_0 = (self.critic.cx, self.critic.hx)
+        hidden_actor_0 = (self.actor.cx, self.actor.hx)
+        hidden_critic_target_0 = (self.critic_target.cx, self.critic_target.hx)
+        hidden_actor_target_0 = (self.actor_target.cx, self.actor_target.hx)
 
-        # Create lists for policy and critic loss
-        policy_loss_total = None
+        # Set total loss counts
         critic_loss_total = None
+        policy_loss_total = None
 
         # Loop over timesteps of the trajectories
         # Process all trajectories in parallel, however
@@ -705,39 +712,65 @@ class RDPGAgent(object):
                 [next_state.unsqueeze(0) for next_state in next_states]
             ).to(self.device)
 
-            # Determine critic loss
-            Qvals, _ = self.critic(torch.cat([states, actions], 1))
-            next_actions, _ = self.actor_target(next_states)
-            next_Q, _ = self.critic_target(
-                torch.cat([next_states, next_actions.detach()], 1)
-            )
-            Qprime = rewards + self.gamma * next_Q
-            critic_loss = self.critic_criterion(Qvals, Qprime)
+            # Determine target value (Q-prime)
+            with torch.no_grad():
+                # Compute next_Q and update target hidden states
+                next_actions, hidden_actor_target_1 = self.actor_target(
+                    next_states, hidden_actor_target_0
+                )
+                next_Q, hidden_critic_target_1 = self.critic_target(
+                    torch.cat([next_states, next_actions], 1),
+                    hidden_critic_target_0
+                )
+                # Compute Q_target (R + discount * Qnext)
+                Q_target = rewards + self.gamma * next_Q
 
-            # Determine actor loss
+            # Compute actual Q-values and policy for this timestep
+            # and update hidden states
+            Q, hidden_critic_1 = self.critic(
+                torch.cat([states, actions], 1),
+                hidden_critic_0
+            )
+            policy, hidden_actor_1 = self.actor(states, hidden_actor_0)
+
+            # Compute critic loss
+            critic_loss = self.critic_criterion(Q, Q_target)
+
+            # Compute actor loss
             policy_loss = -self.critic(
-                torch.cat([states, self.actor(states)[0]], 1)
+                torch.cat([states, policy], 1),
+                hidden_critic_0
             )[0].mean()
 
-            # Store losses
-            if policy_loss_total is not None and critic_loss_total is not None:
-                policy_loss_total += policy_loss
+            # Update total losses
+            if critic_loss_total is not None and policy_loss_total is not None:
                 critic_loss_total += critic_loss
+                policy_loss_total += policy_loss
             else:
-                policy_loss_total = policy_loss
                 critic_loss_total = critic_loss
+                policy_loss_total = policy_loss
 
-            # Detach hidden states
-            self.detach_hidden()
+            # Update hidden states
+            hidden_critic_0 = hidden_critic_1
+            hidden_actor_0 = hidden_actor_1
+            hidden_critic_target_0 = hidden_critic_target_1
+            hidden_actor_target_0 = hidden_actor_target_1
 
-            # Update networks
+        # Update networks
+        if policy_loss_total is not None and critic_loss_total is not None:
+            # Normalize losses
+            critic_loss_total /= float(len(batch))
+            policy_loss_total /= float(len(batch))
+            # Update actor
             self.actor_optimizer.zero_grad()
-            policy_loss.backward(retain_graph=True)
+            policy_loss_total.backward(retain_graph=True)
             self.actor_optimizer.step()
-
+            # Update critic
             self.critic_optimizer.zero_grad()
-            critic_loss.backward(retain_graph=True)
+            critic_loss_total.backward()
             self.critic_optimizer.step()
+        else:
+            raise RuntimeError("Updating failded")
 
         # Update target networks (lagging weights)
         for target_param, param in zip(
@@ -753,8 +786,8 @@ class RDPGAgent(object):
 
         if policy_loss_total is not None and critic_loss_total is not None:
             return (
-                float(policy_loss_total.detach() / len(batch)),
-                float(critic_loss_total.detach() / len(batch))
+                float(policy_loss_total.detach()),
+                float(critic_loss_total.detach())
             )
         else:
             raise RuntimeError("Updating failed...")
