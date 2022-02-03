@@ -679,10 +679,10 @@ class RDPGAgent(object):
         # Extract initial hidden states
         # We manually keep track of hidden states because we'll
         # need to do several passes through the same model per timestep
-        hidden_critic_0 = (self.critic.cx, self.critic.hx)
-        hidden_actor_0 = (self.actor.cx, self.actor.hx)
-        hidden_critic_target_0 = (self.critic_target.cx, self.critic_target.hx)
-        hidden_actor_target_0 = (self.actor_target.cx, self.actor_target.hx)
+        hidden_critic_0 = (self.critic.hx, self.critic.cx)
+        hidden_actor_0 = (self.actor.hx, self.actor.cx)
+        hidden_critic_target_0 = (self.critic_target.hx, self.critic_target.cx)
+        hidden_actor_target_0 = (self.actor_target.hx, self.actor_target.cx)
 
         # Set total loss counts
         critic_loss_total = None
