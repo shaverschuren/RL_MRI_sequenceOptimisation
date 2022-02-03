@@ -202,19 +202,6 @@ class RecurrentModel_LSTM(nn.Module):
         )
         architecture_list.append(
             (
-                "fc3",
-                nn.Linear(128, 128)
-            )
-        )
-        architecture_list.append(
-            (
-                "relu3",
-                nn.ReLU()
-            )
-        )
-
-        architecture_list.append(
-            (
                 "output",
                 nn.Linear(128, self.output_size)
             )
