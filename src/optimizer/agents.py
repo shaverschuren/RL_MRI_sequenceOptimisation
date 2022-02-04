@@ -582,7 +582,7 @@ class RDPGAgent(object):
         """
 
         # Define hidden size
-        hidden_size = 128
+        hidden_size = 32
 
         # Construct actor models (network + target network)
         self.actor = models.RecurrentModel_LSTM(
@@ -656,7 +656,8 @@ class RDPGAgent(object):
         """
 
         # Get action from actor model
-        pure_action, _ = self.actor(torch.unsqueeze(state, 0))
+        with torch.no_grad():
+            pure_action, _ = self.actor(torch.unsqueeze(state, 0))
         pure_action = torch.squeeze(pure_action, 0).detach().numpy()
         # Add noise (if training)
         noise = (
