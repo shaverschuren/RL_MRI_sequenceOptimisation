@@ -552,18 +552,18 @@ class SimulationEnv(object):
         # Scale reward with signal difference
         if float(self.old_state[0]) < 1e-2:
             # If old_state signal is too small, set reward gain to 20
-            reward_gain = 20.
+            reward_gain = 1.
         else:
             # Calculate relative signal difference and derive reward gain
             snr_diff = (
                 abs(self.state[0] - self.old_state[0])
                 / self.old_state[0]
             )
-            reward_gain = snr_diff * 100.
+            reward_gain = snr_diff
 
-            # If reward gain is higher than 20, use 20
+            # If reward gain is higher than 1, use 1
             # We do this to prevent blowing up rewards near the edges
-            if reward_gain > 20.: reward_gain = 20.
+            if reward_gain > 1.: reward_gain = 1.
 
         # If reward is negative, increase gain
         if reward_float < 0.:
@@ -577,10 +577,10 @@ class SimulationEnv(object):
         if reward_float > 0.:
             reward_float *= np.exp(-self.tick / 20.)
 
-        # If the flip angle is changed less than 0.1 deg, penalize the model
-        # for waiting too long without stopping
-        if abs(self.state[1] - self.old_state[1]) < (0.1 / 90.):
-            reward_float -= 0.5
+        # # If the flip angle is changed less than 0.1 deg, penalize the model
+        # # for waiting too long without stopping
+        # if abs(self.state[1] - self.old_state[1]) < (0.1 / 90.):
+        #     reward_float -= 0.5
 
         # If the "done" criterion is passed, tweak the reward based on
         # how close we are to the theretical optimum
@@ -599,30 +599,34 @@ class SimulationEnv(object):
                 )
                 # Tweak reward based on error
                 if self.error > 0.:
-                    if self.n_episodes is not None:
-                        reward_delta = min(
-                            20.,
-                            ((
-                                (
-                                    4.80 * (
-                                        float(self.episode)
-                                        / float(self.n_episodes)) ** 2
-                                    + 0.20
-                                )
-                                * min(1., self.error)) ** -1) * 2 - 40.
-                        )
-                    else:
-                        reward_delta = min(
-                            20., 2. / (0.2 * min(1., self.error)) - 40.
-                        )
+                    # if self.n_episodes is not None:
+                    #     reward_delta = min(
+                    #         1.,
+                    #         ((
+                    #             (
+                    #                 0.24 * (
+                    #                     float(self.episode)
+                    #                     / float(self.n_episodes)) ** 2
+                    #                 + 0.01
+                    #             )
+                    #             * min(1., self.error)) ** -1) * 2 - 2.
+                    #     )
+                    # else:
+                    reward_delta = min(
+                        1., 1. / (30. * (min(1., self.error) + 0.02)) - 1.
+                    )
                 else:
-                    reward_delta = 20.
+                    reward_delta = 1.
 
                 reward_float += reward_delta
 
+        # Clip reward between -1, 1
+        if reward_float > 1.: reward_float = 1.
+        if reward_float < -1.: reward_float = -1
+
         # Store reward in tensor
         self.reward = torch.tensor(
-            [float(reward_float / 10.)], device=self.device
+            [float(reward_float)], device=self.device
         )
 
     def define_done(self, action):
@@ -634,24 +638,24 @@ class SimulationEnv(object):
                 0 if action[1] < 0. else 1,
                 device=self.device)
         else:
-            # # Extract history of this episode
-            # metric_history = [float(state[0]) for state in self.history]
-            # # Define patience
-            # patience = 3 if len(metric_history) > 2 else len(metric_history)
+            # Extract history of this episode
+            metric_history = [float(state[0]) for state in self.history]
+            # Define patience
+            patience = 5 if len(metric_history) > 4 else len(metric_history)
 
-            # # Determine whether snr/cnr has improved in our patience period
-            # done = 0
-            # max_idx = metric_history.index(max(metric_history))
+            # Determine whether snr/cnr has improved in our patience period
+            done = 0
+            max_idx = metric_history.index(max(metric_history))
 
-            # if max_idx >= len(metric_history) - patience:
-            #     done = 0
-            # else:
-            #     done = 1
-            # TODO: Testing
-            if len(self.history) > 29:
-                done = 1
-            else:
+            if max_idx >= len(metric_history) - patience:
                 done = 0
+            else:
+                done = 1
+            # # TODO: Testing
+            # if len(self.history) > 29:
+            #     done = 1
+            # else:
+            #     done = 0
 
             # Define done
             self.done = torch.tensor(done, device=self.device)
@@ -751,16 +755,16 @@ class SimulationEnv(object):
             # based on the desired optimum flip angle
             self.optimal_fa_list = \
                 self.set_t1_from_distribution(self.optimal_fa_list)
-            # Set initial fa (optimal fa +/- 10 [deg])
-            self.fa = self.optimal_fa + random.random() * 30. - 15.
-            if self.fa < min(self.fa_range): self.fa = min(self.fa_range)
-            if self.fa > max(self.fa_range): self.fa = max(self.fa_range)
-            self.fa = float(self.fa)
-            # # Set initial flip angle. Here, we randomly sample from the
-            # # uniformly distributed list we created earlier.
-            # self.fa = float(self.initial_fa_list.pop(
-            #     random.randint(0, len(self.initial_fa_list) - 1)
-            # ))
+            # # Set initial fa (optimal fa +/- 10 [deg])
+            # self.fa = self.optimal_fa + random.random() * 30. - 15.
+            # if self.fa < min(self.fa_range): self.fa = min(self.fa_range)
+            # if self.fa > max(self.fa_range): self.fa = max(self.fa_range)
+            # self.fa = float(self.fa)
+            # Set initial flip angle. Here, we randomly sample from the
+            # uniformly distributed list we created earlier.
+            self.fa = float(self.initial_fa_list.pop(
+                random.randint(0, len(self.initial_fa_list) - 1)
+            ))
 
             if self.metric == "snr":
                 # Set T2 for this episode. We randomly sample this
