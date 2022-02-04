@@ -115,7 +115,7 @@ class SimulationEnv(object):
             T1_range: list[float] = [0.100, 2.000],
             T2_range: list[float] = [0.025, 0.150],
             tr: float = 0.010,
-            noise_level: float = 0.050,
+            noise_level: float = 0.010,
             lock_material_params: bool = False,
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -437,15 +437,18 @@ class SimulationEnv(object):
         # Perform normalisation for all parameters
         # fa
         if hasattr(self, "fa"):
-            self.fa_norm = 0.  # TODO: float(
-            #     (self.fa - 0.)
-            #     / (90. - 0.)
-            # )
+            self.fa_norm = float(  # TODO:
+                getattr(self, "recent_action")
+                if hasattr(self, "recent_action") else 0.
+                # (self.fa - 0.)
+                # / (90. - 0.)
+            )
         # snr / cnr
         if hasattr(self, self.metric):
             setattr(
                 self, f"{self.metric}_norm",
-                getattr(self, self.metric) / self.metric_calibration
+                (getattr(self, self.metric) - self.metric_calibration)
+                / self.metric_calibration
             )
 
     def calculate_theoretical_optimum(self):
@@ -544,22 +547,31 @@ class SimulationEnv(object):
         """Define reward for last step"""
 
         # Define reward as either +/- 1 for increase or decrease in signal
-        if self.state[0] > self.old_state[0]:
+
+        old_signal = float(
+            (self.old_state[0] * self.metric_calibration)
+            + self.metric_calibration
+        )
+        signal = float(
+            (self.state[0] * self.metric_calibration)
+            + self.metric_calibration
+        )
+
+        if signal > old_signal:
             reward_float = 1.0
         else:
             reward_float = -1.0
 
         # Scale reward with signal difference
-        if float(self.old_state[0]) < 1e-2:
+        if old_signal < 1e-2:
             # If old_state signal is too small, set reward gain to 20
             reward_gain = 1.
         else:
             # Calculate relative signal difference and derive reward gain
-            snr_diff = (
-                abs(self.state[0] - self.old_state[0])
-                / self.old_state[0]
+            signal_diff = (
+                abs(signal - old_signal) / old_signal
             )
-            reward_gain = snr_diff * 5.
+            reward_gain = signal_diff * 2.
 
             # If reward gain is higher than 1, use 1
             # We do this to prevent blowing up rewards near the edges
@@ -567,7 +579,7 @@ class SimulationEnv(object):
 
         # If reward is negative, increase gain
         if reward_float < 0.:
-            reward_gain *= 2.0
+            reward_gain *= 1.5
 
         # Define reward
         reward_float *= reward_gain
@@ -674,8 +686,10 @@ class SimulationEnv(object):
         # Update counter
         self.tick += 1
 
-        # Check action validity and perform action
+        # Check action validity and perform action TODO:
         action_np = action.detach().numpy()
+        self.recent_action = float(action_np)
+
         if self.action_space_type == "continuous":
             if (
                 (self.action_space.low <= action_np).all()
@@ -751,66 +765,69 @@ class SimulationEnv(object):
 
         # Set new T1, T2, fa, fa_initial
         if self.homogeneous_initialization:
-            # Set the T1s for this episode. Here, we randomly sample
-            # T1_1 from the uniform distribution and then calculate T1_2
-            # based on the desired optimum flip angle
-            self.optimal_fa_list = \
-                self.set_t1_from_distribution(self.optimal_fa_list)
-            # # Set initial fa (optimal fa +/- 10 [deg])
-            # self.fa = self.optimal_fa + random.random() * 30. - 15.
-            # if self.fa < min(self.fa_range): self.fa = min(self.fa_range)
-            # if self.fa > max(self.fa_range): self.fa = max(self.fa_range)
-            # self.fa = float(self.fa)
+
             # Set initial flip angle. Here, we randomly sample from the
             # uniformly distributed list we created earlier.
             self.fa = float(self.initial_fa_list.pop(
                 random.randint(0, len(self.initial_fa_list) - 1)
             ))
 
-            if self.metric == "snr":
-                # Set T2 for this episode. We randomly sample this
-                # from the previously definded uniform distribution.
-                self.T2 = float(self.T2_list.pop(
-                    random.randint(0, len(self.T2_list) - 1)
-                ))
-            elif self.metric == "cnr":
-                # Set T2s for this episode. We randomly sample these
-                # from the previously definded uniform distributions for both
-                # tissues.
-                self.T2_1 = float(self.T2_list_1.pop(
-                    random.randint(0, len(self.T2_list_1) - 1)
-                ))
-                self.T2_2 = float(self.T2_list_2.pop(
-                    random.randint(0, len(self.T2_list_2) - 1)
-                ))
+            # Set material params from distributions
+            if not self.lock_material_params:
+                # Set the T1s for this episode. Here, we randomly sample
+                # T1_1 from the uniform distribution and then calculate T1_2
+                # based on the desired optimum flip angle
+                self.optimal_fa_list = \
+                    self.set_t1_from_distribution(self.optimal_fa_list)
+
+                if self.metric == "snr":
+                    # Set T2 for this episode. We randomly sample this
+                    # from the previously definded uniform distribution.
+                    self.T2 = float(self.T2_list.pop(
+                        random.randint(0, len(self.T2_list) - 1)
+                    ))
+                elif self.metric == "cnr":
+                    # Set T2s for this episode. We randomly sample these
+                    # from the previously definded uniform distributions for
+                    # both tissues.
+                    self.T2_1 = float(self.T2_list_1.pop(
+                        random.randint(0, len(self.T2_list_1) - 1)
+                    ))
+                    self.T2_2 = float(self.T2_list_2.pop(
+                        random.randint(0, len(self.T2_list_2) - 1)
+                    ))
 
         else:
             # Randomly set fa
             self.fa = random.uniform(
                 self.fa_range[0], self.fa_range[1]
             )
-            # Randomly set T1/T2 (either for single tissue of two tissues)
-            if self.metric == "snr":
-                self.T1 = random.uniform(
-                    self.T1_range[0], self.T1_range[1])
-                self.T2 = random.uniform(
-                    self.T2_range[0], min(self.T2_range[1], self.T1))
-            elif self.metric == "cnr":
-                self.T1_1 = random.uniform(
-                    self.T1_range[0], self.T1_range[1])
-                self.T1_2 = random.uniform(
-                    self.T1_range[0], self.T1_range[1])
-                self.T2_1 = random.uniform(
-                    self.T2_range[0], min(self.T2_range[1], self.T1_1))
-                self.T2_2 = random.uniform(
-                    self.T2_range[0], min(self.T2_range[1], self.T1_2))
+
+            # Randomly set material parameters
+            if not self.lock_material_params:
+
+                # Randomly set T1/T2 (either for single tissue of two tissues)
+                if self.metric == "snr":
+                    self.T1 = random.uniform(
+                        self.T1_range[0], self.T1_range[1])
+                    self.T2 = random.uniform(
+                        self.T2_range[0], min(self.T2_range[1], self.T1))
+                elif self.metric == "cnr":
+                    self.T1_1 = random.uniform(
+                        self.T1_range[0], self.T1_range[1])
+                    self.T1_2 = random.uniform(
+                        self.T1_range[0], self.T1_range[1])
+                    self.T2_1 = random.uniform(
+                        self.T2_range[0], min(self.T2_range[1], self.T1_1))
+                    self.T2_2 = random.uniform(
+                        self.T2_range[0], min(self.T2_range[1], self.T1_2))
 
         # If lock_material_params, we simply don't vary T1/T2s
         if self.lock_material_params:
             if self.metric == "snr":
                 # Set to approximate phantom for testing purposes
                 self.T1 = 0.600  # float(np.mean(self.T1_range))
-                self.T2 = 0.300  # float(np.mean(self.T2_range))
+                self.T2 = 0.100  # float(np.mean(self.T2_range))
             elif self.metric == "cnr":
                 # Set to WM/GM for testing purposes
                 self.T1_1 = 0.700   # float(np.percentile(self.T1_range, 25))

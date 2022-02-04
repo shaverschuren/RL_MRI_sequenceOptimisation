@@ -763,8 +763,9 @@ class RDPG(object):
 
         # Define datafields
         self.logs_fields = [
-            "img", "fa", "fa_norm", self.metric, "error", "done", "epsilon",
-            "critic_loss", "policy_loss", "n_scans", "reward", "performance"
+            "img", "fa", "fa_norm", self.metric, f"{self.metric}_norm",
+            "error", "done", "epsilon", "critic_loss", "policy_loss",
+            "n_scans", "reward", "performance"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -818,6 +819,12 @@ class RDPG(object):
                 value=float(getattr(self.env, self.metric)),
                 step=-1
             )
+            self.logger.log_scalar(
+                field=f"{self.metric}_norm",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(getattr(self.env, f"{self.metric}_norm")),
+                step=-1
+            )
 
             # Log accuracy (if applicable)
             if isinstance(self.env, environments.SimulationEnv):
@@ -847,9 +854,9 @@ class RDPG(object):
         print(
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
             f"Action: {float(action[0]):5.2f} - "
-            f"FA: {float(next_state[1]) * 90.:5.1f} - "
+            f"FA: {float(self.env.fa):5.1f} - "
             f"{self.metric.upper()}: "
-            f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
+            f"{float(getattr(self.env, self.metric)):5.2f} -"
             " Reward: "
             "" + reward_color + f"{float(reward):6.3f}" + end_str
         )
@@ -900,6 +907,12 @@ class RDPG(object):
                 step=self.tick
             )
             self.logger.log_scalar(
+                field=f"{self.metric}_norm",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(getattr(self.env, f"{self.metric}_norm")),
+                step=self.tick
+            )
+            self.logger.log_scalar(
                 field="reward",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
                 value=float(reward),
@@ -945,8 +958,8 @@ class RDPG(object):
         # Find "best" fa/metric in recent memory
         best_idx = np.argmax(recent_metrics)
         best_metric = (
-            float(recent_metrics[best_idx])
-            * self.env.metric_calibration
+            (float(recent_metrics[best_idx]) * self.env.metric_calibration)
+            + self.env.metric_calibration
         )
         best_fa = float(recent_fa[best_idx]) * 90.
 
