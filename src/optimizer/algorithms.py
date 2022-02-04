@@ -791,7 +791,10 @@ class RDPG(object):
             ):
                 self.logger.log_image(
                     field="img",
-                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                    tag=(
+                        f"{self.logs_tag}_{run_type}_"
+                        f"episode_{self.episode + 1}"
+                    ),
                     image=np.array(self.env.recent_img) / 5.,
                     step=-1
                 )
@@ -820,13 +823,16 @@ class RDPG(object):
             if isinstance(self.env, environments.SimulationEnv):
                 # Extract optimal metric
                 optimal_metric = getattr(self.env, f"optimal_{self.metric}")
-                # Calculate performance (how much of optimal SNR/CNR do we have)
+                # Calculate performance (how much of optimal SNR/CNR is there)
                 performance = getattr(self.env, self.metric) / optimal_metric
 
                 # Log the error
                 self.logger.log_scalar(
                     field="performance",
-                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                    tag=(
+                        f"{self.logs_tag}_{run_type}_"
+                        f"episode_{self.episode + 1}"
+                    ),
                     value=performance,
                     step=-1
                 )
@@ -845,7 +851,7 @@ class RDPG(object):
             f"{self.metric.upper()}: "
             f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
             " Reward: "
-            "" + reward_color + f"{float(reward):6.2f}" + end_str
+            "" + reward_color + f"{float(reward):5.3f}" + end_str
         )
 
         # Log this step to tensorboard
