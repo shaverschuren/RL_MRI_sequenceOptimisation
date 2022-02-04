@@ -774,54 +774,62 @@ class RDPG(object):
     def log_initiation(self):
         """Log episode initialisation to tensorboard"""
 
+        # Determine run type
         run_type = "train" if self.train else "test"
 
-        # Image
+        # If in test mode or 1/100 of a train run, log this step
         if (
-            isinstance(self.env, environments.ScannerEnv)
-            and hasattr(self.env, 'recent_img')
+            run_type == "test"
+            or self.episode in list(
+                range(0, self.n_episodes, self.n_episodes // 100)
+            )
         ):
-            self.logger.log_image(
-                field="img",
-                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                image=np.array(self.env.recent_img) / 5.,
-                step=-1
-            )
+            # Image
+            if (
+                isinstance(self.env, environments.ScannerEnv)
+                and hasattr(self.env, 'recent_img')
+            ):
+                self.logger.log_image(
+                    field="img",
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                    image=np.array(self.env.recent_img) / 5.,
+                    step=-1
+                )
 
-        # Scalars (first state if applicable -> state0)
-        self.logger.log_scalar(
-            field="fa",
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(self.env.fa),
-            step=-1
-        )
-        self.logger.log_scalar(
-            field="fa_norm",
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(self.env.fa_norm),
-            step=-1
-        )
-        self.logger.log_scalar(
-            field=self.metric,
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(getattr(self.env, self.metric)),
-            step=-1
-        )
-
-        # Log accuracy (if applicable)
-        if isinstance(self.env, environments.SimulationEnv):
-            # Extract optimal metric
-            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
-            # Calculate performance (how much of optimal SNR/CNR do we have)
-            performance = getattr(self.env, self.metric) / optimal_metric
-
-            # Log the error
+            # Scalars (first state if applicable -> state0)
             self.logger.log_scalar(
-                field="performance",
+                field="fa",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=performance,
+                value=float(self.env.fa),
                 step=-1
             )
+            self.logger.log_scalar(
+                field="fa_norm",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(self.env.fa_norm),
+                step=-1
+            )
+            self.logger.log_scalar(
+                field=self.metric,
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(getattr(self.env, self.metric)),
+                step=-1
+            )
+
+            # Log accuracy (if applicable)
+            if isinstance(self.env, environments.SimulationEnv):
+                # Extract optimal metric
+                optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+                # Calculate performance (how much of optimal SNR/CNR do we have)
+                performance = getattr(self.env, self.metric) / optimal_metric
+
+                # Log the error
+                self.logger.log_scalar(
+                    field="performance",
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                    value=performance,
+                    step=-1
+                )
 
     def log_step(self, state, action, reward, next_state, done):
         """Log a single step"""
@@ -841,66 +849,80 @@ class RDPG(object):
         )
 
         # Log this step to tensorboard
+        # (but only for 100 training episodes because of speed issues)
         run_type = "train" if self.train else "test"
 
-        # Image
         if (
-            isinstance(self.env, environments.ScannerEnv)
-            and hasattr(self.env, 'recent_img')
-        ):
-            self.logger.log_image(
-                field="img",
-                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                image=np.array(self.env.recent_img) / 5.,
-                step=self.tick + 1
+            run_type == "test"
+            or self.episode in list(
+                range(0, self.n_episodes, self.n_episodes // 100)
             )
+        ):
 
-        # Scalars (current state -> state1)
-        self.logger.log_scalar(
-            field="fa",
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(self.env.fa),
-            step=self.tick
-        )
-        self.logger.log_scalar(
-            field="fa_norm",
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(self.env.fa_norm),
-            step=self.tick
-        )
-        self.logger.log_scalar(
-            field=self.metric,
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(getattr(self.env, self.metric)),
-            step=self.tick
-        )
-        self.logger.log_scalar(
-            field="reward",
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(reward),
-            step=self.tick
-        )
-        self.logger.log_scalar(
-            field="done",
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(self.env.done),
-            step=self.tick
-        )
+            # Image
+            if (
+                isinstance(self.env, environments.ScannerEnv)
+                and hasattr(self.env, 'recent_img')
+            ):
+                self.logger.log_image(
+                    field="img",
+                    tag=(
+                        f"{self.logs_tag}_{run_type}_"
+                        f"episode_{self.episode + 1}"
+                    ),
+                    image=np.array(self.env.recent_img) / 5.,
+                    step=self.tick + 1
+                )
 
-        # Log accuracy (if applicable)
-        if isinstance(self.env, environments.SimulationEnv):
-            # Extract optimal metric
-            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
-            # Calculate performance (how much of optimal SNR/CNR do we have)
-            performance = getattr(self.env, self.metric) / optimal_metric
-
-            # Log the error
+            # Scalars (current state -> state1)
             self.logger.log_scalar(
-                field="performance",
+                field="fa",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=performance,
+                value=float(self.env.fa),
                 step=self.tick
             )
+            self.logger.log_scalar(
+                field="fa_norm",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(self.env.fa_norm),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field=self.metric,
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(getattr(self.env, self.metric)),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field="reward",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(reward),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field="done",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(self.env.done),
+                step=self.tick
+            )
+
+            # Log accuracy (if applicable)
+            if isinstance(self.env, environments.SimulationEnv):
+                # Extract optimal metric
+                optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+                # Calculate performance (how much of optimal SNR/CNR is there)
+                performance = getattr(self.env, self.metric) / optimal_metric
+
+                # Log the error
+                self.logger.log_scalar(
+                    field="performance",
+                    tag=(
+                        f"{self.logs_tag}_{run_type}_"
+                        f"episode_{self.episode + 1}"
+                    ),
+                    value=performance,
+                    step=self.tick
+                )
 
     def log_episode(self):
         """Log a single episode"""
@@ -1136,6 +1158,8 @@ class RDPG(object):
                 if (
                     done and (
                         done_threshold or not self.train
+                    ) or (
+                        not self.model_done and done
                     )
                 ):
                     print("Stopping criterion met!")
