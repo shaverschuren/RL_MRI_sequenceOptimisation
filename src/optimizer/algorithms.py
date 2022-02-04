@@ -851,7 +851,7 @@ class RDPG(object):
             f"{self.metric.upper()}: "
             f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
             " Reward: "
-            "" + reward_color + f"{float(reward):5.3f}" + end_str
+            "" + reward_color + f"{float(reward):6.3f}" + end_str
         )
 
         # Log this step to tensorboard
@@ -1018,8 +1018,8 @@ class RDPG(object):
             if best_metric == 0.:
                 relative_error = 1.
             else:
-                relative_error = abs(
-                    optimal_metric - best_metric
+                relative_error = max(
+                    0., optimal_metric - best_metric
                 ) / best_metric
 
             # Log the error
