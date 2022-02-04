@@ -1133,12 +1133,11 @@ class RDPG(object):
                     float(self.tick + 1) / float(self.n_ticks)
                     > 1. - 3 * float(self.episode + 1) / float(self.n_episodes)
                 )
-                # if (
-                #     done and (
-                #         done_threshold or not self.train
-                #     )
-                # ):
-                if done:
+                if (
+                    done and (
+                        done_threshold or not self.train
+                    )
+                ):
                     print("Stopping criterion met!")
                     break
 
