@@ -437,10 +437,10 @@ class SimulationEnv(object):
         # Perform normalisation for all parameters
         # fa
         if hasattr(self, "fa"):
-            self.fa_norm = float(
-                (self.fa - 0.)
-                / (90. - 0.)
-            )
+            self.fa_norm = 0.  # TODO: float(
+            #     (self.fa - 0.)
+            #     / (90. - 0.)
+            # )
         # snr / cnr
         if hasattr(self, self.metric):
             setattr(
@@ -559,7 +559,7 @@ class SimulationEnv(object):
                 abs(self.state[0] - self.old_state[0])
                 / self.old_state[0]
             )
-            reward_gain = snr_diff
+            reward_gain = snr_diff * 5.
 
             # If reward gain is higher than 1, use 1
             # We do this to prevent blowing up rewards near the edges
@@ -583,42 +583,43 @@ class SimulationEnv(object):
         #     reward_float -= 0.5
 
         # If the "done" criterion is passed, tweak the reward based on
-        # how close we are to the theretical optimum
-        if self.done:
-            # Check whether the theoretical optimum is available
-            if hasattr(self, f"optimal_{self.metric}"):
-                # Extract optimal metric and define error
-                optimal_metric = getattr(self, f"optimal_{self.metric}")
-                # Extract optimum reached during trajectory
-                metric_history = [float(state[0]) for state in self.history]
-                reached_optimum = max(metric_history) * self.metric_calibration
-                # Define error between theoretical and reached optimum
-                self.error = max(0., float(
-                    (optimal_metric - reached_optimum)
-                    / optimal_metric)
-                )
-                # Tweak reward based on error
-                if self.error > 0.:
-                    # if self.n_episodes is not None:
-                    #     reward_delta = min(
-                    #         1.,
-                    #         ((
-                    #             (
-                    #                 0.24 * (
-                    #                     float(self.episode)
-                    #                     / float(self.n_episodes)) ** 2
-                    #                 + 0.01
-                    #             )
-                    #             * min(1., self.error)) ** -1) * 2 - 2.
-                    #     )
-                    # else:
-                    reward_delta = min(
-                        1., 1. / (30. * (min(1., self.error) + 0.02)) - 1.
-                    )
-                else:
-                    reward_delta = 1.
+        # how close we are to the theretical optimum TODO:
+        # if self.done:
+        #     # Check whether the theoretical optimum is available
+        #     if hasattr(self, f"optimal_{self.metric}"):
+        #         # Extract optimal metric and define error
+        #         optimal_metric = getattr(self, f"optimal_{self.metric}")
+        #         # Extract optimum reached during trajectory
+        #         metric_history = [float(state[0]) for state in self.history]
+        #         reached_optimum = max(metric_history) * self.metric_calibration
+        #         max_idx = metric_history.index(max(metric_history))
+        #         # Define error between theoretical and reached optimum
+        #         self.error = max(0., float(
+        #             (optimal_metric - reached_optimum)
+        #             / optimal_metric)
+        #         )
+        #         # Tweak reward based on error
+        #         if self.error > 0.:
+        #             # if self.n_episodes is not None:
+        #             #     reward_delta = min(
+        #             #         1.,
+        #             #         ((
+        #             #             (
+        #             #                 0.24 * (
+        #             #                     float(self.episode)
+        #             #                     / float(self.n_episodes)) ** 2
+        #             #                 + 0.01
+        #             #             )
+        #             #             * min(1., self.error)) ** -1) * 2 - 2.
+        #             #     )
+        #             # else:
+        #             reward_delta = min(
+        #                 1., 1. / (30. * (min(1., self.error) + 0.02)) - 1.
+        #             ) * (20 / (max_idx + 1))  # Scale with "speed"
+        #         else:
+        #             reward_delta = 1.
 
-                reward_float += reward_delta
+        #         reward_float += reward_delta
 
         # Clip reward between -1, 1
         if reward_float > 1.: reward_float = 1.
@@ -641,7 +642,7 @@ class SimulationEnv(object):
             # Extract history of this episode
             metric_history = [float(state[0]) for state in self.history]
             # Define patience
-            patience = 5 if len(metric_history) > 4 else len(metric_history)
+            patience = 10 if len(metric_history) > 9 else len(metric_history)
 
             # Determine whether snr/cnr has improved in our patience period
             done = 0
