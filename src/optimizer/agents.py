@@ -680,10 +680,10 @@ class RDPGAgent(object):
         # Extract initial hidden states
         # We manually keep track of hidden states because we'll
         # need to do several passes through the same model per timestep
-        hidden_critic_0 = (self.critic.hx, self.critic.cx)
-        hidden_actor_0 = (self.actor.hx, self.actor.cx)
-        hidden_critic_target_0 = (self.critic_target.hx, self.critic_target.cx)
-        hidden_actor_target_0 = (self.actor_target.hx, self.actor_target.cx)
+        hidden_critic = [(self.critic.hx, self.critic.cx)]
+        hidden_actor = [(self.actor.hx, self.actor.cx)]
+        hidden_critic_target = [(self.critic_target.hx, self.critic_target.cx)]
+        hidden_actor_target = [(self.actor_target.hx, self.actor_target.cx)]
 
         # Set total loss counts
         critic_loss_total = None
@@ -717,11 +717,11 @@ class RDPGAgent(object):
             with torch.no_grad():
                 # Compute next_Q and update target hidden states
                 next_actions, hidden_actor_target_1 = self.actor_target(
-                    next_states, hidden_actor_target_0
+                    next_states, hidden_actor_target[t]
                 )
                 next_Q, hidden_critic_target_1 = self.critic_target(
                     torch.cat([next_states, next_actions], 1),
-                    hidden_critic_target_0
+                    hidden_critic_target[t]
                 )
                 # Compute Q_target (R + discount * Qnext)
                 Q_target = rewards + self.gamma * next_Q
@@ -730,9 +730,9 @@ class RDPGAgent(object):
             # and update hidden states
             Q, hidden_critic_1 = self.critic(
                 torch.cat([states, actions], 1),
-                hidden_critic_0
+                hidden_critic[t]
             )
-            policy, hidden_actor_1 = self.actor(states, hidden_actor_0)
+            policy, hidden_actor_1 = self.actor(states, hidden_actor[t])
 
             # Compute critic loss
             critic_loss = self.critic_criterion(Q, Q_target)
@@ -740,7 +740,7 @@ class RDPGAgent(object):
             # Compute actor loss
             policy_loss = -self.critic(
                 torch.cat([states, policy], 1),
-                hidden_critic_0
+                hidden_critic[t]
             )[0].mean()
 
             # Update total losses
@@ -752,10 +752,10 @@ class RDPGAgent(object):
                 policy_loss_total = policy_loss
 
             # Update hidden states
-            hidden_critic_0 = hidden_critic_1
-            hidden_actor_0 = hidden_actor_1
-            hidden_critic_target_0 = hidden_critic_target_1
-            hidden_actor_target_0 = hidden_actor_target_1
+            hidden_critic.append(hidden_critic_1)
+            hidden_actor.append(hidden_actor_1)
+            hidden_critic_target.append(hidden_critic_target_1)
+            hidden_actor_target.append(hidden_actor_target_1)
 
         # Update networks
         if policy_loss_total is not None and critic_loss_total is not None:
