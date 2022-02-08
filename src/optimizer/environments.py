@@ -438,10 +438,10 @@ class SimulationEnv(object):
         # fa
         if hasattr(self, "fa"):
             self.fa_norm = float(  # TODO:
-                getattr(self, "recent_action")
-                if hasattr(self, "recent_action") else 0.
-                # (self.fa - 0.)
-                # / (90. - 0.)
+                # getattr(self, "recent_action")
+                # if hasattr(self, "recent_action") else 0.
+                (self.fa - 0.)
+                / (90. - 0.)
             )
         # snr / cnr
         if hasattr(self, self.metric):
@@ -489,8 +489,27 @@ class SimulationEnv(object):
                 fa=self.optimal_fa, pass_to_self=False
             )
 
+    def calculate_steady_state(self, fa, tr, T1, T2):
+        """Prototyping function.
+        Calculates steady state instead of simulation.
+        """
+
+        # Determine flip angle in rads
+        alpha = fa * np.pi / 180.
+
+        # calculate signal
+        F0 = np.array([
+            np.exp((-tr / 2.) / T2)
+            * (np.sin(alpha) * (1. - np.exp(-tr / T1)))
+            / (1. - np.cos(alpha) * np.exp(-tr / T1))
+        ])
+
+        return F0
+
     def run_simulation(self, fa=None, pass_to_self=True):
         """Run a simulation for scan parameters stored in self"""
+
+        # TODO: Substituted simulations for steady state equation for now
 
         # Select flip angle
         if not fa:
@@ -500,11 +519,12 @@ class SimulationEnv(object):
 
         # Determine SNR (if mode="snr")
         if self.metric == "snr":
-            # Run simulations
-            F0, _, _ = epg.epg_as_numpy(
-                self.Nfa, fa, self.tr,
-                self.T1, self.T2
-            )
+            # # Run simulations
+            # F0, _, _ = epg.epg_as_numpy(
+            #     self.Nfa, fa, self.tr,
+            #     self.T1, self.T2
+            # )
+            F0 = self.calculate_steady_state(fa, self.tr, self.T1, self.T2)
 
             # Determine snr
             snr = float(
@@ -519,13 +539,19 @@ class SimulationEnv(object):
         # Determine CNR (if mode="cnr")
         elif self.metric == "cnr":
             # Run simulations
-            F0_1, _, _ = epg.epg_as_numpy(
-                self.Nfa, fa, self.tr,
-                self.T1_1, self.T2_1
+            # F0_1, _, _ = epg.epg_as_numpy(
+            #     self.Nfa, fa, self.tr,
+            #     self.T1_1, self.T2_1
+            # )
+            # F0_2, _, _ = epg.epg_as_numpy(
+            #     self.Nfa, fa, self.tr,
+            #     self.T1_2, self.T2_2
+            # )
+            F0_1 = self.calculate_steady_state(
+                fa, self.tr, self.T1_1, self.T2_1
             )
-            F0_2, _, _ = epg.epg_as_numpy(
-                self.Nfa, fa, self.tr,
-                self.T1_2, self.T2_2
+            F0_2 = self.calculate_steady_state(
+                fa, self.tr, self.T1_2, self.T2_2
             )
 
             # Determine CNR
@@ -587,51 +613,51 @@ class SimulationEnv(object):
         # Scale reward with step_i (faster improvement yields bigger rewards)
         # Only scale the positives, though.
         if reward_float > 0.:
-            reward_float *= np.exp(-self.tick / 20.)
+            reward_float *= np.exp(-self.tick / 30.)
 
         # # If the flip angle is changed less than 0.1 deg, penalize the model
         # # for waiting too long without stopping
-        # if abs(self.state[1] - self.old_state[1]) < (0.1 / 90.):
-        #     reward_float -= 0.5
+        if abs(self.state[1] - self.old_state[1]) < (0.1 / 90.):
+            reward_float -= 0.5
 
         # If the "done" criterion is passed, tweak the reward based on
         # how close we are to the theretical optimum TODO:
-        # if self.done:
-        #     # Check whether the theoretical optimum is available
-        #     if hasattr(self, f"optimal_{self.metric}"):
-        #         # Extract optimal metric and define error
-        #         optimal_metric = getattr(self, f"optimal_{self.metric}")
-        #         # Extract optimum reached during trajectory
-        #         metric_history = [float(state[0]) for state in self.history]
-        #         reached_optimum = max(metric_history) * self.metric_calibration
-        #         max_idx = metric_history.index(max(metric_history))
-        #         # Define error between theoretical and reached optimum
-        #         self.error = max(0., float(
-        #             (optimal_metric - reached_optimum)
-        #             / optimal_metric)
-        #         )
-        #         # Tweak reward based on error
-        #         if self.error > 0.:
-        #             # if self.n_episodes is not None:
-        #             #     reward_delta = min(
-        #             #         1.,
-        #             #         ((
-        #             #             (
-        #             #                 0.24 * (
-        #             #                     float(self.episode)
-        #             #                     / float(self.n_episodes)) ** 2
-        #             #                 + 0.01
-        #             #             )
-        #             #             * min(1., self.error)) ** -1) * 2 - 2.
-        #             #     )
-        #             # else:
-        #             reward_delta = min(
-        #                 1., 1. / (30. * (min(1., self.error) + 0.02)) - 1.
-        #             ) * (20 / (max_idx + 1))  # Scale with "speed"
-        #         else:
-        #             reward_delta = 1.
+        if self.done:
+            # Check whether the theoretical optimum is available
+            if hasattr(self, f"optimal_{self.metric}"):
+                # Extract optimal metric and define error
+                optimal_metric = getattr(self, f"optimal_{self.metric}")
+                # Extract optimum reached during trajectory
+                metric_history = [float(state[0]) for state in self.history]
+                reached_optimum = max(metric_history) * self.metric_calibration
+                max_idx = metric_history.index(max(metric_history))
+                # Define error between theoretical and reached optimum
+                self.error = max(0., float(
+                    (optimal_metric - reached_optimum)
+                    / optimal_metric)
+                )
+                # Tweak reward based on error
+                if self.error > 0.:
+                    # if self.n_episodes is not None:
+                    #     reward_delta = min(
+                    #         1.,
+                    #         ((
+                    #             (
+                    #                 0.24 * (
+                    #                     float(self.episode)
+                    #                     / float(self.n_episodes)) ** 2
+                    #                 + 0.01
+                    #             )
+                    #             * min(1., self.error)) ** -1) * 2 - 2.
+                    #     )
+                    # else:
+                    reward_delta = min(
+                        1., 1. / (30. * (min(1., self.error) + 0.02)) - 1.
+                    ) * (20 / (max_idx + 1))  # Scale with "speed"
+                else:
+                    reward_delta = 1.
 
-        #         reward_float += reward_delta
+                reward_float += reward_delta
 
         # Clip reward between -1, 1
         if reward_float > 1.: reward_float = 1.

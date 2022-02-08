@@ -182,24 +182,25 @@ class RecurrentModel_LSTM(nn.Module):
         architecture_list.append(
             (
                 "lstm",
-                nn.LSTMCell(
+                nn.LSTM(
                     input_size=self.hidden_size,
-                    hidden_size=self.hidden_size
+                    hidden_size=self.hidden_size,
+                    num_layers=2
                 )
             )
         )
-        architecture_list.append(
-            (
-                "fc2",
-                nn.Linear(self.hidden_size, 64)
-            )
-        )
-        architecture_list.append(
-            (
-                "relu2",
-                nn.ReLU()
-            )
-        )
+        # architecture_list.append(
+        #     (
+        #         "fc2",
+        #         nn.Linear(self.hidden_size, 64)
+        #     )
+        # )
+        # architecture_list.append(
+        #     (
+        #         "relu2",
+        #         nn.ReLU()
+        #     )
+        # )
         # architecture_list.append(
         #     (
         #         "fc3",
@@ -215,7 +216,7 @@ class RecurrentModel_LSTM(nn.Module):
         architecture_list.append(
             (
                 "output",
-                nn.Linear(64, self.output_size)
+                nn.Linear(self.hidden_size, self.output_size)
             )
         )
         if self.output_activation.lower() == "tanh":
@@ -330,13 +331,17 @@ class RecurrentModel_LSTM(nn.Module):
         x = self.stack[:self.lstm_idx](x)
         # Pass through the LSTM module and extract x, hidden states
         if hidden is None:
-            hx, cx = self.stack[self.lstm_idx](x, (self.hx, self.cx))
+            x, (hx, cx) = self.stack[self.lstm_idx](
+                torch.unsqueeze(x, 0), (self.hx, self.cx)
+            )
             self.hx = hx
             self.cx = cx
         else:
-            hx, cx = self.stack[self.lstm_idx](x, hidden)
+            x, (hx, cx) = self.stack[self.lstm_idx](
+                torch.unsqueeze(x, 0), hidden
+            )
         # Pass through rest of the stack and extract output
-        x = hx
+        x = torch.squeeze(x, 0)
         x = self.stack[self.lstm_idx + 1:](x)
 
         return x, (hx, cx)
@@ -344,5 +349,5 @@ class RecurrentModel_LSTM(nn.Module):
     def reset_hidden_state(self, batch_size=1):
         """Reset hidden state of the lstm module"""
 
-        self.hx = Variable(torch.zeros(batch_size, self.hidden_size))
-        self.cx = Variable(torch.zeros(batch_size, self.hidden_size))
+        self.hx = Variable(torch.zeros(2, batch_size, self.hidden_size))
+        self.cx = Variable(torch.zeros(2, batch_size, self.hidden_size))

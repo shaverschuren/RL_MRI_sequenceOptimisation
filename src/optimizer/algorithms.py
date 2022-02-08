@@ -736,7 +736,7 @@ class RDPG(object):
         self.agent = agents.RDPGAgent(
             env.action_space,
             n_actions=2 if model_done else 1,
-            epsilon_decay=1. - (4. / float(self.n_episodes))
+            epsilon_decay=1. - (20. / float(self.n_episodes))  # TODO: 4
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
 

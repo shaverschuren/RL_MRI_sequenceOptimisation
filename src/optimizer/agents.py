@@ -582,7 +582,7 @@ class RDPGAgent(object):
         """
 
         # Define hidden size
-        hidden_size = 32
+        hidden_size = 64
 
         # Construct actor models (network + target network)
         self.actor = models.RecurrentModel_LSTM(
