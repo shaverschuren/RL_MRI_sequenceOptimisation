@@ -182,7 +182,7 @@ def init_environment(args: argparse.Namespace):
             action_space_type=action_space_type,
             model_done=not args.suppress_done,
             recurrent_model=recurrent_model,
-            lock_material_params=validation_mode,  # TODO: True
+            lock_material_params=True,  # validation_mode,  # TODO: True
             validation_mode=validation_mode
         )
     else:
