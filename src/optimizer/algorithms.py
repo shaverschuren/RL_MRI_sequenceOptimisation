@@ -959,7 +959,7 @@ class RDPG(object):
         best_idx = np.argmax(recent_metrics)
         best_metric = (
             (float(recent_metrics[best_idx]) * self.env.metric_calibration)
-            + self.env.metric_calibration
+            # + self.env.metric_calibration
         )
         best_fa = float(recent_fa[best_idx]) * 90.
 

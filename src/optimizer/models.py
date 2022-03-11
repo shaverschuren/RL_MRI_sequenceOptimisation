@@ -189,18 +189,18 @@ class RecurrentModel_LSTM(nn.Module):
                 )
             )
         )
-        # architecture_list.append(
-        #     (
-        #         "fc2",
-        #         nn.Linear(self.hidden_size, 64)
-        #     )
-        # )
-        # architecture_list.append(
-        #     (
-        #         "relu2",
-        #         nn.ReLU()
-        #     )
-        # )
+        architecture_list.append(
+            (
+                "fc2",
+                nn.Linear(self.hidden_size, 64)
+            )
+        )
+        architecture_list.append(
+            (
+                "relu2",
+                nn.ReLU()
+            )
+        )
         # architecture_list.append(
         #     (
         #         "fc3",
@@ -216,7 +216,7 @@ class RecurrentModel_LSTM(nn.Module):
         architecture_list.append(
             (
                 "output",
-                nn.Linear(self.hidden_size, self.output_size)
+                nn.Linear(64, self.output_size)
             )
         )
         if self.output_activation.lower() == "tanh":
