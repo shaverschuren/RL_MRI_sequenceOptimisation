@@ -690,7 +690,9 @@ class RDPG(object):
             env,
             log_dir: Union[str, os.PathLike],
             n_episodes: int = 1000,
+            n_ticks: int = 30,
             batch_size: int = 128,
+            model_done: bool = True,
             pretrained_path: Union[str, os.PathLike, None] = None,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
@@ -715,9 +717,12 @@ class RDPG(object):
 
         # Build attributes
         self.env = env
+        self.metric = self.env.metric
         self.log_dir = log_dir
         self.n_episodes = n_episodes
+        self.n_ticks = n_ticks
         self.batch_size = batch_size
+        self.model_done = model_done
         self.pretrained_path = pretrained_path
 
         # Setup device
@@ -730,7 +735,7 @@ class RDPG(object):
         # Setup agent
         self.agent = agents.RDPGAgent(
             env.action_space,
-            n_actions=1,
+            n_actions=2 if model_done else 1,
             epsilon_decay=1. - (4. / float(self.n_episodes))  # TODO: 4
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
@@ -758,8 +763,9 @@ class RDPG(object):
 
         # Define datafields
         self.logs_fields = [
-            "error", "done", "epsilon", "critic_loss", "policy_loss", "reward",
-            "x", "v", "duration"
+            "img", "fa", "fa_norm", self.metric, f"{self.metric}_norm",
+            "error", "done", "epsilon", "critic_loss", "policy_loss",
+            "n_scans", "reward", "performance"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -779,22 +785,81 @@ class RDPG(object):
                 range(0, self.n_episodes, self.n_episodes // 100)
             )
         ):
+            # Image
+            if (
+                isinstance(self.env, environments.ScannerEnv)
+                and hasattr(self.env, 'recent_img')
+            ):
+                self.logger.log_image(
+                    field="img",
+                    tag=(
+                        f"{self.logs_tag}_{run_type}_"
+                        f"episode_{self.episode + 1}"
+                    ),
+                    image=np.array(self.env.recent_img) / 5.,
+                    step=-1
+                )
 
+            # Scalars (first state if applicable -> state0)
             self.logger.log_scalar(
-                field="x",
+                field="fa",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=float(self.env.state[0]),
+                value=float(self.env.fa),
                 step=-1
             )
             self.logger.log_scalar(
-                field="v",
+                field="fa_norm",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=float(self.env.state[1]),
+                value=float(self.env.fa_norm),
                 step=-1
             )
+            self.logger.log_scalar(
+                field=self.metric,
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(getattr(self.env, self.metric)),
+                step=-1
+            )
+            self.logger.log_scalar(
+                field=f"{self.metric}_norm",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(getattr(self.env, f"{self.metric}_norm")),
+                step=-1
+            )
+
+            # Log accuracy (if applicable)
+            if isinstance(self.env, environments.SimulationEnv):
+                # Extract optimal metric
+                optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+                # Calculate performance (how much of optimal SNR/CNR is there)
+                performance = getattr(self.env, self.metric) / optimal_metric
+
+                # Log the error
+                self.logger.log_scalar(
+                    field="performance",
+                    tag=(
+                        f"{self.logs_tag}_{run_type}_"
+                        f"episode_{self.episode + 1}"
+                    ),
+                    value=performance,
+                    step=-1
+                )
 
     def log_step(self, state, action, reward, next_state, done):
         """Log a single step"""
+
+        # Print some info regarding this step
+        reward_color = "\033[92m" if reward > 0. else "\033[91m"
+        end_str = "\033[0m"
+
+        print(
+            f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
+            f"Action: {float(action[0]):5.2f} - "
+            f"FA: {float(self.env.fa):5.1f} - "
+            f"{self.metric.upper()}: "
+            f"{float(getattr(self.env, self.metric)):5.2f} -"
+            " Reward: "
+            "" + reward_color + f"{float(reward):6.3f}" + end_str
+        )
 
         # Log this step to tensorboard
         # (but only for 100 training episodes because of speed issues)
@@ -807,17 +872,44 @@ class RDPG(object):
             )
         ):
 
+            # Image
+            if (
+                isinstance(self.env, environments.ScannerEnv)
+                and hasattr(self.env, 'recent_img')
+            ):
+                self.logger.log_image(
+                    field="img",
+                    tag=(
+                        f"{self.logs_tag}_{run_type}_"
+                        f"episode_{self.episode + 1}"
+                    ),
+                    image=np.array(self.env.recent_img) / 5.,
+                    step=self.tick + 1
+                )
+
             # Scalars (current state -> state1)
             self.logger.log_scalar(
-                field="x",
+                field="fa",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=float(self.env.state[0]),
+                value=float(self.env.fa),
                 step=self.tick
             )
             self.logger.log_scalar(
-                field="v",
+                field="fa_norm",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=float(self.env.state[1]),
+                value=float(self.env.fa_norm),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field=self.metric,
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(getattr(self.env, self.metric)),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field=f"{self.metric}_norm",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(getattr(self.env, f"{self.metric}_norm")),
                 step=self.tick
             )
             self.logger.log_scalar(
@@ -829,12 +921,47 @@ class RDPG(object):
             self.logger.log_scalar(
                 field="done",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=float(done),
+                value=float(self.env.done),
                 step=self.tick
             )
 
+            # Log accuracy (if applicable)
+            if isinstance(self.env, environments.SimulationEnv):
+                # Extract optimal metric
+                optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+                # Calculate performance (how much of optimal SNR/CNR is there)
+                performance = getattr(self.env, self.metric) / optimal_metric
+
+                # Log the error
+                self.logger.log_scalar(
+                    field="performance",
+                    tag=(
+                        f"{self.logs_tag}_{run_type}_"
+                        f"episode_{self.episode + 1}"
+                    ),
+                    value=performance,
+                    step=self.tick
+                )
+
     def log_episode(self):
         """Log a single episode"""
+
+        # Extract recent memory
+        recent_memory = self.memory.get_recent_memory(6)
+        recent_states = [transition.state for transition in recent_memory]
+        recent_next_states = [
+            transition.next_state for transition in recent_memory
+        ]
+        recent_metrics = [float(state[0]) for state in recent_next_states]
+        recent_fa = [float(state[1]) for state in recent_next_states]
+
+        # Find "best" fa/metric in recent memory
+        best_idx = np.argmax(recent_metrics)
+        best_metric = (
+            float(recent_metrics[best_idx])
+            * self.env.metric_calibration
+        )
+        best_fa = float(recent_fa[best_idx]) * 90.
 
         # Find cumulative reward
         previous_trajectory = self.memory.memory[-1]
@@ -845,13 +972,25 @@ class RDPG(object):
 
         # Log scalars
         self.logger.log_scalar(
+            field="fa",
+            tag=f"{self.logs_tag}_train_episodes",
+            value=best_fa,
+            step=self.episode
+        )
+        self.logger.log_scalar(
+            field=self.metric,
+            tag=f"{self.logs_tag}_train_episodes",
+            value=best_metric,
+            step=self.episode
+        )
+        self.logger.log_scalar(
             field="epsilon",
             tag=f"{self.logs_tag}_train_episodes",
             value=self.agent.epsilon,
             step=self.episode
         )
         self.logger.log_scalar(
-            field="duration",
+            field="n_scans",
             tag=f"{self.logs_tag}_train_episodes",
             value=self.tick + 1,
             step=self.episode
@@ -883,17 +1022,77 @@ class RDPG(object):
                 step=self.episode
             )
 
+        # If theoretical optimum is known, log the error
+        if isinstance(self.env, environments.SimulationEnv):
+            # Find optimal fa and snr/cnr
+            optimal_fa = self.env.optimal_fa
+            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
+            # Calculate relative SNR/CNR error
+            if best_metric == 0.:
+                relative_error = 1.
+            else:
+                relative_error = max(
+                    0., optimal_metric - best_metric
+                ) / best_metric
+
+            # Log the error
+            self.logger.log_scalar(
+                field="error",
+                tag=f"{self.logs_tag}_train_episodes",
+                value=min(relative_error, 1.),
+                step=self.episode
+            )
+            # Print the error
+            print(
+                f"(Step {self.tick + 2 + (best_idx - len(recent_memory))}) "
+                "Error relative to actual optimum: "
+                f"{relative_error * 100.:.2f}%"
+            )
+
     def verbose_episode(self):
         """Prints some info about the current episode"""
 
         # Assemble print string
-        print_str = (
-            "\n========== "
-            f"Episode {self.episode + 1:3d}/"
-            f"{self.n_episodes if self.train else 20:3d}"
-            " ==========\n"
-            "\n-----------------------------------\n"
-        )
+        if isinstance(self.env, environments.SimulationEnv):
+            print_str = (
+                "\n========== "
+                f"Episode {self.episode + 1:3d}/"
+                f"{self.n_episodes if self.train else 20:3d}"
+                " ==========\n"
+                "\n-----------------------------------"
+                "\nRunning episode with "
+            )
+
+            if self.metric == "snr":
+                print_str += f"T1={self.env.T1:.4f}s & T2={self.env.T2:.4f}s"
+            elif self.metric == "cnr":
+                print_str += (
+                    f"T1a={self.env.T1_1:.4f}s; T2a={self.env.T2_1:.4f}s; "
+                    f"T1b={self.env.T1_2:.4f}s; T2b={self.env.T2_2:.4f}s"
+                )
+            else:
+                RuntimeError()
+
+            print_str += (
+                f"\nInitial FA:\t\t{self.env.fa:4.1f} [deg]"
+                f"\nOptimal FA:\t\t{self.env.optimal_fa:4.1f} [deg]"
+                f"\nOptimal {self.metric.upper()}:\t\t"
+                f"{getattr(self.env, f'optimal_{self.metric}'):4.2f} [-]"
+                "\n-----------------------------------"
+            )
+        elif isinstance(self.env, environments.ScannerEnv):
+            print_str = (
+                "\n========== "
+                f"Episode {self.episode + 1:3d}/"
+                f"{self.n_episodes if self.train else 10:3d}"
+                " ==========\n"
+                "\n-----------------------------------"
+                f"\nInitial FA:\t{self.env.fa:4.1f} [deg]"
+                "\n-----------------------------------"
+            )
+        else:
+            print(self.env.__class__)
+            raise RuntimeError()
 
         # Print the string
         print(print_str)
@@ -911,6 +1110,15 @@ class RDPG(object):
             " ====================\n\n"
         )
 
+        # Create training initial condition distributions
+        if train:
+            self.env.n_episodes = self.n_episodes
+        else:
+            self.env.n_episodes = 20
+
+        self.env.homogeneous_initialization = True
+        self.env.set_homogeneous_dists()
+
         # Episode loop
         for self.episode in range(self.n_episodes) if train else range(20):
 
@@ -924,45 +1132,29 @@ class RDPG(object):
             # Create episodic memory element (history) and
             # define initial action/reward
             states = torch.FloatTensor(
-                [[0.] * 2], device=self.device
+                [[0.] * self.env.n_states], device=self.device
             )
             actions = torch.FloatTensor(
-                [[0.] * 1], device=self.device)
+                [[0.] * self.env.n_actions], device=self.device)
             rewards = torch.FloatTensor([0.], device=self.device)
             next_states = torch.FloatTensor(
-                [[0.] * 2], device=self.device
+                [[0.] * self.env.n_states], device=self.device
             )
 
             # Print some info
             self.verbose_episode()
 
             # Loop over ticks/steps
-            self.tick = 0
-            done = False
-            while not done:
-
-                # Render environment
-                if not train: self.env.render()
+            for self.tick in range(self.n_ticks):
 
                 # Extract current state
                 state = self.env.state
-
-                # Throw out velocity info and convert to tensor
-                state[1] = 0.
-                state = torch.tensor(state, dtype=torch.float32)
 
                 # Choose action
                 action = self.agent.select_action(state, train)
 
                 # Simulate step
-                next_state, reward, done, info = self.env.step(np.array(action))
-
-                # Throw out velocity info and convert to tensors
-                next_state[1] = 0.
-
-                next_state = torch.tensor(next_state, dtype=torch.float32)
-                reward = torch.tensor([reward], dtype=torch.float32)
-                done = torch.tensor([done], dtype=torch.float32)
+                next_state, reward, done = self.env.step(action)
 
                 # Add action/reward for previous transition
                 # to the history
@@ -976,11 +1168,21 @@ class RDPG(object):
                 # Log step results
                 self.log_step(state, action, reward, next_state, done)
 
-                # Update tick counter
-                self.tick += 1
-
-            # Print some info
-            print(f"Episode ended after {self.tick + 1} steps")
+                # Check if done and actually stop only if
+                # we're far enough into the episode.
+                done_threshold = (
+                    float(self.tick + 1) / float(self.n_ticks)
+                    > 1. - 3 * float(self.episode + 1) / float(self.n_episodes)
+                )
+                if (
+                    done and (
+                        done_threshold or not self.train
+                    ) or (
+                        not self.model_done and done
+                    )
+                ):
+                    print("Stopping criterion met!")
+                    break
 
             # Update memory with previous episode (remove first step)
             self.memory.push(
@@ -1001,7 +1203,11 @@ class RDPG(object):
             self.agent.update_epsilon()
 
             # Backup model once in a while
-            self.agent.save(self.model_path)
+            if (
+                self.episode % (self.n_episodes // 100) == 0
+                or self.episode + 1 == self.n_episodes
+            ):
+                self.agent.save(self.model_path)
 
 
 class Validator(object):

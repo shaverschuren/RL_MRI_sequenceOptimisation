@@ -1,1 +1,1 @@
-"""Module implementing RL-based MRI sequence design optimizers"""
+"""Module made for testing model recurrence on well-documented environments"""
