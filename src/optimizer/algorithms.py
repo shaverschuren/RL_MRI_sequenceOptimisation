@@ -344,7 +344,6 @@ class DDPG(object):
             env,
             log_dir: Union[str, os.PathLike],
             n_episodes: int = 2000,
-            n_ticks: int = 30,
             batch_size: int = 64,
             pretrained_path: Union[str, os.PathLike, None] = None,
             device: Union[torch.device, None] = None):
@@ -368,10 +367,8 @@ class DDPG(object):
 
         # Build attributes
         self.env = env
-        self.metric = self.env.metric
         self.log_dir = log_dir
         self.n_episodes = n_episodes
-        self.n_ticks = n_ticks
         self.batch_size = batch_size
         self.pretrained_path = pretrained_path
 
@@ -384,7 +381,7 @@ class DDPG(object):
 
         # Setup agent
         self.agent = agents.DDPGAgent(
-            env.action_space, env.n_states, env.n_actions,
+            env.action_space, 2, 1,
             epsilon_decay=1. - (4. / float(self.n_episodes))
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
@@ -412,68 +409,112 @@ class DDPG(object):
 
         # Define datafields
         self.logs_fields = [
-            "img", "fa", "fa_norm", self.metric, "error", "done", "epsilon",
-            "critic_loss", "policy_loss"
+            "error", "done", "epsilon", "critic_loss", "policy_loss", "reward",
+            "x", "v", "duration"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
             self.logs_path, self.logs_fields
         )
 
+    def log_initiation(self):
+        """Log episode initialisation to tensorboard"""
+
+        # Determine run type
+        run_type = "train" if self.train else "test"
+
+        # If in test mode or 1/100 of a train run, log this step
+        if (
+            run_type == "test"
+            or self.episode in list(
+                range(0, self.n_episodes, self.n_episodes // 100)
+            )
+        ):
+
+            self.logger.log_scalar(
+                field="x",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(self.env.state[0]),
+                step=-1
+            )
+            self.logger.log_scalar(
+                field="v",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(self.env.state[1]),
+                step=-1
+            )
+
     def log_step(self, state, action, reward, next_state, done):
         """Log a single step"""
 
-        # Print some info regarding this step
-        reward_color = "\033[92m" if reward > 0. else "\033[91m"
-        end_str = "\033[0m"
-
-        print(
-            f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-            f"Action: {float(action):5.2f} - "
-            f"FA: {float(next_state[1]) * 90.:5.1f} - "
-            f"{self.metric.upper()}: "
-            f"{float(next_state[0]) * self.env.metric_calibration:5.2f} -"
-            " Reward: "
-            "" + reward_color + f"{float(reward):6.2f}" + end_str
-        )
-
         # Log this step to tensorboard
+        # (but only for 100 training episodes because of speed issues)
         run_type = "train" if self.train else "test"
 
         if (
-            isinstance(self.env, environments.ScannerEnv)
-            and hasattr(self.env, 'recent_img')
+            run_type == "test"
+            or self.episode in list(
+                range(0, self.n_episodes, self.n_episodes // 100)
+            )
         ):
-            self.logger.log_image(
-                field="img",
+
+            # Scalars (current state -> state1)
+            self.logger.log_scalar(
+                field="x",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                image=np.array(self.env.recent_img),
+                value=float(self.env.state[0]),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field="v",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(self.env.state[1]),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field="reward",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(reward),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field="done",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(done),
                 step=self.tick
             )
 
+    def log_episode(self):
+        """Log a single episode"""
+
+        # Find cumulative reward
+        previous_trajectory = self.memory.memory[-1]
+        if type(previous_trajectory) is not list:
+            previous_trajectory = [previous_trajectory]
+
+        rewards = [
+            float(transition.reward) for transition in previous_trajectory
+        ]
+        cumulative_reward = sum(rewards)
+
+        # Log scalars
         self.logger.log_scalar(
-            field="fa",
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(self.env.fa),
-            step=self.tick
+            field="epsilon",
+            tag=f"{self.logs_tag}_train_episodes",
+            value=self.agent.epsilon,
+            step=self.episode
         )
         self.logger.log_scalar(
-            field="fa_norm",
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(self.env.fa_norm),
-            step=self.tick
+            field="duration",
+            tag=f"{self.logs_tag}_train_episodes",
+            value=self.tick + 1,
+            step=self.episode
         )
         self.logger.log_scalar(
-            field=self.metric,
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(getattr(self.env, self.metric)),
-            step=self.tick
-        )
-        self.logger.log_scalar(
-            field="done",
-            tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            value=float(self.env.done),
-            step=self.tick
+            field="reward",
+            tag=f"{self.logs_tag}_train_episodes",
+            value=cumulative_reward,
+            step=self.episode
         )
 
         # Log losses (if applicable)
@@ -482,79 +523,17 @@ class DDPG(object):
             and hasattr(self, "policy_loss")
             and hasattr(self, "critic_loss")
         ):
-            # Create or update training tick
-            if not hasattr(self, "train_tick"):
-                self.train_tick = 0
-            else:
-                self.train_tick += 1
             # Log losses
             self.logger.log_scalar(
                 field="policy_loss",
-                tag=f"{self.logs_tag}_train_losses",
+                tag=f"{self.logs_tag}_train_episodes",
                 value=self.policy_loss,
-                step=self.train_tick
+                step=self.episode
             )
             self.logger.log_scalar(
                 field="critic_loss",
-                tag=f"{self.logs_tag}_train_losses",
-                value=self.critic_loss,
-                step=self.train_tick
-            )
-
-    def log_episode(self):
-        """Log a single episode"""
-
-        # Extract recent memory
-        recent_memory = self.memory.get_recent_memory(5)
-        recent_states = [transition.next_state for transition in recent_memory]
-        recent_metrics = [float(state[0]) for state in recent_states]
-        recent_fa = [float(state[1]) for state in recent_states]
-
-        # Find "best" fa/metric in recent memory
-        best_idx = np.argmax(recent_metrics)
-        best_metric = (
-            float(recent_metrics[best_idx])
-            * self.env.metric_calibration
-        )
-        best_fa = float(recent_fa[best_idx]) * 90.
-
-        # Log scalars
-        self.logger.log_scalar(
-            field="fa",
-            tag=f"{self.logs_tag}_train_episodes",
-            value=best_fa,
-            step=self.episode
-        )
-        self.logger.log_scalar(
-            field=self.metric,
-            tag=f"{self.logs_tag}_train_episodes",
-            value=best_metric,
-            step=self.episode
-        )
-        self.logger.log_scalar(
-            field="epsilon",
-            tag=f"{self.logs_tag}_train_episodes",
-            value=self.agent.epsilon,
-            step=self.episode
-        )
-
-        # If theoretical optimum is known, log the error
-        if isinstance(self.env, environments.SimulationEnv):
-            # Find optimal fa and snr/cnr
-            optimal_fa = self.env.optimal_fa
-            optimal_metric = getattr(self.env, f"optimal_{self.metric}")
-            # Calculate relative SNR/CNR error
-            if best_metric == 0.:
-                relative_error = 1.
-            else:
-                relative_error = abs(
-                    optimal_metric - best_metric
-                ) / best_metric
-
-            self.logger.log_scalar(
-                field="error",
                 tag=f"{self.logs_tag}_train_episodes",
-                value=min(relative_error, 1.),
+                value=self.critic_loss,
                 step=self.episode
             )
 
@@ -562,46 +541,13 @@ class DDPG(object):
         """Prints some info about the current episode"""
 
         # Assemble print string
-        if isinstance(self.env, environments.SimulationEnv):
-            print_str = (
-                "\n========== "
-                f"Episode {self.episode + 1:3d}/"
-                f"{self.n_episodes if self.train else 10:3d}"
-                " ==========\n"
-                "\n-----------------------------------"
-                "\nRunning episode with "
-            )
-
-            if self.metric == "snr":
-                print_str += f"T1={self.env.T1:.4f}s & T2={self.env.T2:.4f}s"
-            elif self.metric == "cnr":
-                print_str += (
-                    f"T1a={self.env.T1_1:.4f}s; T2a={self.env.T2_1:.4f}s; "
-                    f"T1b={self.env.T1_2:.4f}s; T2b={self.env.T2_2:.4f}s"
-                )
-            else:
-                RuntimeError()
-
-            print_str += (
-                f"\nInitial FA:\t\t{self.env.fa:4.1f} [deg]"
-                f"\nOptimal FA:\t\t{self.env.optimal_fa:4.1f} [deg]"
-                f"\nOptimal {self.metric.upper()}:\t\t"
-                f"{getattr(self.env, f'optimal_{self.metric}'):4.2f} [-]"
-                "\n-----------------------------------"
-            )
-        elif isinstance(self.env, environments.ScannerEnv):
-            print_str = (
-                "\n========== "
-                f"Episode {self.episode + 1:3d}/"
-                f"{self.n_episodes if self.train else 10:3d}"
-                " ==========\n"
-                "\n-----------------------------------"
-                f"\nInitial FA:\t{self.env.fa:4.1f} [deg]"
-                "\n-----------------------------------"
-            )
-        else:
-            print(self.env.__class__)
-            raise RuntimeError()
+        print_str = (
+            "\n========== "
+            f"Episode {self.episode + 1:3d}/"
+            f"{self.n_episodes if self.train else 20:3d}"
+            " ==========\n"
+            "\n-----------------------------------\n"
+        )
 
         # Print the string
         print(print_str)
@@ -619,35 +565,54 @@ class DDPG(object):
             " ====================\n\n"
         )
 
-        # Create training initial condition distributions
-        if train:
-            self.env.n_episodes = self.n_episodes
-            self.env.homogeneous_initialization = True
-            self.env.set_homogeneous_dists()
-        else:
-            self.env.n_episodes = None
-            self.env.homogeneous_initialization = False
-
         # Episode loop
-        for self.episode in range(self.n_episodes) if train else range(10):
+        found_top = False
+        for self.episode in range(self.n_episodes) if train else range(20):
 
-            # Reset environment
+            # Reset environment and log start
             self.env.reset()
+            self.log_initiation()
 
             # Print some info
             self.verbose_episode()
 
             # Loop over ticks/steps
-            for self.tick in range(self.n_ticks):
+            positions = []
+            self.tick = 0
+            done = False
+            while not done:
+
+                # Render environment
+                if not train: self.env.render()
 
                 # Extract current state
                 state = self.env.state
+
+                # Throw out velocity info and convert to tensor
+                # state[1] = 0.
+                state = torch.tensor(state, dtype=torch.float32)
 
                 # Choose action
                 action = self.agent.select_action(state, train)
 
                 # Simulate step
-                next_state, reward, done = self.env.step(action)
+                next_state, reward, done, info = self.env.step(np.array(action))
+
+                # Store positions for reward tweak
+                positions.append(next_state[0])
+
+                # Throw out velocity info and convert to tensors
+                # next_state[1] = 0.
+
+                # Tweak reward because this one is terribly designed
+                if done:
+                    best_position = max(positions)
+                    reward += float(best_position + 0.4) * 100
+                
+                # Store everything in tensors
+                next_state = torch.FloatTensor(next_state, device=self.device)
+                reward = torch.FloatTensor([reward], device=self.device)
+                done = torch.FloatTensor([done], device=self.device)
 
                 # Add to memory
                 self.memory.push(
@@ -663,9 +628,21 @@ class DDPG(object):
                 # Log step results
                 self.log_step(state, action, reward, next_state, done)
 
-                # Check if done
-                if done:
-                    break
+                # Update tick counter
+                self.tick += 1
+
+            # Define found_top
+            if self.tick < 999:
+                found_top = True
+
+            # Print some info
+            print(f"Episode ended after {self.tick + 1} steps")
+
+            # If training, update model
+            if train:
+                batch = self.memory.sample(self.batch_size)
+                self.policy_loss, self.critic_loss = \
+                    self.agent.update(batch)
 
             # Log episode results
             if train:
@@ -674,8 +651,26 @@ class DDPG(object):
             # Update epsilon
             self.agent.update_epsilon()
 
-            # Backup model
+            # Backup model once in a while
             self.agent.save(self.model_path)
+
+            # Break loop and run again if the top hasn't
+            # been found after a few attempts
+            if (not found_top) and self.episode > 13:
+                break
+
+        # Retry if top hasn't been found
+        if not found_top and train:
+            print("======= Restarting because of unlucky start... =======")
+            # Setup agent
+            self.agent = agents.DDPGAgent(
+                self.env.action_space,
+                n_states=2,
+                n_actions=1,
+                epsilon_decay=1. - (4. / float(self.n_episodes))  # TODO: 4
+            )
+            # Rerun training
+            self.run()
 
 
 class RDPG(object):
@@ -689,8 +684,8 @@ class RDPG(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            n_episodes: int = 1000,
-            batch_size: int = 128,
+            n_episodes: int = 2000,
+            batch_size: int = 64,
             pretrained_path: Union[str, os.PathLike, None] = None,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
@@ -912,6 +907,7 @@ class RDPG(object):
         )
 
         # Episode loop
+        found_top = False
         for self.episode in range(self.n_episodes) if train else range(20):
 
             # Reset environment and log start
@@ -937,6 +933,7 @@ class RDPG(object):
             self.verbose_episode()
 
             # Loop over ticks/steps
+            positions = []
             self.tick = 0
             done = False
             while not done:
@@ -948,7 +945,7 @@ class RDPG(object):
                 state = self.env.state
 
                 # Throw out velocity info and convert to tensor
-                state[1] = 0.
+                # state[1] = 0.
                 state = torch.tensor(state, dtype=torch.float32)
 
                 # Choose action
@@ -957,8 +954,16 @@ class RDPG(object):
                 # Simulate step
                 next_state, reward, done, info = self.env.step(np.array(action))
 
+                # Store positions for reward tweak
+                positions.append(next_state[0])
+
                 # Throw out velocity info and convert to tensors
-                next_state[1] = 0.
+                # next_state[1] = 0.
+
+                # Tweak reward because this one is terribly designed
+                if done:
+                    best_position = max(positions)
+                    reward += float(best_position + 0.4) * 100
 
                 next_state = torch.tensor(next_state, dtype=torch.float32)
                 reward = torch.tensor([reward], dtype=torch.float32)
@@ -978,6 +983,10 @@ class RDPG(object):
 
                 # Update tick counter
                 self.tick += 1
+
+            # Define found_top
+            if self.tick < 999:
+                found_top = True
 
             # Print some info
             print(f"Episode ended after {self.tick + 1} steps")
@@ -1002,6 +1011,23 @@ class RDPG(object):
 
             # Backup model once in a while
             self.agent.save(self.model_path)
+
+            # Break loop and run again if the top hasn't
+            # been found after a few attempts
+            if (not found_top) and self.episode > 13:
+                break
+
+        # Retry if top hasn't been found
+        if not found_top and train:
+            print("======= Restarting because of unlucky start... =======")
+            # Setup agent
+            self.agent = agents.RDPGAgent(
+                self.env.action_space,
+                n_actions=1,
+                epsilon_decay=1. - (4. / float(self.n_episodes))  # TODO: 4
+            )
+            # Rerun training
+            self.run()
 
 
 class Validator(object):
