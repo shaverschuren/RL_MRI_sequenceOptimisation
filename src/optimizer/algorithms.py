@@ -601,13 +601,17 @@ class DDPG(object):
                 # Store positions for reward tweak
                 positions.append(next_state[0])
 
+                # Tweak reward
+                if reward < 0.: reward = -0.01
+
                 # Throw out velocity info and convert to tensors
                 # next_state[1] = 0.
 
                 # Tweak reward because this one is terribly designed
-                # if done:
-                #     best_position = max(positions)
-                #     reward += float(best_position + 0.4) * 100
+                if done:
+                    best_position = max(positions)
+                    reward = max(0., float(best_position + 0.4))
+                    if self.tick < 999: reward += 1.
                 
                 # Store everything in tensors
                 next_state = torch.FloatTensor(next_state, device=self.device)

@@ -151,7 +151,7 @@ if __name__ == "__main__":
     # Initialize optimizer
     optimizer = algorithms.DDPG(
         env, log_dir=os.path.join(root, "logs", "ddpg_testing"),
-        n_episodes=500
+        n_episodes=250
     )
 
     if mode == "validation":

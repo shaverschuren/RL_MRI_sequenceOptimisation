@@ -263,7 +263,7 @@ class DDPGAgent(object):
             alpha_actor: float = 1e-4,
             alpha_critic: float = 1e-3,
             tau: float = 1e-2,
-            hidden_layers: list[int] = [400, 400],
+            hidden_layers: list[int] = [128, 256, 128],
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
 
