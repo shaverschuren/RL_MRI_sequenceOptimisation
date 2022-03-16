@@ -605,9 +605,9 @@ class DDPG(object):
                 # next_state[1] = 0.
 
                 # Tweak reward because this one is terribly designed
-                if done:
-                    best_position = max(positions)
-                    reward += float(best_position + 0.4) * 100
+                # if done:
+                #     best_position = max(positions)
+                #     reward += float(best_position + 0.4) * 100
                 
                 # Store everything in tensors
                 next_state = torch.FloatTensor(next_state, device=self.device)
