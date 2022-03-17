@@ -566,7 +566,7 @@ class DDPG(object):
         )
 
         # Episode loop
-        found_top = False
+        found_top = True  # False  # TODO:
         for self.episode in range(self.n_episodes) if train else range(20):
 
             # Reset environment and log start
@@ -603,7 +603,10 @@ class DDPG(object):
                 positions.append(next_state[0])
 
                 # Tweak reward
-                if reward < 0.: reward = -0.01
+                if (float(state[1]) < 0.) == (float(action) < 0.):
+                    reward = float(abs(action)) / 20.
+                else:
+                    reward = float(-abs(action)) / 20.
 
                 # Throw out velocity info and convert to tensors
                 # next_state[1] = 0.
@@ -611,11 +614,8 @@ class DDPG(object):
                 # Tweak reward because this one is terribly designed
                 if done:
                     best_position = max(positions)
-                    reward = max(
-                        0.,
-                        float(best_position + 0.5 - abs(positions[0] + 0.5))
-                    )
-                    if self.tick < 998: reward += 1.
+                    reward = float(abs(best_position + 0.5) - abs(positions[0] + 0.5))
+                    if self.tick < 998: reward += 100.
 
                 # Store everything in tensors
                 next_state = torch.FloatTensor(next_state, device=self.device)
@@ -669,7 +669,7 @@ class DDPG(object):
 
             # Break loop and run again if the top hasn't
             # been found after a few attempts
-            if (not found_top) and self.episode > 13:
+            if (not found_top) and self.episode > 23:
                 break
 
         # Retry if top hasn't been found
