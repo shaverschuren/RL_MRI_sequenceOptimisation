@@ -584,7 +584,7 @@ class DDPG(object):
             while not done:
 
                 # Render environment
-                if not train: self.env.render()
+                # if not train: self.env.render()
 
                 # Extract current state
                 state = self.env.state
