@@ -387,7 +387,7 @@ class DDPG(object):
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
-        self.memory = training.LongTermMemory(10000)
+        self.memory = training.LongTermMemory(1000 * n_episodes)
         # Setup logger
         self.setup_logger()
 
@@ -580,6 +580,7 @@ class DDPG(object):
             positions = []
             self.tick = 0
             done = False
+            print("Running episode...")
             while not done:
 
                 # Render environment
@@ -610,9 +611,12 @@ class DDPG(object):
                 # Tweak reward because this one is terribly designed
                 if done:
                     best_position = max(positions)
-                    reward = max(0., float(best_position + 0.4))
-                    if self.tick < 999: reward += 1.
-                
+                    reward = max(
+                        0.,
+                        float(best_position + 0.5 - abs(positions[0] + 0.5))
+                    )
+                    if self.tick < 998: reward += 1.
+
                 # Store everything in tensors
                 next_state = torch.FloatTensor(next_state, device=self.device)
                 reward = torch.FloatTensor([reward], device=self.device)
@@ -640,10 +644,15 @@ class DDPG(object):
                 found_top = True
 
             # Print some info
-            print(f"Episode ended after {self.tick + 1} steps")
+            print(
+                f"Episode ended after {self.tick + 1} steps"
+                f"\nBest position: {best_position:.2f}"
+                f"\nLast step reward: {float(reward):.2f}"
+            )
 
             # If training, update model
             if train:
+                print("Running training...")
                 batch = self.memory.sample(self.batch_size)
                 self.policy_loss, self.critic_loss = \
                     self.agent.update(batch)
