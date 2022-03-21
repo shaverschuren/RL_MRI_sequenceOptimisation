@@ -149,9 +149,9 @@ if __name__ == "__main__":
     env = gym.make('MountainCarContinuous-v0')
 
     # Initialize optimizer
-    optimizer = algorithms.DDPG(
-        env, log_dir=os.path.join(root, "logs", "ddpg_testing"),
-        n_episodes=250
+    optimizer = algorithms.RDPG(
+        env, log_dir=os.path.join(root, "logs", "rdpg_testing"),
+        n_episodes=500
     )
 
     if mode == "validation":

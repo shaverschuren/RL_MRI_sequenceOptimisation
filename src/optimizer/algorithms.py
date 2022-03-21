@@ -11,6 +11,7 @@ import os
 from typing import Union
 import numpy as np
 from datetime import datetime
+import time
 import torch
 from optimizer import agents, environments
 from util import training, loggers
@@ -344,7 +345,7 @@ class DDPG(object):
             env,
             log_dir: Union[str, os.PathLike],
             n_episodes: int = 2000,
-            batch_size: int = 64,
+            batch_size: int = 128,
             pretrained_path: Union[str, os.PathLike, None] = None,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
@@ -410,7 +411,7 @@ class DDPG(object):
         # Define datafields
         self.logs_fields = [
             "error", "done", "epsilon", "critic_loss", "policy_loss", "reward",
-            "x", "v", "duration"
+            "x", "v", "action", "duration"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -469,6 +470,12 @@ class DDPG(object):
                 field="v",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
                 value=float(self.env.state[1]),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field="action",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(action),
                 step=self.tick
             )
             self.logger.log_scalar(
@@ -566,7 +573,7 @@ class DDPG(object):
         )
 
         # Episode loop
-        found_top = True  # False  # TODO:
+        found_top = False  # TODO:
         for self.episode in range(self.n_episodes) if train else range(20):
 
             # Reset environment and log start
@@ -576,13 +583,17 @@ class DDPG(object):
             # Print some info
             self.verbose_episode()
 
-            # Loop over ticks/steps
+            # Set some initial vars and loop over ticks/steps
             positions = []
             self.tick = 0
             done = False
+            reward = 0.
+            best_position = -0.6
             print("Running episode...")
+            time_all = 0.
+            time_step = 0.
             while not done:
-
+                start_all = time.time()
                 # Render environment
                 # if not train: self.env.render()
 
@@ -597,16 +608,18 @@ class DDPG(object):
                 action = self.agent.select_action(state, train)
 
                 # Simulate step
-                next_state, reward, done, info = self.env.step(np.array(action))
-
+                start_step = time.time()
+                next_state, reward, done, _ = self.env.step(np.array(action))
+                stop_step = time.time()
                 # Store positions for reward tweak
                 positions.append(next_state[0])
 
                 # Tweak reward
-                if (float(state[1]) < 0.) == (float(action) < 0.):
-                    reward = float(abs(action)) / 20.
-                else:
-                    reward = float(-abs(action)) / 20.
+                # reward = float(action) * float(state[1]) * 50.
+                # if (float(state[1]) < 0.) == (float(action) < 0.):
+                #     reward = float(abs(action))  # / 2.
+                # else:
+                #     reward = float(-abs(action))  # / 2.
 
                 # Throw out velocity info and convert to tensors
                 # next_state[1] = 0.
@@ -614,7 +627,9 @@ class DDPG(object):
                 # Tweak reward because this one is terribly designed
                 if done:
                     best_position = max(positions)
-                    reward = float(abs(best_position + 0.5) - abs(positions[0] + 0.5))
+                    reward = float(
+                        abs(best_position + 0.5) - abs(positions[0] + 0.5)
+                    )
                     if self.tick < 998: reward += 100.
 
                 # Store everything in tensors
@@ -627,17 +642,24 @@ class DDPG(object):
                     state, action, reward, next_state, done
                 )
 
-                # If training, update model
-                if train and self.batch_size <= len(self.memory):
-                    batch = self.memory.sample(self.batch_size)
-                    self.policy_loss, self.critic_loss = \
-                        self.agent.update(batch)
+                # # If training, update model
+                # if train and self.batch_size <= len(self.memory):
+                #     # TODO:
+                #     for _ in range(5):
+                #         batch = self.memory.sample(self.batch_size)
+                #         self.policy_loss, self.critic_loss = \
+                #             self.agent.update(batch)
 
                 # Log step results
                 self.log_step(state, action, reward, next_state, done)
 
                 # Update tick counter
                 self.tick += 1
+
+                stop_all = time.time()
+
+                time_all += float(stop_all - start_all)
+                time_step += float(stop_step - start_step)
 
             # Define found_top
             if self.tick < 999:
@@ -648,6 +670,7 @@ class DDPG(object):
                 f"Episode ended after {self.tick + 1} steps"
                 f"\nBest position: {best_position:.2f}"
                 f"\nLast step reward: {float(reward):.2f}"
+                f"\nTotal time in 'step': {(time_step / time_all) * 100.:.2f}%"
             )
 
             # If training, update model
@@ -680,7 +703,7 @@ class DDPG(object):
                 self.env.action_space,
                 n_states=2,
                 n_actions=1,
-                epsilon_decay=1. - (4. / float(self.n_episodes))  # TODO: 4
+                epsilon_decay=1. - (4. / float(self.n_episodes))
             )
             # Rerun training
             self.run()
@@ -767,7 +790,7 @@ class RDPG(object):
         # Define datafields
         self.logs_fields = [
             "error", "done", "epsilon", "critic_loss", "policy_loss", "reward",
-            "x", "v", "duration"
+            "x", "v", "action", "duration"
         ]
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -826,6 +849,12 @@ class RDPG(object):
                 field="v",
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
                 value=float(self.env.state[1]),
+                step=self.tick
+            )
+            self.logger.log_scalar(
+                field="action",
+                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                value=float(action),
                 step=self.tick
             )
             self.logger.log_scalar(
@@ -949,6 +978,8 @@ class RDPG(object):
             positions = []
             self.tick = 0
             done = False
+            best_position = -0.6
+            reward = 0.
             while not done:
 
                 # Render environment
@@ -965,7 +996,7 @@ class RDPG(object):
                 action = self.agent.select_action(state, train)
 
                 # Simulate step
-                next_state, reward, done, info = self.env.step(np.array(action))
+                next_state, reward, done, _ = self.env.step(np.array(action))
 
                 # Store positions for reward tweak
                 positions.append(next_state[0])
@@ -976,7 +1007,10 @@ class RDPG(object):
                 # Tweak reward because this one is terribly designed
                 if done:
                     best_position = max(positions)
-                    reward += float(best_position + 0.4) * 100
+                    reward = float(
+                        abs(best_position + 0.5) - abs(positions[0] + 0.5)
+                    )
+                    if self.tick < 998: reward += 100.
 
                 next_state = torch.tensor(next_state, dtype=torch.float32)
                 reward = torch.tensor([reward], dtype=torch.float32)
@@ -1002,7 +1036,11 @@ class RDPG(object):
                 found_top = True
 
             # Print some info
-            print(f"Episode ended after {self.tick + 1} steps")
+            print(
+                f"Episode ended after {self.tick + 1} steps"
+                f"\nBest position: {best_position:.2f}"
+                f"\nLast step reward: {float(reward):.2f}"
+            )
 
             # Update memory with previous episode (remove first step)
             self.memory.push(
@@ -1010,10 +1048,12 @@ class RDPG(object):
             )
 
             # If training, update model
-            if train:
+            if train and len(self.memory) > self.batch_size:  # TODO:
+                print("Training... ", end="", flush=True)
                 batch = self.memory.sample(self.batch_size)
                 self.policy_loss, self.critic_loss = \
                     self.agent.update(batch)
+                print("Done")
 
             # Log episode results
             if train:
@@ -1027,7 +1067,7 @@ class RDPG(object):
 
             # Break loop and run again if the top hasn't
             # been found after a few attempts
-            if (not found_top) and self.episode > 13:
+            if (not found_top) and self.episode > self.batch_size - 2:
                 break
 
         # Retry if top hasn't been found
@@ -1039,6 +1079,8 @@ class RDPG(object):
                 n_actions=1,
                 epsilon_decay=1. - (4. / float(self.n_episodes))  # TODO: 4
             )
+            # Setup memory
+            self.memory = training.EpisodicMemory(self.n_episodes // 2)
             # Rerun training
             self.run()
 
