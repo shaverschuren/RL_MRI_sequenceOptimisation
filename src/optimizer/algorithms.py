@@ -1009,7 +1009,7 @@ class RDPG(object):
                     best_position = max(positions)
                     reward = float(
                         abs(best_position + 0.5) - abs(positions[0] + 0.5)
-                    )
+                    ) * 100.
                     if self.tick < 998: reward += 100.
 
                 next_state = torch.tensor(next_state, dtype=torch.float32)
