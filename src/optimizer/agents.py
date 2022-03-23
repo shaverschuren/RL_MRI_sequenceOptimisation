@@ -752,26 +752,32 @@ class RDPGAgent(object):
                 policy_loss_total = policy_loss
 
             # Update hidden states
-            hidden_critic.append(hidden_critic_1)
-            hidden_actor.append(hidden_actor_1)
-            hidden_critic_target.append(hidden_critic_target_1)
-            hidden_actor_target.append(hidden_actor_target_1)
+            hidden_critic.append(
+                (hidden_critic_1[0].detach(), hidden_critic_1[1].detach())
+            )
+            hidden_actor.append(
+                (hidden_actor_1[0].detach(), hidden_actor_1[1].detach())
+            )
+            hidden_critic_target.append((
+                hidden_critic_target_1[0].detach(),
+                hidden_critic_target_1[1].detach()
+            ))
+            hidden_actor_target.append((
+                hidden_actor_target_1[0].detach(),
+                hidden_actor_target_1[1].detach()
+            ))
 
-        # Update networks
-        if policy_loss_total is not None and critic_loss_total is not None:
-            # Normalize losses
-            critic_loss_total /= float(len(batch))
-            policy_loss_total /= float(len(batch))
-            # Update actor
+            # Detach hidden states
+            self.detach_hidden()
+
+            # Update networks
             self.actor_optimizer.zero_grad()
-            policy_loss_total.backward(retain_graph=True)
+            policy_loss.backward(retain_graph=True)
             self.actor_optimizer.step()
-            # Update critic
+
             self.critic_optimizer.zero_grad()
-            critic_loss_total.backward()
+            critic_loss.backward(retain_graph=True)
             self.critic_optimizer.step()
-        else:
-            raise RuntimeError("Updating failded")
 
         # Update target networks (lagging weights)
         for target_param, param in zip(
@@ -787,11 +793,53 @@ class RDPGAgent(object):
 
         if policy_loss_total is not None and critic_loss_total is not None:
             return (
-                float(policy_loss_total.detach()),
-                float(critic_loss_total.detach())
+                float(policy_loss_total.detach() / len(batch)),
+                float(critic_loss_total.detach() / len(batch))
             )
         else:
             raise RuntimeError("Updating failed...")
+
+        #     # Update hidden states
+        #     hidden_critic.append(hidden_critic_1)
+        #     hidden_actor.append(hidden_actor_1)
+        #     hidden_critic_target.append(hidden_critic_target_1)
+        #     hidden_actor_target.append(hidden_actor_target_1)
+
+        # # Update networks
+        # if policy_loss_total is not None and critic_loss_total is not None:
+        #     # Normalize losses
+        #     critic_loss_total /= float(len(batch))
+        #     policy_loss_total /= float(len(batch))
+        #     # Update actor
+        #     self.actor_optimizer.zero_grad()
+        #     policy_loss_total.backward(retain_graph=True)
+        #     self.actor_optimizer.step()
+        #     # Update critic
+        #     self.critic_optimizer.zero_grad()
+        #     critic_loss_total.backward()
+        #     self.critic_optimizer.step()
+        # else:
+        #     raise RuntimeError("Updating failded")
+
+        # # Update target networks (lagging weights)
+        # for target_param, param in zip(
+        #         self.actor_target.parameters(), self.actor.parameters()):
+        #     target_param.data.copy_(
+        #         param.data * self.tau + target_param.data * (1.0 - self.tau)
+        #     )
+        # for target_param, param in zip(
+        #         self.critic_target.parameters(), self.critic.parameters()):
+        #     target_param.data.copy_(
+        #         param.data * self.tau + target_param.data * (1.0 - self.tau)
+        #     )
+
+        # if policy_loss_total is not None and critic_loss_total is not None:
+        #     return (
+        #         float(policy_loss_total.detach()),
+        #         float(critic_loss_total.detach())
+        #     )
+        # else:
+        #     raise RuntimeError("Updating failed...")
 
     def update_epsilon(self):
         """Update epsilon (called at the end of an episode)"""
