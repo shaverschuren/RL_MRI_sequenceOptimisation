@@ -615,37 +615,37 @@ class SimulationEnv(object):
 
         # If the "done" criterion is passed, tweak the reward based on
         # how close we are to the theretical optimum
-        if self.done:
-            # Check whether the theoretical optimum is available
-            if hasattr(self, f"optimal_{self.metric}"):
-                # Extract optimal metric and define error
-                optimal_metric = getattr(self, f"optimal_{self.metric}")
-                self.error = max(0., float(
-                    (optimal_metric - self.state[0] * 50.)
-                    / optimal_metric)
-                )
-                # Tweak reward based on error
-                if self.error > 0.:
-                    if self.n_episodes is not None:
-                        reward_delta = min(
-                            20.,
-                            ((
-                                (
-                                    4.80 * (
-                                        float(self.episode)
-                                        / float(self.n_episodes)) ** 2
-                                    + 0.20
-                                )
-                                * min(1., self.error)) ** -1) * 2 - 40.
-                        )
-                    else:
-                        reward_delta = min(
-                            20., 2. / (0.2 * min(1., self.error)) - 40.
-                        )
-                else:
-                    reward_delta = 20.
+        # if self.done:
+        #     # Check whether the theoretical optimum is available
+        #     if hasattr(self, f"optimal_{self.metric}"):
+        #         # Extract optimal metric and define error
+        #         optimal_metric = getattr(self, f"optimal_{self.metric}")
+        #         self.error = max(0., float(
+        #             (optimal_metric - self.state[0] * 50.)
+        #             / optimal_metric)
+        #         )
+        #         # Tweak reward based on error
+        #         if self.error > 0.:
+        #             if self.n_episodes is not None:
+        #                 reward_delta = min(
+        #                     20.,
+        #                     ((
+        #                         (
+        #                             4.80 * (
+        #                                 float(self.episode)
+        #                                 / float(self.n_episodes)) ** 2
+        #                             + 0.20
+        #                         )
+        #                         * min(1., self.error)) ** -1) * 2 - 40.
+        #                 )
+        #             else:
+        #                 reward_delta = min(
+        #                     20., 2. / (0.2 * min(1., self.error)) - 40.
+        #                 )
+        #         else:
+        #             reward_delta = 20.
 
-                reward_float += reward_delta
+        #         reward_float += reward_delta
 
         # Store reward in tensor
         self.reward = torch.tensor(
@@ -674,9 +674,10 @@ class SimulationEnv(object):
                 done = 0
             else:
                 done = 1
-            # # TODO: Testing
-            # if len(self.history) > 29:
-            #     done = 1
+
+        # TODO: Testing --> done also given at final tick
+        if len(self.history) > 29:
+            done = 1
             # else:
             #     done = 0
 
