@@ -949,7 +949,7 @@ class RDPG(object):
         )
 
         # Episode loop
-        found_top = False
+        found_top = True  # TODO: False
         for self.episode in range(self.n_episodes) if train else range(20):
 
             # Reset environment and log start
@@ -985,8 +985,9 @@ class RDPG(object):
                 # Render environment
                 if not train: self.env.render()
 
-                # Extract current state
+                # Extract current state and somewhat normalize velocity value
                 state = self.env.state
+                state[1] *= 100.
 
                 # Throw out velocity info and convert to tensor
                 # state[1] = 0.
@@ -998,6 +999,9 @@ class RDPG(object):
                 # Simulate step
                 next_state, reward, done, _ = self.env.step(np.array(action))
 
+                # Normalize velocity value of next_state
+                next_state[1] *= 100.
+
                 # Store positions for reward tweak
                 positions.append(next_state[0])
 
@@ -1005,12 +1009,17 @@ class RDPG(object):
                 # next_state[1] = 0.
 
                 # Tweak reward because this one is terribly designed
+                if float(state[1]) > 0.: reward = float(action)
+                else: reward = -float(action)
+
+                if self.tick > 48: done = True
+
                 if done:
                     best_position = max(positions)
-                    reward = float(
-                        abs(best_position + 0.5) - abs(positions[0] + 0.5)
-                    ) * 100.
-                    if self.tick < 998: reward += 100.
+                    # reward = float(
+                    #     abs(best_position + 0.5) - abs(positions[0] + 0.5)
+                    # ) * 100.
+                    # if self.tick < 998: reward += 100.
 
                 next_state = torch.tensor(next_state, dtype=torch.float32)
                 reward = torch.tensor([reward], dtype=torch.float32)
@@ -1032,7 +1041,7 @@ class RDPG(object):
                 self.tick += 1
 
             # Define found_top
-            if self.tick < 999:
+            if self.tick < 49:
                 found_top = True
 
             # Print some info
