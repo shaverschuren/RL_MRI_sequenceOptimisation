@@ -772,11 +772,11 @@ class RDPGAgent(object):
 
             # Update networks
             self.actor_optimizer.zero_grad()
-            policy_loss.backward(retain_graph=True)
+            policy_loss.backward()
             self.actor_optimizer.step()
 
             self.critic_optimizer.zero_grad()
-            critic_loss.backward(retain_graph=True)
+            critic_loss.backward()
             self.critic_optimizer.step()
 
         # Update target networks (lagging weights)
