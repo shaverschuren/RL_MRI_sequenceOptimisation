@@ -685,9 +685,9 @@ class RDPGAgent(object):
         hidden_critic_target = [(self.critic_target.hx, self.critic_target.cx)]
         hidden_actor_target = [(self.actor_target.hx, self.actor_target.cx)]
 
-        # Set total loss counts
-        critic_loss_total = None
+        # Create lists for policy and critic loss
         policy_loss_total = None
+        critic_loss_total = None
 
         # Loop over timesteps of the trajectories
         # Process all trajectories in parallel, however
@@ -743,35 +743,41 @@ class RDPGAgent(object):
                 hidden_critic[t]
             )[0].mean()
 
-            # Update total losses
-            if critic_loss_total is not None and policy_loss_total is not None:
-                critic_loss_total += critic_loss
+            # Store losses
+            if policy_loss_total is not None and critic_loss_total is not None:
                 policy_loss_total += policy_loss
+                critic_loss_total += critic_loss
             else:
-                critic_loss_total = critic_loss
                 policy_loss_total = policy_loss
+                critic_loss_total = critic_loss
 
             # Update hidden states
-            hidden_critic.append(hidden_critic_1)
-            hidden_actor.append(hidden_actor_1)
-            hidden_critic_target.append(hidden_critic_target_1)
-            hidden_actor_target.append(hidden_actor_target_1)
+            hidden_critic.append(
+                (hidden_critic_1[0].detach(), hidden_critic_1[1].detach())
+            )
+            hidden_actor.append(
+                (hidden_actor_1[0].detach(), hidden_actor_1[1].detach())
+            )
+            hidden_critic_target.append((
+                hidden_critic_target_1[0].detach(),
+                hidden_critic_target_1[1].detach()
+            ))
+            hidden_actor_target.append((
+                hidden_actor_target_1[0].detach(),
+                hidden_actor_target_1[1].detach()
+            ))
 
-        # Update networks
-        if policy_loss_total is not None and critic_loss_total is not None:
-            # Normalize losses
-            critic_loss_total /= float(len(batch))
-            policy_loss_total /= float(len(batch))
-            # Update actor
+            # Detach hidden states
+            self.detach_hidden()
+
+            # Update networks
             self.actor_optimizer.zero_grad()
-            policy_loss_total.backward(retain_graph=True)
+            policy_loss.backward(retain_graph=True)
             self.actor_optimizer.step()
-            # Update critic
+
             self.critic_optimizer.zero_grad()
-            critic_loss_total.backward()
+            critic_loss.backward(retain_graph=True)
             self.critic_optimizer.step()
-        else:
-            raise RuntimeError("Updating failded")
 
         # Update target networks (lagging weights)
         for target_param, param in zip(
@@ -787,8 +793,8 @@ class RDPGAgent(object):
 
         if policy_loss_total is not None and critic_loss_total is not None:
             return (
-                float(policy_loss_total.detach()),
-                float(critic_loss_total.detach())
+                float(policy_loss_total.detach() / len(batch)),
+                float(critic_loss_total.detach() / len(batch))
             )
         else:
             raise RuntimeError("Updating failed...")
