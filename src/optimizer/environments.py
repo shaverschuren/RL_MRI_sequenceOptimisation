@@ -852,7 +852,7 @@ class SimulationEnv(object):
         self.run_simulation()
 
         # Perform metric calibration
-        self.metric_calibration = 1.  # TODO: getattr(self, f"{self.metric}")
+        self.metric_calibration = getattr(self, f"{self.metric}")
 
         # Normalize parameters
         self.norm_parameters()
