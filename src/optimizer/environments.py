@@ -575,33 +575,26 @@ class SimulationEnv(object):
         """Define reward for last step"""
 
         # Define reward as either +/- 1 for increase or decrease in signal
-
-        old_signal = float(
-            (self.old_state[0] * self.metric_calibration)
-        )
-        signal = float(
-            (self.state[0] * self.metric_calibration)
-        )
-
-        if signal > old_signal:
+        if self.state[0] > self.old_state[0]:
             reward_float = 1.0
         else:
             reward_float = -1.0
 
         # Scale reward with signal difference
-        if old_signal < 1e-2:
+        if float(self.old_state[0]) < 1e-2:
             # If old_state signal is too small, set reward gain to 20
-            reward_gain = 1.
+            reward_gain = 20.
         else:
             # Calculate relative signal difference and derive reward gain
-            signal_diff = (
-                abs(signal - old_signal) / old_signal
+            snr_diff = (
+                abs(self.state[0] - self.old_state[0])
+                / self.old_state[0]
             )
-            reward_gain = signal_diff * 5.
+            reward_gain = snr_diff * 100.
 
-            # If reward gain is higher than 1, use 1
+            # If reward gain is higher than 20, use 20
             # We do this to prevent blowing up rewards near the edges
-            if reward_gain > 1.: reward_gain = 1.
+            if reward_gain > 20.: reward_gain = 20.
 
         # If reward is negative, increase gain
         if reward_float < 0.:
@@ -617,51 +610,42 @@ class SimulationEnv(object):
 
         # If the flip angle is changed less than 0.1 deg, penalize the model
         # for waiting too long without stopping
-        # if abs(self.state[1] - self.old_state[1]) < (0.1 / 90.):
-        #     reward_float -= 0.05
+        if abs(self.state[1] - self.old_state[1]) < (0.1 / 180.):
+            reward_float -= 0.5
 
         # If the "done" criterion is passed, tweak the reward based on
-        # how close we are to the theretical optimum TODO:
-        # if self.done:
-        #     # Check whether the theoretical optimum is available
-        #     if hasattr(self, f"optimal_{self.metric}"):
-        #         # Extract optimal metric and define error
-        #         optimal_metric = getattr(self, f"optimal_{self.metric}")
-        #         # Extract optimum reached during trajectory
-        #         metric_history = [float(state[0]) for state in self.history]
-        #         reached_optimum = max(metric_history) * self.metric_calibration
-        #         max_idx = metric_history.index(max(metric_history))
-        #         # Define error between theoretical and reached optimum
-        #         self.error = max(0., float(
-        #             (optimal_metric - reached_optimum)
-        #             / optimal_metric)
-        #         )
-        #         # Tweak reward based on error
-        #         if self.error > 0.:
-        #             # if self.n_episodes is not None:
-        #             #     reward_delta = min(
-        #             #         1.,
-        #             #         ((
-        #             #             (
-        #             #                 0.24 * (
-        #             #                     float(self.episode)
-        #             #                     / float(self.n_episodes)) ** 2
-        #             #                 + 0.01
-        #             #             )
-        #             #             * min(1., self.error)) ** -1) * 2 - 2.
-        #             #     )
-        #             # else:
-        #             reward_delta = min(
-        #                 1., 1. / (30. * (min(1., self.error) + 0.02)) - 1.
-        #             ) * (20 / (max_idx + 1) if reward_float > 0. else 1.)  # Scale with "speed"
-        #         else:
-        #             reward_delta = 1.
+        # how close we are to the theretical optimum
+        if self.done:
+            # Check whether the theoretical optimum is available
+            if hasattr(self, f"optimal_{self.metric}"):
+                # Extract optimal metric and define error
+                optimal_metric = getattr(self, f"optimal_{self.metric}")
+                self.error = max(0., float(
+                    (optimal_metric - self.state[0] * 50.)
+                    / optimal_metric)
+                )
+                # Tweak reward based on error
+                if self.error > 0.:
+                    if self.n_episodes is not None:
+                        reward_delta = min(
+                            20.,
+                            ((
+                                (
+                                    4.80 * (
+                                        float(self.episode)
+                                        / float(self.n_episodes)) ** 2
+                                    + 0.20
+                                )
+                                * min(1., self.error)) ** -1) * 2 - 40.
+                        )
+                    else:
+                        reward_delta = min(
+                            20., 2. / (0.2 * min(1., self.error)) - 40.
+                        )
+                else:
+                    reward_delta = 20.
 
-        #         reward_float += reward_delta
-
-        # Clip reward between -1, 1
-        if reward_float > 1.: reward_float = 1.
-        if reward_float < -1.: reward_float = -1
+                reward_float += reward_delta
 
         # Store reward in tensor
         self.reward = torch.tensor(
