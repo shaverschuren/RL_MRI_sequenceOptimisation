@@ -691,7 +691,7 @@ class RDPG(object):
             log_dir: Union[str, os.PathLike],
             n_episodes: int = 1000,
             n_ticks: int = 30,
-            batch_size: int = 128,
+            batch_size: int = 64,
             model_done: bool = True,
             pretrained_path: Union[str, os.PathLike, None] = None,
             device: Union[torch.device, None] = None):
