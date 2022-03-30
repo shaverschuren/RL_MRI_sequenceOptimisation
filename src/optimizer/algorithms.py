@@ -986,8 +986,13 @@ class RDPG(object):
                 if not train: self.env.render()
 
                 # Extract current state and somewhat normalize velocity value
-                state = self.env.state
-                state[1] *= 100.
+                state = np.zeros(np.size(self.env.state))
+                state[0] = float(self.env.state[0])
+                state[1] = float(self.env.state[1]) * 100.
+
+                # Throw out velocity data
+                # state_no_v = np.zeros(np.shape(state))
+                # state_no_v[0] = state[0]
 
                 # Throw out velocity info and convert to tensor
                 # state[1] = 0.
@@ -997,16 +1002,19 @@ class RDPG(object):
                 action = self.agent.select_action(state, train)
 
                 # Simulate step
-                next_state, reward, done, _ = self.env.step(np.array(action))
+                next_state_, reward, done, _ = self.env.step(np.array(action))
 
                 # Normalize velocity value of next_state
-                next_state[1] *= 100.
+                next_state = np.zeros(np.size(next_state_))
+                next_state[0] = float(next_state_[0])
+                next_state[1] = float(next_state_[1]) * 100.
+
+                # Throw out velocity data
+                # next_state_no_v = np.zeros(np.shape(next_state))
+                # next_state_no_v[0] = next_state[0]
 
                 # Store positions for reward tweak
                 positions.append(next_state[0])
-
-                # Throw out velocity info and convert to tensors
-                # next_state[1] = 0.
 
                 # Tweak reward because this one is terribly designed
                 if float(state[1]) > 0.: reward = float(action)
@@ -1022,6 +1030,9 @@ class RDPG(object):
                     # if self.tick < 998: reward += 100.
 
                 next_state = torch.tensor(next_state, dtype=torch.float32)
+                # next_state_no_v = torch.tensor(
+                #     next_state_no_v, dtype=torch.float32
+                # )
                 reward = torch.tensor([reward], dtype=torch.float32)
                 done = torch.tensor([done], dtype=torch.float32)
 
@@ -1038,7 +1049,7 @@ class RDPG(object):
                 self.log_step(state, action, reward, next_state, done)
 
                 # Update tick counter
-                self.tick += 1
+                if not done: self.tick += 1
 
             # Define found_top
             if self.tick < 49:
