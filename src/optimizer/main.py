@@ -182,7 +182,7 @@ def init_environment(args: argparse.Namespace):
             action_space_type=action_space_type,
             model_done=not args.suppress_done,
             recurrent_model=recurrent_model,
-            lock_material_params=validation_mode,  # TODO: True
+            lock_material_params=validation_mode,
             validation_mode=validation_mode
         )
     else:
@@ -226,7 +226,7 @@ def init_optimizer(env, args: argparse.Namespace):
         if args.episodes:
             n_episodes = args.episodes
         else:
-            n_episodes = 2000   # if args.metric == "snr" else 5000
+            n_episodes = 50000
         # Define optimizer
         optimizer = algorithms.RDPG(
             env=env, log_dir=args.log_dir,
