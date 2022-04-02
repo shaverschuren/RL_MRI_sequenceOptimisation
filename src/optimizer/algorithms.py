@@ -1084,7 +1084,7 @@ class RDPG(object):
             print_str = (
                 "\n========== "
                 f"Episode {self.episode + 1:3d}/"
-                f"{self.n_episodes if self.train else 10:3d}"
+                f"{self.n_episodes if self.train else 20:3d}"
                 " ==========\n"
                 "\n-----------------------------------"
                 f"\nInitial FA:\t{self.env.fa:4.1f} [deg]"
@@ -1314,7 +1314,7 @@ class Validator(object):
 
             # Set flip angle
             self.env.fa = float(fa)
-            self.env.norm_parameters()
+            # self.env.norm_parameters()
 
             # Perform scan
             if isinstance(self.env, environments.SimulationEnv):

@@ -1249,7 +1249,7 @@ class ScannerEnv(object):
             # Extract history of this episode
             metric_history = [float(state[0]) for state in self.history]
             # Define patience
-            patience = 5 if len(metric_history) > 4 else len(metric_history)
+            patience = 10 if len(metric_history) > 9 else len(metric_history)
 
             # Determine whether snr/cnr has improved in our patience period
             done = 0
@@ -1259,6 +1259,12 @@ class ScannerEnv(object):
                 done = 0
             else:
                 done = 1
+
+        # TODO: Testing --> done also given at final tick
+        if len(self.history) > 29:
+            done = 1
+            # else:
+            #     done = 0
 
             # Define done
             self.done = torch.tensor(done, device=self.device)
