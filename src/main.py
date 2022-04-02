@@ -75,7 +75,7 @@ def parse_args():
         )
     )
     optional.add_argument(
-        "--suppress_done", type=bool, default=False,
+        "--suppress_done", type=bool, default=True,
         help="Optional: Override the 'done' signal given by the model"
     )
 

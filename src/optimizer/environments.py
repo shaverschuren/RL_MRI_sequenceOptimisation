@@ -115,7 +115,7 @@ class SimulationEnv(object):
             T1_range: list[float] = [0.100, 2.000],
             T2_range: list[float] = [0.025, 0.150],
             tr: float = 0.010,
-            noise_level: float = 0.050,
+            noise_level: float = 0.010,
             lock_material_params: bool = False,
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -355,6 +355,11 @@ class SimulationEnv(object):
                 # Update loop counter
                 loop += 1
 
+        else:
+            raise RuntimeError()
+
+        self.optimal_fa = optimal_fa
+
         return optimal_fa_list
 
     def calculate_2nd_T1(self, optimal_fa, T1_1):
@@ -481,8 +486,27 @@ class SimulationEnv(object):
                 fa=self.optimal_fa, pass_to_self=False
             )
 
+    def calculate_steady_state(self, fa, tr, T1, T2):
+        """Prototyping function.
+        Calculates steady state instead of simulation.
+        """
+
+        # Determine flip angle in rads
+        alpha = fa * np.pi / 180.
+
+        # calculate signal
+        F0 = np.array([
+            np.exp((-tr / 2.) / T2)
+            * (np.sin(alpha) * (1. - np.exp(-tr / T1)))
+            / (1. - np.cos(alpha) * np.exp(-tr / T1))
+        ])
+
+        return F0
+
     def run_simulation(self, fa=None, pass_to_self=True):
         """Run a simulation for scan parameters stored in self"""
+
+        # TODO: Substituted simulations for steady state equation for now
 
         # Select flip angle
         if not fa:
@@ -492,11 +516,12 @@ class SimulationEnv(object):
 
         # Determine SNR (if mode="snr")
         if self.metric == "snr":
-            # Run simulations
-            F0, _, _ = epg.epg_as_numpy(
-                self.Nfa, fa, self.tr,
-                self.T1, self.T2
-            )
+            # # Run simulations
+            # F0, _, _ = epg.epg_as_numpy(
+            #     self.Nfa, fa, self.tr,
+            #     self.T1, self.T2
+            # )
+            F0 = self.calculate_steady_state(fa, self.tr, self.T1, self.T2)
 
             # Determine snr
             snr = float(
@@ -511,13 +536,19 @@ class SimulationEnv(object):
         # Determine CNR (if mode="cnr")
         elif self.metric == "cnr":
             # Run simulations
-            F0_1, _, _ = epg.epg_as_numpy(
-                self.Nfa, fa, self.tr,
-                self.T1_1, self.T2_1
+            # F0_1, _, _ = epg.epg_as_numpy(
+            #     self.Nfa, fa, self.tr,
+            #     self.T1_1, self.T2_1
+            # )
+            # F0_2, _, _ = epg.epg_as_numpy(
+            #     self.Nfa, fa, self.tr,
+            #     self.T1_2, self.T2_2
+            # )
+            F0_1 = self.calculate_steady_state(
+                fa, self.tr, self.T1_1, self.T2_1
             )
-            F0_2, _, _ = epg.epg_as_numpy(
-                self.Nfa, fa, self.tr,
-                self.T1_2, self.T2_2
+            F0_2 = self.calculate_steady_state(
+                fa, self.tr, self.T1_2, self.T2_2
             )
 
             # Determine CNR
@@ -574,7 +605,7 @@ class SimulationEnv(object):
 
         # If the flip angle is changed less than 0.1 deg, penalize the model
         # for waiting too long without stopping
-        if abs(self.state[1] - self.old_state[1]) < (0.1 / 90.):
+        if abs(self.state[1] - self.old_state[1]) < (0.1 / 180.):
             reward_float -= 0.5
 
         # If the "done" criterion is passed, tweak the reward based on
@@ -585,7 +616,7 @@ class SimulationEnv(object):
                 # Extract optimal metric and define error
                 optimal_metric = getattr(self, f"optimal_{self.metric}")
                 self.error = max(0., float(
-                    (optimal_metric - self.state[0] * self.metric_calibration)
+                    (optimal_metric - self.state[0] * 50.)
                     / optimal_metric)
                 )
                 # Tweak reward based on error
@@ -628,7 +659,7 @@ class SimulationEnv(object):
             # Extract history of this episode
             metric_history = [float(state[0]) for state in self.history]
             # Define patience
-            patience = 5 if len(metric_history) > 4 else len(metric_history)
+            patience = 10 if len(metric_history) > 9 else len(metric_history)
 
             # Determine whether snr/cnr has improved in our patience period
             done = 0
@@ -638,6 +669,12 @@ class SimulationEnv(object):
                 done = 0
             else:
                 done = 1
+
+        # TODO: Testing --> done also given at final tick
+        if len(self.history) > 29:
+            done = 1
+            # else:
+            #     done = 0
 
             # Define done
             self.done = torch.tensor(done, device=self.device)
@@ -655,8 +692,10 @@ class SimulationEnv(object):
         # Update counter
         self.tick += 1
 
-        # Check action validity and perform action
+        # Check action validity and perform action TODO:
         action_np = action.detach().numpy()
+        self.recent_action = float(action_np[0])
+
         if self.action_space_type == "continuous":
             if (
                 (self.action_space.low <= action_np).all()
@@ -732,61 +771,69 @@ class SimulationEnv(object):
 
         # Set new T1, T2, fa, fa_initial
         if self.homogeneous_initialization:
+
             # Set initial flip angle. Here, we randomly sample from the
             # uniformly distributed list we created earlier.
             self.fa = float(self.initial_fa_list.pop(
                 random.randint(0, len(self.initial_fa_list) - 1)
             ))
-            # Set the T1s for this episode. Here, we randomly sample
-            # T1_1 from the uniform distribution and then calculate T1_2
-            # based on the desired optimum flip angle
-            self.optimal_fa_list = \
-                self.set_t1_from_distribution(self.optimal_fa_list)
 
-            if self.metric == "snr":
-                # Set T2 for this episode. We randomly sample this
-                # from the previously definded uniform distribution.
-                self.T2 = float(self.T2_list.pop(
-                    random.randint(0, len(self.T2_list) - 1)
-                ))
-            elif self.metric == "cnr":
-                # Set T2s for this episode. We randomly sample these
-                # from the previously definded uniform distributions for both
-                # tissues.
-                self.T2_1 = float(self.T2_list_1.pop(
-                    random.randint(0, len(self.T2_list_1) - 1)
-                ))
-                self.T2_2 = float(self.T2_list_2.pop(
-                    random.randint(0, len(self.T2_list_2) - 1)
-                ))
+            # Set material params from distributions
+            if not self.lock_material_params:
+                # Set the T1s for this episode. Here, we randomly sample
+                # T1_1 from the uniform distribution and then calculate T1_2
+                # based on the desired optimum flip angle
+                self.optimal_fa_list = \
+                    self.set_t1_from_distribution(self.optimal_fa_list)
+
+                if self.metric == "snr":
+                    # Set T2 for this episode. We randomly sample this
+                    # from the previously definded uniform distribution.
+                    self.T2 = float(self.T2_list.pop(
+                        random.randint(0, len(self.T2_list) - 1)
+                    ))
+                elif self.metric == "cnr":
+                    # Set T2s for this episode. We randomly sample these
+                    # from the previously definded uniform distributions for
+                    # both tissues.
+                    self.T2_1 = float(self.T2_list_1.pop(
+                        random.randint(0, len(self.T2_list_1) - 1)
+                    ))
+                    self.T2_2 = float(self.T2_list_2.pop(
+                        random.randint(0, len(self.T2_list_2) - 1)
+                    ))
 
         else:
             # Randomly set fa
             self.fa = random.uniform(
                 self.fa_range[0], self.fa_range[1]
             )
-            # Randomly set T1/T2 (either for single tissue of two tissues)
-            if self.metric == "snr":
-                self.T1 = random.uniform(
-                    self.T1_range[0], self.T1_range[1])
-                self.T2 = random.uniform(
-                    self.T2_range[0], min(self.T2_range[1], self.T1))
-            elif self.metric == "cnr":
-                self.T1_1 = random.uniform(
-                    self.T1_range[0], self.T1_range[1])
-                self.T1_2 = random.uniform(
-                    self.T1_range[0], self.T1_range[1])
-                self.T2_1 = random.uniform(
-                    self.T2_range[0], min(self.T2_range[1], self.T1_1))
-                self.T2_2 = random.uniform(
-                    self.T2_range[0], min(self.T2_range[1], self.T1_2))
+
+            # Randomly set material parameters
+            if not self.lock_material_params:
+
+                # Randomly set T1/T2 (either for single tissue of two tissues)
+                if self.metric == "snr":
+                    self.T1 = random.uniform(
+                        self.T1_range[0], self.T1_range[1])
+                    self.T2 = random.uniform(
+                        self.T2_range[0], min(self.T2_range[1], self.T1))
+                elif self.metric == "cnr":
+                    self.T1_1 = random.uniform(
+                        self.T1_range[0], self.T1_range[1])
+                    self.T1_2 = random.uniform(
+                        self.T1_range[0], self.T1_range[1])
+                    self.T2_1 = random.uniform(
+                        self.T2_range[0], min(self.T2_range[1], self.T1_1))
+                    self.T2_2 = random.uniform(
+                        self.T2_range[0], min(self.T2_range[1], self.T1_2))
 
         # If lock_material_params, we simply don't vary T1/T2s
         if self.lock_material_params:
             if self.metric == "snr":
                 # Set to approximate phantom for testing purposes
                 self.T1 = 0.600  # float(np.mean(self.T1_range))
-                self.T2 = 0.300  # float(np.mean(self.T2_range))
+                self.T2 = 0.100  # float(np.mean(self.T2_range))
             elif self.metric == "cnr":
                 # Set to WM/GM for testing purposes
                 self.T1_1 = 0.700   # float(np.percentile(self.T1_range, 25))

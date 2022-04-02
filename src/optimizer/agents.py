@@ -519,6 +519,7 @@ class RDPGAgent(object):
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
             epsilon_decay: float = 1. - 2e-3,
+            tbptt_factor: int = 5,
             alpha_actor: float = 1e-4,
             alpha_critic: float = 1e-3,
             tau: float = 1e-2,
@@ -541,6 +542,8 @@ class RDPGAgent(object):
                 Minimal epsilon
             epsilon_decay : float
                 Decay factor for epsilon
+            tbptt_factor : int
+                Amount of backpropogation-through-time steps we'll take
             alpha_actor : float
                 Learning rate for Adam optimizer  for actor model
             alpha_critic : float
@@ -559,6 +562,7 @@ class RDPGAgent(object):
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
+        self.tbptt_factor = tbptt_factor
         self.alpha_actor = alpha_actor
         self.alpha_critic = alpha_critic
         self.tau = tau
@@ -582,7 +586,7 @@ class RDPGAgent(object):
         """
 
         # Define hidden size
-        hidden_size = 256
+        hidden_size = 64
 
         # Construct actor models (network + target network)
         self.actor = models.RecurrentModel_LSTM(
@@ -644,7 +648,7 @@ class RDPGAgent(object):
         )
 
         # Setup criterion
-        self.critic_criterion = torch.nn.MSELoss()
+        self.critic_criterion = torch.nn.L1Loss()
 
     def select_action(self, state, train=True):
         """Select action based on current state
@@ -656,7 +660,8 @@ class RDPGAgent(object):
         """
 
         # Get action from actor model
-        pure_action, _ = self.actor(torch.unsqueeze(state, 0))
+        with torch.no_grad():
+            pure_action, _ = self.actor(torch.unsqueeze(state, 0))
         pure_action = torch.squeeze(pure_action, 0).detach().numpy()
         # Add noise (if training)
         noise = (
@@ -676,6 +681,13 @@ class RDPGAgent(object):
 
         # Reset hidden states
         self.reset(batch_size=len(batch[0]))
+        # Extract initial hidden states
+        # We manually keep track of hidden states because we'll
+        # need to do several passes through the same model per timestep
+        hidden_critic = [(self.critic.hx, self.critic.cx)]
+        hidden_actor = [(self.actor.hx, self.actor.cx)]
+        hidden_critic_target = [(self.critic_target.hx, self.critic_target.cx)]
+        hidden_actor_target = [(self.actor_target.hx, self.actor_target.cx)]
 
         # Create lists for policy and critic loss
         policy_loss_total = None
@@ -684,6 +696,16 @@ class RDPGAgent(object):
         # Loop over timesteps of the trajectories
         # Process all trajectories in parallel, however
         for t in range(len(batch)):
+
+            # Detach hidden states after a certain number of steps
+            k = (t + 1) - self.tbptt_factor
+
+            if k >= 0:
+                for i in [0, 1]:
+                    hidden_critic[k][i].detach()
+                    hidden_actor[k][i].detach()
+                    hidden_critic_target[k][i].detach()
+                    hidden_actor_target[k][i].detach()
 
             # Extract states, actions, rewards, next_states
             states = [transition.state for transition in batch[t]]
@@ -705,19 +727,36 @@ class RDPGAgent(object):
                 [next_state.unsqueeze(0) for next_state in next_states]
             ).to(self.device)
 
-            # Determine critic loss
-            Qvals, _ = self.critic(torch.cat([states, actions], 1))
-            next_actions, _ = self.actor_target(next_states)
-            next_Q, _ = self.critic_target(
-                torch.cat([next_states, next_actions.detach()], 1)
-            )
-            Qprime = rewards + self.gamma * next_Q
-            critic_loss = self.critic_criterion(Qvals, Qprime)
+            # Determine target value (Q-prime)
+            with torch.no_grad():
+                # Compute next_Q and update target hidden states
+                next_actions, hidden_actor_target_1 = self.actor_target(
+                    next_states, hidden_actor_target[t]
+                )
+                next_Q, hidden_critic_target_1 = self.critic_target(
+                    torch.cat([next_states, next_actions], 1),
+                    hidden_critic_target[t]
+                )
+                # Compute Q_target (R + discount * Qnext)
+                Q_target = rewards + self.gamma * next_Q
 
-            # Determine actor loss
-            policy_loss = -self.critic(
-                torch.cat([states, self.actor(states)[0]], 1)
-            )[0].mean()
+            # Compute actual Q-values and policy for this timestep
+            Q, hidden_critic_1 = self.critic(
+                torch.cat([states, actions], 1),
+                hidden_critic[t]
+            )
+            policy, hidden_actor_1 = self.actor(states, hidden_actor[t])
+
+            # Compute critic loss
+            critic_loss = self.critic_criterion(Q, Q_target)
+
+            # Compute actor loss
+            policy_loss = -torch.mean(
+                self.critic(
+                    torch.cat([states, policy], 1),
+                    hidden_critic[t]
+                )[0]
+            )
 
             # Store losses
             if policy_loss_total is not None and critic_loss_total is not None:
@@ -727,35 +766,48 @@ class RDPGAgent(object):
                 policy_loss_total = policy_loss
                 critic_loss_total = critic_loss
 
-            # Detach hidden states
-            self.detach_hidden()
+            # Update hidden states
+            hidden_critic.append(hidden_critic_1)
+            hidden_actor.append(hidden_actor_1)
+            hidden_critic_target.append(hidden_critic_target_1)
+            hidden_actor_target.append(hidden_actor_target_1)
 
-            # Update networks
+        # Update networks and return losses
+        if policy_loss_total is not None and critic_loss_total is not None:
+            # Normalize losses
+            policy_loss_total /= float(len(batch))
+            critic_loss_total /= float(len(batch))
+
+            # Update actor
             self.actor_optimizer.zero_grad()
-            policy_loss.backward(retain_graph=True)
+            policy_loss_total.backward(retain_graph=True)
             self.actor_optimizer.step()
 
+            # Update critic
             self.critic_optimizer.zero_grad()
-            critic_loss.backward(retain_graph=True)
+            critic_loss_total.backward()
             self.critic_optimizer.step()
 
-        # Update target networks (lagging weights)
-        for target_param, param in zip(
-                self.actor_target.parameters(), self.actor.parameters()):
-            target_param.data.copy_(
-                param.data * self.tau + target_param.data * (1.0 - self.tau)
-            )
-        for target_param, param in zip(
-                self.critic_target.parameters(), self.critic.parameters()):
-            target_param.data.copy_(
-                param.data * self.tau + target_param.data * (1.0 - self.tau)
+            # Update target networks (lagging weights)
+            for target_param, param in zip(
+                    self.actor_target.parameters(), self.actor.parameters()):
+                target_param.data.copy_(
+                    param.data * self.tau
+                    + target_param.data * (1.0 - self.tau)
+                )
+            for target_param, param in zip(
+                    self.critic_target.parameters(), self.critic.parameters()):
+                target_param.data.copy_(
+                    param.data * self.tau
+                    + target_param.data * (1.0 - self.tau)
+                )
+
+            # Return losses
+            return (
+                float(policy_loss_total.detach()),
+                float(critic_loss_total.detach())
             )
 
-        if policy_loss_total is not None and critic_loss_total is not None:
-            return (
-                float(policy_loss_total.detach() / len(batch)),
-                float(critic_loss_total.detach() / len(batch))
-            )
         else:
             raise RuntimeError("Updating failed...")
 

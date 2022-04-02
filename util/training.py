@@ -245,12 +245,17 @@ class EpisodicMemory(object):
         # Extract the minimal length of the sampled trajectories
         min_len = min([len(trajectory) for trajectory in trajectories])
         # Truncate trajectories to minimal size
-        trajectories = [trajectory[:min_len] for trajectory in trajectories]
+        trajectories_trunc = []
+        for trajectory in trajectories:
+            start_idx = random.randint(0, len(trajectory) - min_len)
+            trajectories_trunc.append(
+                trajectory[start_idx: start_idx + min_len + 1]
+            )
 
         # Zip trajectories so that timesteps are packed together
         # This allows us to perform training of the batch in parallel
         # (much quicker and more stable)
-        batch = list(map(list, zip(*trajectories)))
+        batch = list(map(list, zip(*trajectories_trunc)))
 
         # Return batch
         return batch
