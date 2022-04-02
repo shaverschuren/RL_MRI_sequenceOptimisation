@@ -769,20 +769,6 @@ class RDPGAgent(object):
                 critic_loss_total = critic_loss
 
             # Update hidden states
-            # hidden_critic.append(
-            #     (hidden_critic_1[0].detach(), hidden_critic_1[1].detach())
-            # )
-            # hidden_actor.append(
-            #     (hidden_actor_1[0].detach(), hidden_actor_1[1].detach())
-            # )
-            # hidden_critic_target.append((
-            #     hidden_critic_target_1[0].detach(),
-            #     hidden_critic_target_1[1].detach()
-            # ))
-            # hidden_actor_target.append((
-            #     hidden_actor_target_1[0].detach(),
-            #     hidden_actor_target_1[1].detach()
-            # ))
             hidden_critic.append(hidden_critic_1)
             hidden_actor.append(hidden_actor_1)
             hidden_critic_target.append(hidden_critic_target_1)
@@ -808,12 +794,14 @@ class RDPGAgent(object):
             for target_param, param in zip(
                     self.actor_target.parameters(), self.actor.parameters()):
                 target_param.data.copy_(
-                    param.data * self.tau + target_param.data * (1.0 - self.tau)
+                    param.data * self.tau
+                    + target_param.data * (1.0 - self.tau)
                 )
             for target_param, param in zip(
                     self.critic_target.parameters(), self.critic.parameters()):
                 target_param.data.copy_(
-                    param.data * self.tau + target_param.data * (1.0 - self.tau)
+                    param.data * self.tau
+                    + target_param.data * (1.0 - self.tau)
                 )
 
             # Return losses
