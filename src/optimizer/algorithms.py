@@ -689,7 +689,7 @@ class RDPG(object):
             self,
             env,
             log_dir: Union[str, os.PathLike],
-            n_episodes: int = 1000,
+            n_episodes: int = 100000,
             n_ticks: int = 5,  # TODO: 30
             batch_size: int = 64,
             model_done: bool = True,
@@ -736,12 +736,12 @@ class RDPG(object):
         self.agent = agents.RDPGAgent(
             env.action_space,
             n_actions=2 if model_done else 1,
-            epsilon_decay=1. - (6. / float(self.n_episodes))  # TODO: 4
+            epsilon_decay=1. - (10. / float(self.n_episodes))  # TODO: 4
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
-        self.memory = training.EpisodicMemory(self.n_episodes // 3)  # TODO: 2
+        self.memory = training.EpisodicMemory(self.n_episodes // 4)  # TODO: 2
         # Setup logger
         self.setup_logger()
 
