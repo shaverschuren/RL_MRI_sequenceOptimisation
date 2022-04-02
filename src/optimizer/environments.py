@@ -699,7 +699,7 @@ class SimulationEnv(object):
 
         # Check action validity and perform action TODO:
         action_np = action.detach().numpy()
-        self.recent_action = float(action_np)
+        self.recent_action = float(action_np[0])
 
         if self.action_space_type == "continuous":
             if (

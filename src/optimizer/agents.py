@@ -758,7 +758,6 @@ class RDPGAgent(object):
                 Q_target = rewards + self.gamma * next_Q
 
             # Compute actual Q-values and policy for this timestep
-            # and update hidden states
             Q, hidden_critic_1 = self.critic(
                 torch.cat([states, actions], 1),
                 hidden_critic[t]
@@ -768,11 +767,13 @@ class RDPGAgent(object):
             # Compute critic loss
             critic_loss = self.critic_criterion(Q, Q_target)
 
-            # Compute actor loss TODO: Maybe use target critic for this??
-            policy_loss = -self.critic(
-                torch.cat([states, policy], 1),
-                hidden_critic[t]
-            )[0].mean()
+            # Compute actor loss
+            policy_loss = -torch.mean(
+                self.critic(
+                    torch.cat([states, policy], 1),
+                    hidden_critic[t]
+                )[0]
+            )
 
             # Store losses
             if policy_loss_total is not None and critic_loss_total is not None:
@@ -805,34 +806,42 @@ class RDPGAgent(object):
             # Detach hidden states
             # self.detach_hidden()
 
-        # Update networks
-        self.actor_optimizer.zero_grad()
-        policy_loss_total.backward(retain_graph=True)
-        # plot_grad_flow(self.actor.named_parameters())
-        self.actor_optimizer.step()
-
-        self.critic_optimizer.zero_grad()
-        critic_loss_total.backward()
-        # plot_grad_flow(self.critic.named_parameters())
-        self.critic_optimizer.step()
-
-        # Update target networks (lagging weights)
-        for target_param, param in zip(
-                self.actor_target.parameters(), self.actor.parameters()):
-            target_param.data.copy_(
-                param.data * self.tau + target_param.data * (1.0 - self.tau)
-            )
-        for target_param, param in zip(
-                self.critic_target.parameters(), self.critic.parameters()):
-            target_param.data.copy_(
-                param.data * self.tau + target_param.data * (1.0 - self.tau)
-            )
-
+        # Update networks and return losses
         if policy_loss_total is not None and critic_loss_total is not None:
+            # Normalize losses
+            policy_loss_total /= float(len(batch))
+            critic_loss_total /= float(len(batch))
+
+            # Update actor
+            self.actor_optimizer.zero_grad()
+            policy_loss_total.backward(retain_graph=True)
+            # plot_grad_flow(self.actor.named_parameters())
+            self.actor_optimizer.step()
+
+            # Update critic
+            self.critic_optimizer.zero_grad()
+            critic_loss_total.backward()
+            # plot_grad_flow(self.critic.named_parameters())
+            self.critic_optimizer.step()
+
+            # Update target networks (lagging weights)
+            for target_param, param in zip(
+                    self.actor_target.parameters(), self.actor.parameters()):
+                target_param.data.copy_(
+                    param.data * self.tau + target_param.data * (1.0 - self.tau)
+                )
+            for target_param, param in zip(
+                    self.critic_target.parameters(), self.critic.parameters()):
+                target_param.data.copy_(
+                    param.data * self.tau + target_param.data * (1.0 - self.tau)
+                )
+
+            # Return losses
             return (
-                float(policy_loss_total.detach() / len(batch)),
-                float(critic_loss_total.detach() / len(batch))
+                float(policy_loss_total.detach()),
+                float(critic_loss_total.detach())
             )
+
         else:
             raise RuntimeError("Updating failed...")
 
