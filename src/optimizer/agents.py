@@ -550,6 +550,7 @@ class RDPGAgent(object):
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
             epsilon_decay: float = 1. - 2e-3,
+            tbptt_factor: int = 5,
             alpha_actor: float = 1e-4,
             alpha_critic: float = 1e-3,
             tau: float = 1e-2,
@@ -572,6 +573,8 @@ class RDPGAgent(object):
                 Minimal epsilon
             epsilon_decay : float
                 Decay factor for epsilon
+            tbptt_factor : int
+                Amount of backpropogation-through-time steps we'll take
             alpha_actor : float
                 Learning rate for Adam optimizer  for actor model
             alpha_critic : float
@@ -590,6 +593,7 @@ class RDPGAgent(object):
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
+        self.tbptt_factor = tbptt_factor
         self.alpha_actor = alpha_actor
         self.alpha_critic = alpha_critic
         self.tau = tau
@@ -724,6 +728,16 @@ class RDPGAgent(object):
         # Process all trajectories in parallel, however
         for t in range(len(batch)):
 
+            # Detach hidden states after a certain number of steps
+            k = (t + 1) - self.tbptt_factor
+
+            if k >= 0:
+                for i in [0, 1]:
+                    hidden_critic[k][i].detach()
+                    hidden_actor[k][i].detach()
+                    hidden_critic_target[k][i].detach()
+                    hidden_actor_target[k][i].detach()
+
             # Extract states, actions, rewards, next_states
             states = [transition.state for transition in batch[t]]
             actions = [transition.action for transition in batch[t]]
@@ -802,9 +816,6 @@ class RDPGAgent(object):
             hidden_actor.append(hidden_actor_1)
             hidden_critic_target.append(hidden_critic_target_1)
             hidden_actor_target.append(hidden_actor_target_1)
-
-            # Detach hidden states
-            # self.detach_hidden()
 
         # Update networks and return losses
         if policy_loss_total is not None and critic_loss_total is not None:

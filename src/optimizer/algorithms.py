@@ -690,7 +690,7 @@ class RDPG(object):
             env,
             log_dir: Union[str, os.PathLike],
             n_episodes: int = 100000,
-            n_ticks: int = 5,  # TODO: 30
+            n_ticks: int = 10,  # TODO: 30
             batch_size: int = 64,
             model_done: bool = True,
             pretrained_path: Union[str, os.PathLike, None] = None,
