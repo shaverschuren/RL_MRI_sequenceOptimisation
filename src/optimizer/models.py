@@ -164,7 +164,8 @@ class RecurrentModel_LSTM(nn.Module):
         # Init architecture list
         architecture_list = []
 
-        # TODO: Testing
+        # TODO: Will have to revert this to the format we used before,
+        # but for now this works quite well. So... I'm not touching it.
         self.lstm_idx = 2
 
         architecture_list.append(
@@ -201,18 +202,6 @@ class RecurrentModel_LSTM(nn.Module):
                 nn.ReLU()
             )
         )
-        # architecture_list.append(
-        #     (
-        #         "fc3",
-        #         nn.Linear(128, 128)
-        #     )
-        # )
-        # architecture_list.append(
-        #     (
-        #         "relu3",
-        #         nn.ReLU()
-        #     )
-        # )
         architecture_list.append(
             (
                 "output",

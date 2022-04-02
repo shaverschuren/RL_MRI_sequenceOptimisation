@@ -437,19 +437,14 @@ class SimulationEnv(object):
         # Perform normalisation for all parameters
         # fa
         if hasattr(self, "fa"):
-            self.fa_norm = float(  # TODO:
-                # getattr(self, "recent_action")
-                # if hasattr(self, "recent_action") else 0.
+            self.fa_norm = float(
                 (self.fa - 0.)
                 / (90. - 0.)
-                # 0.
             )
         # snr / cnr
         if hasattr(self, self.metric):
             setattr(
                 self, f"{self.metric}_norm",
-                # (getattr(self, self.metric) - self.metric_calibration)
-                # / self.metric_calibration
                 getattr(self, self.metric) / self.metric_calibration
             )
 

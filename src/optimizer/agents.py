@@ -14,8 +14,6 @@ from torch import optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 from optimizer import environments, models
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 
 
 class DQNAgent(object):
