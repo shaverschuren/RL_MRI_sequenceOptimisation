@@ -520,7 +520,7 @@ class RDPGAgent(object):
             epsilon_min: float = 0.01,
             epsilon_decay: float = 1. - 2e-3,
             tbptt_k1: int = 5,
-            tbptt_k2: int = 3,
+            tbptt_k2: int = 5,
             alpha_actor: float = 1e-4,
             alpha_critic: float = 1e-3,
             tau: float = 1e-2,
@@ -682,7 +682,7 @@ class RDPGAgent(object):
 
     def update(self, batch):
         """Updates the models based on a given batch
-        
+
         Here, we use trucated backpropogation through time (TBPTT)
         TODO: source
         TODO: Explanation of k1, k2 etc.
