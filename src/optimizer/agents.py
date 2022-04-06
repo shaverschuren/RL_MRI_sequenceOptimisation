@@ -520,7 +520,7 @@ class RDPGAgent(object):
             epsilon_min: float = 0.01,
             epsilon_decay: float = 1. - 2e-3,
             tbptt_k1: int = 5,
-            tbptt_k2: int = 5,
+            tbptt_k2: int = 3,
             alpha_actor: float = 1e-4,
             alpha_critic: float = 1e-3,
             tau: float = 1e-2,
@@ -688,6 +688,9 @@ class RDPGAgent(object):
         TODO: Explanation of k1, k2 etc.
         """
 
+        # TODO: Debugging
+        torch.autograd.set_detect_anomaly(True)
+
         # Check for validity of tbptt parameters
         if self.tbptt_k1 > len(batch) or self.tbptt_k2 > len(batch):
             raise ValueError(
@@ -795,13 +798,27 @@ class RDPGAgent(object):
                 # Detach hidden states that are too far back in history (k2)
                 for i in range(t - self.tbptt_k2 + 2):
                     # print(f"{i}:{len(hidden_critic)}")
-                    for j in [0, 1]:
-                        hidden_critic[i][j].detach()
-                        hidden_actor[i][j].detach()
-                        hidden_critic_target[i][j].detach()
-                        hidden_actor_target[i][j].detach()
+                    hidden_critic[i] = (
+                        Variable(hidden_critic[i][0].data),
+                        Variable(hidden_critic[i][1].data)
+                    )
+                    hidden_actor[i] = (
+                        Variable(hidden_actor[i][0].data),
+                        Variable(hidden_actor[i][1].data)
+                    )
+                    hidden_critic_target[i] = (
+                        Variable(hidden_critic_target[i][0].data),
+                        Variable(hidden_critic_target[i][1].data)
+                    )
+                    hidden_actor_target[i] = (
+                        Variable(hidden_actor_target[i][0].data),
+                        Variable(hidden_actor_target[i][1].data)
+                    )
 
                 # Update actor
+                # Here, retain the graph since the gradients of the policy loss
+                # flow through the critic model, which is needed later for
+                # the critic backpropagation.
                 self.actor_optimizer.zero_grad()
                 policy_loss_sums[update_count].backward(retain_graph=True)
                 self.actor_optimizer.step()
