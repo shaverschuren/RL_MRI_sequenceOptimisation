@@ -690,6 +690,7 @@ class RDPGAgent(object):
 
         # TODO: Debugging
         torch.autograd.set_detect_anomaly(True)
+        addresses = []
 
         # Check for validity of tbptt parameters
         if self.tbptt_k1 > len(batch) or self.tbptt_k2 > len(batch):
@@ -781,13 +782,56 @@ class RDPGAgent(object):
             critic_loss_sums[update_count] += critic_loss
 
             # Update hidden states
+            address1 = (
+                f"{hex(id(hidden_actor_1[0]))}; {hex(id(hidden_actor_1[1]))}; "
+                f"{hex(id(hidden_critic_1[0]))}; {hex(id(hidden_critic_1[1]))}"
+            )
+
             hidden_critic.append(hidden_critic_1)
             hidden_actor.append(hidden_actor_1)
             hidden_critic_target.append(hidden_critic_target_1)
             hidden_actor_target.append(hidden_actor_target_1)
 
+            address2 = (
+                f"{hex(id(hidden_actor_1[0]))}; {hex(id(hidden_actor_1[1]))}; "
+                f"{hex(id(hidden_critic_1[0]))}; {hex(id(hidden_critic_1[1]))}"
+            )
+            address3 = (
+                f"{hex(id(hidden_actor[-1][0]))}; "
+                f"{hex(id(hidden_actor[-1][1]))}; "
+                f"{hex(id(hidden_critic[-1][0]))}; "
+                f"{hex(id(hidden_critic[-1][1]))}"
+            )
+
+            addresses.append(address1)
+
+            if address1 != address2 or address1 != address3:
+                raise UserWarning(f"\n{address1}\n{address2}\n{address3}")
+
             # Update the network periodically
             if (t + 1) % self.tbptt_k1 == 0:
+
+                addresses_check_act = [
+                    f"{hex(id(act[0]))}; {hex(id(act[1]))}"
+                    for act in hidden_actor
+                ]
+                addresses_check_cri = [
+                    f"{hex(id(cri[0]))}; {hex(id(cri[1]))}"
+                    for cri in hidden_critic
+                ]
+
+                for i in range(1, len(hidden_actor)):
+                    check_act = addresses_check_act[i] == addresses[i - 1][:30]
+                    check_cri = addresses_check_cri[i] == addresses[i - 1][32:]
+
+                    if not (check_act and check_cri):
+                        raise UserWarning(
+                            "Memory addresses changed!"
+                            f"\nError found at hidden state index {i}"
+                            f"\nExpected:\t{addresses_check_act[i]}; "
+                            f"{addresses_check_cri[i]}"
+                            f"\nFound:\t\t{addresses[i - 1]}"
+                        )
 
                 # print(f"Len: {len(hidden_critic)}")
 
