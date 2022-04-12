@@ -14,6 +14,7 @@ from torch import optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 from optimizer import environments, models
+from torchviz import make_dot
 
 
 class DQNAgent(object):
@@ -691,6 +692,7 @@ class RDPGAgent(object):
         # TODO: Debugging
         torch.autograd.set_detect_anomaly(True)
         addresses = []
+        graphs = []
 
         # Check for validity of tbptt parameters
         if self.tbptt_k1 > len(batch) or self.tbptt_k2 > len(batch):
@@ -776,6 +778,17 @@ class RDPGAgent(object):
                     hidden_critic[t]
                 )[0]
             )
+
+            g_critic = make_dot(
+                critic_loss, params=dict(self.critic.named_parameters())  # ,
+                # show_attrs=True, show_saved=True
+            )
+            g_policy = make_dot(
+                policy_loss, params=dict(self.actor.named_parameters())  # ,
+                # show_attrs=True, show_saved=True
+            )
+
+            graphs.append((g_policy, g_critic))
 
             # Store losses
             policy_loss_sums[update_count] += policy_loss
