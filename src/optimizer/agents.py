@@ -690,7 +690,7 @@ class RDPGAgent(object):
         """
 
         # TODO: Debugging
-        torch.autograd.set_detect_anomaly(True)
+        # torch.autograd.set_detect_anomaly(True)
         addresses = []
         graphs = []
 
@@ -779,16 +779,16 @@ class RDPGAgent(object):
                 )[0]
             )
 
-            g_critic = make_dot(
-                critic_loss, params=dict(self.critic.named_parameters())  # ,
-                # show_attrs=True, show_saved=True
-            )
-            g_policy = make_dot(
-                policy_loss, params=dict(self.actor.named_parameters())  # ,
-                # show_attrs=True, show_saved=True
-            )
+            # g_critic = make_dot(
+            #     critic_loss, params=dict(self.critic.named_parameters()),
+            #     show_attrs=True, show_saved=True
+            # )
+            # g_policy = make_dot(
+            #     policy_loss, params=dict(self.actor.named_parameters()),
+            #     show_attrs=True, show_saved=True
+            # )
 
-            graphs.append((g_policy, g_critic))
+            # graphs.append((g_policy, g_critic))
 
             # Store losses
             policy_loss_sums[update_count] += policy_loss
@@ -833,7 +833,7 @@ class RDPGAgent(object):
                     for cri in hidden_critic
                 ]
 
-                for i in range(1, len(hidden_actor)):
+                for i in range(1 + self.tbptt_k1 * update_count, len(hidden_actor)):
                     check_act = addresses_check_act[i] == addresses[i - 1][:30]
                     check_cri = addresses_check_cri[i] == addresses[i - 1][32:]
 
@@ -863,14 +863,14 @@ class RDPGAgent(object):
                         Variable(hidden_actor[i][0].data),
                         Variable(hidden_actor[i][1].data)
                     )
-                    hidden_critic_target[i] = (
-                        Variable(hidden_critic_target[i][0].data),
-                        Variable(hidden_critic_target[i][1].data)
-                    )
-                    hidden_actor_target[i] = (
-                        Variable(hidden_actor_target[i][0].data),
-                        Variable(hidden_actor_target[i][1].data)
-                    )
+                    # hidden_critic_target[i] = (
+                    #     Variable(hidden_critic_target[i][0].data),
+                    #     Variable(hidden_critic_target[i][1].data)
+                    # )
+                    # hidden_actor_target[i] = (
+                    #     Variable(hidden_actor_target[i][0].data),
+                    #     Variable(hidden_actor_target[i][1].data)
+                    # )
 
                 # Update actor
                 # Here, retain the graph since the gradients of the policy loss
@@ -886,8 +886,27 @@ class RDPGAgent(object):
                 self.critic_optimizer.step()
 
                 # Detach losses
-                policy_loss_sums[update_count].detach()
-                critic_loss_sums[update_count].detach()
+                # Detach hidden states that are too far back in history (k2)
+                for i in range(len(hidden_critic)):
+                    # print(f"{i}:{len(hidden_critic)}")
+                    hidden_critic[i] = (
+                        Variable(hidden_critic[i][0].data),
+                        Variable(hidden_critic[i][1].data)
+                    )
+                    hidden_actor[i] = (
+                        Variable(hidden_actor[i][0].data),
+                        Variable(hidden_actor[i][1].data)
+                    )
+                    # hidden_critic_target[i] = (
+                    #     Variable(hidden_critic_target[i][0].data),
+                    #     Variable(hidden_critic_target[i][1].data)
+                    # )
+                    # hidden_actor_target[i] = (
+                    #     Variable(hidden_actor_target[i][0].data),
+                    #     Variable(hidden_actor_target[i][1].data)
+                    # )
+                # policy_loss_sums[update_count].detach()
+                # critic_loss_sums[update_count].detach()
 
                 # Update target networks (lagging weights)
                 for target_param, param in zip(
