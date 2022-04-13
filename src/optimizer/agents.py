@@ -14,6 +14,7 @@ from torch import optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 from optimizer import environments, models
+from torchviz import make_dot
 
 
 class DQNAgent(object):
@@ -519,7 +520,8 @@ class RDPGAgent(object):
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
             epsilon_decay: float = 1. - 2e-3,
-            tbptt_factor: int = 5,
+            tbptt_k1: int = 5,
+            tbptt_k2: int = 5,
             alpha_actor: float = 1e-4,
             alpha_critic: float = 1e-3,
             tau: float = 1e-2,
@@ -542,8 +544,10 @@ class RDPGAgent(object):
                 Minimal epsilon
             epsilon_decay : float
                 Decay factor for epsilon
-            tbptt_factor : int
-                Amount of backpropogation-through-time steps we'll take
+            tbptt_k1 : int
+                Amount of forward steps between model updates
+            tbptt_k2 : int
+                Amount of steps over which to perform backpropagation
             alpha_actor : float
                 Learning rate for Adam optimizer  for actor model
             alpha_critic : float
@@ -562,7 +566,8 @@ class RDPGAgent(object):
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
-        self.tbptt_factor = tbptt_factor
+        self.tbptt_k1 = tbptt_k1
+        self.tbptt_k2 = tbptt_k2
         self.alpha_actor = alpha_actor
         self.alpha_critic = alpha_critic
         self.tau = tau
@@ -677,10 +682,28 @@ class RDPGAgent(object):
         return torch.FloatTensor(noisy_action, device=self.device)
 
     def update(self, batch):
-        """Updates the models based on a given batch"""
+        """Updates the models based on a given batch
+
+        Here, we use trucated backpropogation through time (TBPTT)
+        TODO: source
+        TODO: Explanation of k1, k2 etc.
+        """
+
+        # Check for validity of tbptt parameters
+        if self.tbptt_k1 > len(batch) or self.tbptt_k2 > len(batch):
+            raise ValueError(
+                "For TBPTT, k1 and k2 should both be smaller or equal"
+                " to the sequence length."
+                f"\nGot n={len(batch)}, k1={self.tbptt_k1}, k2={self.tbptt_k2}"
+            )
+        elif self.tbptt_k1 < self.tbptt_k2:
+            raise UserWarning(
+                "k1 < k2. This case isn't functional yet and probably won't be"
+            )
 
         # Reset hidden states
         self.reset(batch_size=len(batch[0]))
+
         # Extract initial hidden states
         # We manually keep track of hidden states because we'll
         # need to do several passes through the same model per timestep
@@ -690,22 +713,19 @@ class RDPGAgent(object):
         hidden_actor_target = [(self.actor_target.hx, self.actor_target.cx)]
 
         # Create lists for policy and critic loss
-        policy_loss_total = None
-        critic_loss_total = None
+        policy_loss_sums = [
+            torch.tensor(0., dtype=torch.float32, device=self.device)
+        ]
+        critic_loss_sums = [
+            torch.tensor(0., dtype=torch.float32, device=self.device)
+        ]
+
+        # Define initial update count
+        update_count = 0
 
         # Loop over timesteps of the trajectories
         # Process all trajectories in parallel, however
         for t in range(len(batch)):
-
-            # Detach hidden states after a certain number of steps
-            k = (t + 1) - self.tbptt_factor
-
-            if k >= 0:
-                for i in [0, 1]:
-                    hidden_critic[k][i].detach()
-                    hidden_actor[k][i].detach()
-                    hidden_critic_target[k][i].detach()
-                    hidden_actor_target[k][i].detach()
 
             # Extract states, actions, rewards, next_states
             states = [transition.state for transition in batch[t]]
@@ -759,12 +779,8 @@ class RDPGAgent(object):
             )
 
             # Store losses
-            if policy_loss_total is not None and critic_loss_total is not None:
-                policy_loss_total += policy_loss
-                critic_loss_total += critic_loss
-            else:
-                policy_loss_total = policy_loss
-                critic_loss_total = critic_loss
+            policy_loss_sums[update_count] += policy_loss
+            critic_loss_sums[update_count] += critic_loss
 
             # Update hidden states
             hidden_critic.append(hidden_critic_1)
@@ -772,44 +788,86 @@ class RDPGAgent(object):
             hidden_critic_target.append(hidden_critic_target_1)
             hidden_actor_target.append(hidden_actor_target_1)
 
-        # Update networks and return losses
-        if policy_loss_total is not None and critic_loss_total is not None:
-            # Normalize losses
-            policy_loss_total /= float(len(batch))
-            critic_loss_total /= float(len(batch))
+            # Update the network periodically
+            if (t + 1) % self.tbptt_k1 == 0:
 
-            # Update actor
-            self.actor_optimizer.zero_grad()
-            policy_loss_total.backward(retain_graph=True)
-            self.actor_optimizer.step()
+                # Normalize losses
+                policy_loss_sums[update_count] /= float(self.tbptt_k1)
+                critic_loss_sums[update_count] /= float(self.tbptt_k1)
 
-            # Update critic
-            self.critic_optimizer.zero_grad()
-            critic_loss_total.backward()
-            self.critic_optimizer.step()
+                # Detach hidden states that are too far back in history (k2)
+                for i in range(t - self.tbptt_k2 + 2):
+                    # print(f"{i}:{len(hidden_critic)}")
+                    hidden_critic[i] = (
+                        Variable(hidden_critic[i][0].data),
+                        Variable(hidden_critic[i][1].data)
+                    )
+                    hidden_actor[i] = (
+                        Variable(hidden_actor[i][0].data),
+                        Variable(hidden_actor[i][1].data)
+                    )
 
-            # Update target networks (lagging weights)
-            for target_param, param in zip(
-                    self.actor_target.parameters(), self.actor.parameters()):
-                target_param.data.copy_(
-                    param.data * self.tau
-                    + target_param.data * (1.0 - self.tau)
+                # Update actor
+                # Here, retain the graph since the gradients of the policy loss
+                # flow through the critic model, which is needed later for
+                # the critic backpropagation.
+                self.actor_optimizer.zero_grad()
+                policy_loss_sums[update_count].backward(retain_graph=True)
+                self.actor_optimizer.step()
+
+                # Update critic
+                self.critic_optimizer.zero_grad()
+                critic_loss_sums[update_count].backward()
+                self.critic_optimizer.step()
+
+                # Detach all "used" hidden states
+                for i in range(len(hidden_critic)):
+                    hidden_critic[i] = (
+                        Variable(hidden_critic[i][0].data),
+                        Variable(hidden_critic[i][1].data)
+                    )
+                    hidden_actor[i] = (
+                        Variable(hidden_actor[i][0].data),
+                        Variable(hidden_actor[i][1].data)
+                    )
+
+                # Update target networks (lagging weights)
+                for target_param, param in zip(
+                        self.actor_target.parameters(),
+                        self.actor.parameters()
+                ):
+                    target_param.data.copy_(
+                        param.data * self.tau
+                        + target_param.data * (1.0 - self.tau)
+                    )
+                for target_param, param in zip(
+                        self.critic_target.parameters(),
+                        self.critic.parameters()
+                ):
+                    target_param.data.copy_(
+                        param.data * self.tau
+                        + target_param.data * (1.0 - self.tau)
+                    )
+
+                # Create new loss term in the summation list
+                policy_loss_sums.append(
+                    torch.tensor(0., dtype=torch.float32, device=self.device)
                 )
-            for target_param, param in zip(
-                    self.critic_target.parameters(), self.critic.parameters()):
-                target_param.data.copy_(
-                    param.data * self.tau
-                    + target_param.data * (1.0 - self.tau)
+                critic_loss_sums.append(
+                    torch.tensor(0., dtype=torch.float32, device=self.device)
                 )
 
-            # Return losses
+                # Increase update counter
+                update_count += 1
+
+        # Return losses
+        if update_count > 0:
             return (
-                float(policy_loss_total.detach()),
-                float(critic_loss_total.detach())
+                float(sum(policy_loss_sums) / float(update_count)),
+                float(sum(critic_loss_sums) / float(update_count))
             )
-
         else:
-            raise RuntimeError("Updating failed...")
+            raise UserWarning("Updating failed")
 
     def update_epsilon(self):
         """Update epsilon (called at the end of an episode)"""
