@@ -59,7 +59,8 @@ def parse_args():
         help="Optional: Override the number of episodes to train with"
     )
     optional.add_argument(
-        "--suppress_done", type=bool, default=False,
+        "--auto_done", "-ad", type=bool, nargs="?", metavar="auto_done",
+        default=False, const=True,
         help="Optional: Override the 'done' signal given by the model"
     )
 
@@ -172,7 +173,7 @@ def init_environment(args: argparse.Namespace):
             log_dir=args.log_dir,
             fa_range=fa_range,
             metric=args.metric, action_space_type=action_space_type,
-            model_done=not args.suppress_done,
+            model_done=args.auto_done,
             recurrent_model=recurrent_model,
             validation_mode=validation_mode
         )
@@ -180,7 +181,7 @@ def init_environment(args: argparse.Namespace):
         env = environments.SimulationEnv(
             mode=args.metric, fa_range=fa_range,
             action_space_type=action_space_type,
-            model_done=not args.suppress_done,
+            model_done=args.auto_done,
             recurrent_model=recurrent_model,
             lock_material_params=validation_mode,
             validation_mode=validation_mode
@@ -231,7 +232,7 @@ def init_optimizer(env, args: argparse.Namespace):
         optimizer = algorithms.RDPG(
             env=env, log_dir=args.log_dir,
             n_episodes=n_episodes,
-            model_done=not args.suppress_done,
+            model_done=args.auto_done,
             pretrained_path=args.pretrained_path
         )
     elif args.agent == "validation":
