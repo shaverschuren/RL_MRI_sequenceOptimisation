@@ -17,6 +17,7 @@ import time                                         # noqa: E402
 start = time.time()                                 # Start timer
 
 import argparse                                     # noqa: E402
+import warnings                                     # noqa: E402
 from optimizer import algorithms, environments      # noqa: E402
 
 print(f"Took {time.time() - start:.2f} seconds")    # Print timer results
@@ -106,6 +107,12 @@ def parse_args():
                 "The file passed in argument 'pretrained_path' doesn't exist"
                 f"\nGot '{args.pretrained_path}'"
             )
+    if args.auto_done:
+        warnings.warn(
+            "\nAuto-done was enabled but isn't quite functional yet."
+            "\nConsider turning it off by removing '-auto_done' or '-ad' "
+            "from the cmd call."
+        )
 
     # Return arguments
     return args
