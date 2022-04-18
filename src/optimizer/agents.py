@@ -516,7 +516,7 @@ class RDPGAgent(object):
             action_space: environments.ActionSpace,
             n_states: int = 2,
             n_actions: int = 2,
-            gamma: float = 0.99,
+            gamma: float = 0.,  # TODO: 0.99
             epsilon: float = 1.,
             epsilon_min: float = 0.01,
             epsilon_decay: float = 1. - 2e-3,
