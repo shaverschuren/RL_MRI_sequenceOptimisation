@@ -772,6 +772,12 @@ class RDPG(object):
             self.logs_path, self.logs_fields
         )
 
+        # Setup loss history and "best" model backup feature
+        self.loss_history = []
+        self.best_loss = None
+        self.backup_best = False
+        self.best_episode = 0
+
     def log_initiation(self):
         """Log episode initialisation to tensorboard"""
 
@@ -1008,7 +1014,7 @@ class RDPG(object):
             and hasattr(self, "policy_loss")
             and hasattr(self, "critic_loss")
         ):
-            # Log losses
+            # Log losses in tensorboard
             self.logger.log_scalar(
                 field="policy_loss",
                 tag=f"{self.logs_tag}_train_episodes",
@@ -1021,6 +1027,43 @@ class RDPG(object):
                 value=self.critic_loss,
                 step=self.episode
             )
+            # Log losses internally
+            self.loss_history.append({
+                "episode": self.episode,
+                "policy_loss": float(self.policy_loss),
+                "critic_loss": float(self.critic_loss)
+            })
+            # Check whether we're currently on the "best" episode yet
+            if len(self.loss_history) < 5:
+                # Skip this if there isn't enough episodes yet for mean filter
+                pass
+            else:
+                # Calculate mean loss over last five episodes
+                mean_loss = 0.
+
+                for i in range(-5, 0):
+                    loss_sum = (
+                        float(self.loss_history[i]["policy_loss"])
+                        + float(self.loss_history[i]["critic_loss"])
+                    )
+                    mean_loss += loss_sum
+
+                mean_loss /= 5.
+
+                # Update "best" loss value and check whether we're
+                # on the "best" episode yet (if applicable)
+                if self.best_loss is not None:
+                    # Check if better if data is available
+                    if mean_loss < self.best_loss:
+                        self.best_loss = mean_loss
+                        self.backup_best = True
+                        self.best_episode = self.episode
+                    else:
+                        self.backup_best = False
+                else:
+                    # If no data available yet, just use the most recent one
+                    self.best_loss = mean_loss
+                    self.backup_best = True
 
         # If theoretical optimum is known, log the error
         if isinstance(self.env, environments.SimulationEnv):
@@ -1191,7 +1234,9 @@ class RDPG(object):
 
             # If training, update model
             if train:
+                # Generate batch
                 batch = self.memory.sample(self.batch_size)
+                # Run training
                 self.policy_loss, self.critic_loss = \
                     self.agent.update(batch)
 
@@ -1207,7 +1252,11 @@ class RDPG(object):
                 self.episode % (self.n_episodes // 100) == 0
                 or self.episode + 1 == self.n_episodes
             ):
+                # Update most recent backup
                 self.agent.save(self.model_path)
+                # Update "best" backup
+                if self.backup_best:
+                    self.agent.save(self.model_path.replace(".pt", "_best.pt"))
 
 
 class Validator(object):
