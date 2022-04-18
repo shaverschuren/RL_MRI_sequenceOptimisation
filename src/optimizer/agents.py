@@ -8,6 +8,7 @@ Here, we give implementations for agents used in several algorithms, namely:
 """
 
 from typing import Union
+import warnings
 import numpy as np
 import torch
 from torch import optim
@@ -691,15 +692,28 @@ class RDPGAgent(object):
 
         # Check for validity of tbptt parameters
         if self.tbptt_k1 > len(batch) or self.tbptt_k2 > len(batch):
-            raise ValueError(
+            # Warn about bad k1/k2
+            warnings.warn(
                 "For TBPTT, k1 and k2 should both be smaller or equal"
                 " to the sequence length."
                 f"\nGot n={len(batch)}, k1={self.tbptt_k1}, k2={self.tbptt_k2}"
+                "\nChanging k1 and k2 to n, so now using "
+                f"n={len(batch)}, k1={len(batch)}, k2={len(batch)}"
             )
+            # Change values to appropriate ones
+            n = len(batch)
+            k1 = n
+            k2 = n
+
         elif self.tbptt_k1 < self.tbptt_k2:
             raise UserWarning(
                 "k1 < k2. This case isn't functional yet and probably won't be"
             )
+
+        else:
+            n = len(batch)
+            k1 = self.tbptt_k1
+            k2 = self.tbptt_k2
 
         # Reset hidden states
         self.reset(batch_size=len(batch[0]))
@@ -789,14 +803,14 @@ class RDPGAgent(object):
             hidden_actor_target.append(hidden_actor_target_1)
 
             # Update the network periodically
-            if (t + 1) % self.tbptt_k1 == 0:
+            if (t + 1) % k1 == 0:
 
                 # Normalize losses
-                policy_loss_sums[update_count] /= float(self.tbptt_k1)
-                critic_loss_sums[update_count] /= float(self.tbptt_k1)
+                policy_loss_sums[update_count] /= float(k1)
+                critic_loss_sums[update_count] /= float(k1)
 
                 # Detach hidden states that are too far back in history (k2)
-                for i in range(t - self.tbptt_k2 + 2):
+                for i in range(t - k2 + 2):
                     # print(f"{i}:{len(hidden_critic)}")
                     hidden_critic[i] = (
                         Variable(hidden_critic[i][0].data),

@@ -616,14 +616,14 @@ class SimulationEnv(object):
                 # Extract optimal metric and define error
                 optimal_metric = getattr(self, f"optimal_{self.metric}")
                 self.error = max(0., float(
-                    (optimal_metric - self.state[0] * 50.)
+                    (optimal_metric - self.state[0] * self.metric_calibration)
                     / optimal_metric)
                 )
                 # Tweak reward based on error
                 if self.error > 0.:
                     if self.n_episodes is not None:
                         reward_delta = min(
-                            20.,
+                            40.,
                             ((
                                 (
                                     4.80 * (
@@ -635,10 +635,10 @@ class SimulationEnv(object):
                         )
                     else:
                         reward_delta = min(
-                            20., 2. / (0.2 * min(1., self.error)) - 40.
+                            40., 2. / (0.2 * min(1., self.error)) - 40.
                         )
                 else:
-                    reward_delta = 20.
+                    reward_delta = 40.
 
                 reward_float += reward_delta
 
@@ -669,15 +669,6 @@ class SimulationEnv(object):
                 done = 0
             else:
                 done = 1
-
-        # TODO: Testing --> done also given at final tick
-        if len(self.history) > 29:
-            done = 1
-            # else:
-            #     done = 0
-
-            # Define done
-            self.done = torch.tensor(done, device=self.device)
 
     def step(self, action):
         """Run a single step of the RL loop
