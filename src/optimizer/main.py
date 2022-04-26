@@ -170,7 +170,7 @@ def init_environment(args: argparse.Namespace):
 
     # Determine fa range
     if args.metric == "snr": fa_range = [3., 30.]
-    elif args.metric == "cnr": fa_range = [10., 40.]
+    elif args.metric == "cnr": fa_range = [5., 35.]
     else: raise RuntimeError()
 
     # Initialize environment
