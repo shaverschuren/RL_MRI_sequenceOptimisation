@@ -110,7 +110,7 @@ class SimulationEnv(object):
             recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[None, int] = None,
-            fa_range: list[float] = [10., 40.],
+            fa_range: list[float] = [5., 45.],
             Nfa: int = 1000,
             T1_range: list[float] = [0.100, 2.000],
             T2_range: list[float] = [0.025, 0.150],
@@ -869,7 +869,7 @@ class ScannerEnv(object):
             recurrent_model: Union[bool, None] = False,
             homogeneous_initialization: bool = False,
             n_episodes: Union[int, None] = None,
-            fa_range: list[float] = [10., 40.],
+            fa_range: list[float] = [5., 45.],
             overwrite_roi: bool = False,
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -1096,7 +1096,7 @@ class ScannerEnv(object):
                 (self.fa - 0.)
                 / (90. - 0.)
             )
-        # snr / cnr (just devide by 50 for now)
+        # snr / cnr
         if hasattr(self, self.metric):
             setattr(
                 self, f"{self.metric}_norm",
