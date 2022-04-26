@@ -317,9 +317,9 @@ class SimulationEnv(object):
                 if loop >= 9999:
                     # Display warning
                     warnings.warn(
-                        "\nT1a/T1b combination for flip angle "
+                        "\n\x1b[33;20mT1a/T1b combination for flip angle "
                         f"of {optimal_fa:.2f} [deg] not found!"
-                        "\nWe're skipping this flip angle."
+                        "\nWe're skipping this flip angle.\x1b[0m"
                     )
                     # Replace non-viable flip angle (if possible)
                     optimal_fa_list.pop(fa_idx)
