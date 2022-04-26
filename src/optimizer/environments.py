@@ -469,6 +469,9 @@ class SimulationEnv(object):
             # Calculate best flip angle analytically. Formula retrieved from:
             # Haselhoff EH. Optimization of flip angle for T1 dependent cnr: a
             # closed form solution. Magn Reson Med 1997;38:518 – 9.
+            # TODO: This only works in the T1-dependent FA range!!! Gives huge
+            # errors when applied to T2-weighted cases. Will have to fix this
+            # somehow.
             self.optimal_fa = float(np.arccos(
                 (
                     -2 * E1a * E1b + E1a + E1b - 2 + np.sqrt(
