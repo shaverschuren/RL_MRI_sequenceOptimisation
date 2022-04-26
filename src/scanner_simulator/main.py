@@ -35,19 +35,19 @@ def parse_args():
         help="Resolution of the simulation (NxN). Default: 256"
     )
     optional.add_argument(
-        "--T1a", default=1.084, type=float,
+        "--T1a", default=1.50, type=float,
         help="T1 to simulate phantom with [s]. Default: White matter"
     )
     optional.add_argument(
-        "--T2a", default=0.069, type=float,
+        "--T2a", default=0.149, type=float,
         help="T1 to simulate phantom with [s]. Default: White matter"
     )
     optional.add_argument(
-        "--T1b", default=1.820, type=float,
+        "--T1b", default=1.410, type=float,
         help="T1 to simulate second phantom with [s]. Default: Grey matter"
     )
     optional.add_argument(
-        "--T2b", default=0.099, type=float,
+        "--T2b", default=0.059, type=float,
         help="T2 to simulate second phantom with [s]. Default: Grey matter"
     )
 
