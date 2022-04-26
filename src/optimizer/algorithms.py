@@ -1345,7 +1345,7 @@ class Validator(object):
 
         # Print start info
         print(
-            "\n======= Running SNR validation ======="
+            f"\n======= Running {self.env.metric.upper()} validation ======="
             "\n\n--------------------------------------"
             f"\nFA Range [deg]: [{self.fa_range[0]}, {self.fa_range[1]}]"
             f"\nN_scans:        {self.n_ticks}"
