@@ -3,7 +3,7 @@
 This module performs basic EPG simulations in k-space.
 It is based upon some MATLAB code, as was written
 and documented at 'https://github.com/mriphysics/EPG-X' by
-Matthias Weigel in 11/2014, was reimplemented in Python
+Shaihan Malik in 06/2017, was reimplemented in Python
 by Luuk Jacobs in 01/2022 and then partly repurposed and adjusted
 by Sjors Verschuren in 05/2022.
 
