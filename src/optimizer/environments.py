@@ -1024,7 +1024,10 @@ class ScannerEnv(object):
 
         # Generate ROI path and calibration image
         self.roi_path = os.path.join(self.log_dir, "roi.npy")
-        self.calibration_image = self.perform_scan(pass_fa=False)
+        # TODO: Changed this during scan session
+        self.calibration_image = self.perform_scan(
+            fa=50., pass_fa=True
+        )
 
         # Check for existence of ROI file
         if not self.overwrite_roi and os.path.exists(self.roi_path):
