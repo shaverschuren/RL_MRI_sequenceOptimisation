@@ -1,10 +1,21 @@
 """Module implementing the k-space acquisition simulator class"""
 
+
+# Path setup
 import os
-from typing import Union
-import numpy as np
-import torch
-from epg_simulator.python import epg  # TODO: Make this gpu-compatible
+import sys
+
+src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+root = os.path.dirname(src)
+if root not in sys.path: sys.path.append(root)
+if src not in sys.path: sys.path.append(src)
+
+# Specific imports
+from typing import Union                            # noqa: E402
+import time                                         # noqa: E402
+import numpy as np                                  # noqa: E402
+import torch                                        # noqa: E402
+from epg_simulator.python import epg_numba as epg   # noqa: E402
 
 
 class SimulatorObject():
@@ -56,7 +67,10 @@ class SimulatorObject():
                 f"This directory doesn't exist. Got '{map_dir}'"
             )
         else:
-            if ["T1.npy", "T2.npy", "PD.npy"] not in os.listdir(map_dir):
+            if any(
+                file_name not in os.listdir(map_dir)
+                for file_name in ['T1.npy', 'T2.npy', 'PD.npy']
+            ):
                 raise FileNotFoundError(
                     "The given directory exists, but it does not contain "
                     "the required files. "
@@ -85,4 +99,23 @@ class SimulatorObject():
         The k-space filling trajectory is (for now) only cartesian sequential.
         """
 
-        raise NotImplementedError()
+        # Quick tryout
+        F0, _, _ = epg.epg_as_numpy(
+            100, alphas, 0.050,
+            np.max(self.T1_map_np), np.max(self.T2_map_np)
+        )
+
+
+if __name__ == "__main__":
+
+    # Include timer for debugging
+    start_time = time.time()
+
+    # Initialize the simulator
+    simulator = SimulatorObject('tmp/')
+    initialization_time = time.time() - start_time
+    print(f"Initialization done!    Took {initialization_time:.4f} seconds")
+
+    simulator.forward(alphas=np.array([50.] * 100))
+    simulation_time = time.time() - initialization_time - start_time
+    print(f"Simulation done!        Took {simulation_time:.4f} seconds")
