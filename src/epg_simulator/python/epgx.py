@@ -1,6 +1,7 @@
 """EPGX Simulation module
 
-This module performs basic EPG simulations in k-space.
+This module performs EPG simulations on the GPU, taking
+MT effects into account.
 It is based upon some MATLAB code, as was written
 and documented at 'https://github.com/mriphysics/EPG-X' by
 Shaihan Malik in 06/2017, was reimplemented in Python
