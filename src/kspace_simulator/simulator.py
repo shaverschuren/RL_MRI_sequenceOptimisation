@@ -15,7 +15,7 @@ from typing import Union                            # noqa: E402
 import time                                         # noqa: E402
 import numpy as np                                  # noqa: E402
 import torch                                        # noqa: E402
-from epg_simulator.python import epg_numba as epg   # noqa: E402
+from epg_simulator.python import epg                # noqa: E402
 
 
 class SimulatorObject():
@@ -55,6 +55,10 @@ class SimulatorObject():
         # Intiialize quantative maps
         self.init_quantative_maps()
 
+        # Check sequence
+        if sequence != "GRE":
+            raise NotImplementedError()
+
     def init_quantative_maps(self):
         """Function initializing the quantative maps for this object"""
 
@@ -91,7 +95,8 @@ class SimulatorObject():
 
     def forward(
         self,
-        alphas: Union[float, np.ndarray]
+        alphas: np.ndarray,
+        tr: float = 0.050
     ):
         """Function implementing a forward simulation of a pulse train
 
@@ -101,9 +106,11 @@ class SimulatorObject():
 
         # Quick tryout
         F0, _, _ = epg.epg_as_numpy(
-            100, alphas, 0.050,
-            np.max(self.T1_map_np), np.max(self.T2_map_np)
+            len(alphas), alphas, tr,
+            0.6, 0.01
         )
+
+        return F0
 
 
 if __name__ == "__main__":
@@ -116,6 +123,12 @@ if __name__ == "__main__":
     initialization_time = time.time() - start_time
     print(f"Initialization done!    Took {initialization_time:.4f} seconds")
 
-    simulator.forward(alphas=np.array([50.] * 100))
+    # Run a tryout simulation
+    F0 = simulator.forward(alphas=np.arange(50, 0, -0.5))
     simulation_time = time.time() - initialization_time - start_time
     print(f"Simulation done!        Took {simulation_time:.4f} seconds")
+
+    # For debugging purposes, plot result
+    import matplotlib.pyplot as plt
+    plt.plot(np.array(list(range(1, len(F0) + 1))), np.abs(F0))
+    plt.show()
