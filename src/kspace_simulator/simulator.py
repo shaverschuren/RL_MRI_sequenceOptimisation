@@ -74,3 +74,15 @@ class SimulatorObject():
         self.T1_map_torch = torch.FloatTensor(self.T1_map_np)
         self.T2_map_torch = torch.FloatTensor(self.T2_map_np)
         self.PD_map_torch = torch.FloatTensor(self.PD_map_np)
+
+    def forward(
+        self,
+        alphas: Union[float, np.ndarray]
+    ):
+        """Function implementing a forward simulation of a pulse train
+
+        Note that we've only implemented GRE so far.
+        The k-space filling trajectory is (for now) only cartesian sequential.
+        """
+
+        raise NotImplementedError()
