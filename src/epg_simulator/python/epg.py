@@ -83,12 +83,19 @@ def epg_as_numpy(
     # Determine effective alpha and phi arrays and dedicated
     # length parameters: SSFP variant settings
     if type(alpha) == np.ndarray:
+        # Check whether N_in == len(alpha)
+        if N_in != len(alpha):
+            raise ValueError(
+                "The number of pulses should equal the "
+                "echo train length."
+                f"\nGot {N_in} and {len(alpha)}"
+            )
         # Calculate phi, flip angle array
         phi = np.array([-np.angle(SP)] * len(alpha))
         fa = np.array(abs(SP) * alpha)
-        # The flip angle (array) is repeated N_in times
-        for pn in range(1, N_in):
-            fa = np.concatenate((fa, alpha))
+        # # The flip angle (array) is repeated N_in times
+        # for pn in range(1, N_in):
+        #     fa = np.concatenate((fa, alpha))
     elif type(alpha) == float:
         # Calculate phi, flip angle array
         phi = np.array(-np.angle(SP))
