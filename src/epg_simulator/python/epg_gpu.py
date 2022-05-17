@@ -6,8 +6,6 @@ and documented at 'https://github.com/mriphysics/EPG-X' by
 Shaihan Malik in 06/2017, was reimplemented in Python
 by Luuk Jacobs in 01/2022 and then partly repurposed and adjusted
 by Sjors Verschuren in 05/2022.
-
-TODO: Needs to be fully reviewed and then repurposed still
 """
 
 import math
@@ -20,7 +18,7 @@ class EPG(torch.nn.Module):
     @staticmethod
     def EPG_shift_matrices(device, Nmax):
         N = (Nmax + 1) * 3
-        S = torch.zeros((N * N, 1), dtype=torch.float16, device=device)
+        S = torch.zeros((N * N, 1), dtype=torch.float32, device=device)
 
         kidx = list(range(3, N, 3))  # miss out F1+
         sidx = [x - 3 for x in kidx]  # negative states shift 4 back
@@ -60,7 +58,7 @@ class EPG(torch.nn.Module):
         sina = torch.sin(alpha)
         RR = torch.tensor([[cosa2, -sina2, sina],
                            [-sina2, cosa2, sina],
-                           [-0.5 * sina, -0.5 * sina, cosa]], dtype=torch.float16, device=device)
+                           [-0.5 * sina, -0.5 * sina, cosa]], dtype=torch.float32, device=device)
         return RR
 
     @staticmethod
@@ -73,7 +71,7 @@ class EPG(torch.nn.Module):
         sina = torch.sin(alpha)
         RR = torch.tensor([[cosa2, sina2, sina],
                            [sina2, cosa2, -sina],
-                           [-0.5 * sina, 0.5 * sina, cosa]], dtype=torch.float16, device=device)
+                           [-0.5 * sina, 0.5 * sina, cosa]], dtype=torch.float32, device=device)
         return RR
 
     def EPG_TSE(self, device, theta, ESP, T1, T2, z0, inversion, TI):
@@ -87,33 +85,47 @@ class EPG(torch.nn.Module):
         :param inversion: whether inversion pulse if applied or not (bool)
         :param TI: inversion time (ms)
         """
-        np2 = len(theta)
-        kmax = 2 * (np2 - 1)  # maximum EPG order (can be lowered to save memory and time)
 
-        kmax_per_pulse = np.array(
-            [2 * x + 1 for x in list(range(1, math.ceil(np2 / 2) + 1)) + list(range(math.floor(np2 / 2), 0, -1))])
+        # Define flip angle train length and max EPG order
+        np2 = len(theta)
+        kmax = 2 * (np2 - 1)
+
+        # Define max EPG order per pulse
+        kmax_per_pulse = np.array([
+            2 * x + 1
+            for x in (
+                list(range(1, math.ceil(np2 / 2) + 1))
+                + list(range(math.floor(np2 / 2), 0, -1))
+            )
+        ])
         kmax_per_pulse[kmax_per_pulse > kmax] = kmax
+        # Adjust kmax
         if max(kmax_per_pulse) < kmax:
             kmax = max(kmax_per_pulse)
-        N = 3 * (kmax + 1)  # number of states
 
-        im_dim = T1.shape[0]  # number of voxels we simulate simultaneously
+        # Determine the number of total states
+        N = 3 * (kmax + 1)
 
-        S = self.EPG_shift_matrices(device, kmax)  # shift matrix
+        # Define the number of voxels/pixels we simulate in parallel
+        im_dim = T1.shape[0]
 
+        # Define the shift matrix
+        S = self.EPG_shift_matrices(device, kmax)
+
+        # Define relaxation constants and their combined operator matrix
         E1 = torch.exp(-0.5 * ESP / T1)
         E2 = torch.exp(-0.5 * ESP / T2)
         E = torch.diag_embed(torch.stack([E2, E2, E1], dim=2))[:, 0, :, :]
 
-        b = torch.zeros((im_dim, N, 1), dtype=torch.float16, device=device)
+        b = torch.zeros((im_dim, N, 1), dtype=torch.float32, device=device)
         b[:, 2, :] = 1 - E1
 
-        E = self.kron(torch.unsqueeze(torch.eye(kmax + 1, dtype=torch.float16, device=device), 0), E)  # no diffusion
+        E = self.kron(torch.unsqueeze(torch.eye(kmax + 1, dtype=torch.float32, device=device), 0), E)  # no diffusion
 
         ES = torch.matmul(E, S)
 
-        F = torch.zeros((im_dim, N, np2 - 1), dtype=torch.float16, device=device)
-        FF = torch.zeros((im_dim, N, 1), dtype=torch.float16, device=device)
+        F = torch.zeros((im_dim, N, np2 - 1), dtype=torch.float32, device=device)
+        FF = torch.zeros((im_dim, N, 1), dtype=torch.float32, device=device)
 
         FF[:, 2] = z0  # initial state
 
@@ -125,8 +137,8 @@ class EPG(torch.nn.Module):
         FF[:, :3] = torch.matmul(A, FF[:, :3])
         FF[:, :6] = torch.matmul(ES[:, :6, :6], FF[:, :6].clone()) + b[:, :6]
 
-        A = self.RF_rot_refoc(device, torch.as_tensor(abs(theta[1])))  # refocussing pulses (contstant)
-        T = torch.zeros((1, N*N, 1), dtype=torch.float16, device=device)
+        A = self.RF_rot_refoc(device, torch.as_tensor(abs(theta[1])))  # refocusing pulses (contstant)
+        T = torch.zeros((1, N*N, 1), dtype=torch.float32, device=device)
         i1 = [y + ii for y in [x * N for x in range(3)] for ii in range(3)]
         ksft = 3 * (3 * (kmax + 1) + 1)
         for i2 in range(9):
@@ -152,14 +164,65 @@ class EPG(torch.nn.Module):
 
         return F[:, 0, :], Fn, Zn
 
-    def EPG_GRE(self):
+    def EPG_GRE(self, device, theta, T1, T2, TR):
         """Function for GPU-accelerated single-compartment Gradient Echo EPG
 
         TODO: Write this whole thing... MATLAB counterpart (not GPU optimized):
         https://github.com/mriphysics/EPG-X/blob/master/EPGX-src/EPG_GRE.m
         """
 
-    def forward(self, device, nrefocus, ESP, TE, TR, inversion, TI, fake_param, test=False):
+        # Define flip angle train length and max EPG order
+        np2 = len(theta)
+        kmax = np2 - 1
+
+        # Define max EPG order per pulse
+        kmax_per_pulse = np.array([
+            x
+            for x in (
+                list(range(1, math.ceil(np2 / 2) + 1))
+                + list(range(math.floor(np2 / 2), 0, -1))
+            )
+        ])
+        kmax_per_pulse[kmax_per_pulse > kmax] = kmax
+        # Adjust kmax
+        if max(kmax_per_pulse) < kmax:
+            kmax = max(kmax_per_pulse)
+
+        # Determine the number of total states
+        N = 3 * (kmax + 1)
+
+        # Define the number of voxels/pixels we simulate in parallel
+        im_dim = T1.shape[0]
+
+        # Define the shift matrix
+        S = self.EPG_shift_matrices(device, kmax)
+
+        # Define relaxation matrix
+        E1 = torch.exp(-TR / T1)
+        E2 = torch.exp(-TR / T2)
+        E = torch.diag_embed(torch.stack([E2, E2, E1], dim=2))[:, 0, :, :]
+
+        # Define regrowth matrix
+        b = torch.zeros((im_dim, N, 1), dtype=torch.float32, device=device)
+        b[:, 2, :] = 1 - E1
+
+        # We don't use diffusion, so E is the same for all EPG orders
+        E = self.kron(torch.unsqueeze(
+            torch.eye(kmax + 1, dtype=torch.float32, device=device), 0
+        ), E)
+
+        # Define composite relaxation-shift matrix
+        ES = torch.matmul(E, S)
+
+        # TODO: Done till here!
+        # F = torch.zeros((im_dim, N, np2 - 1), dtype=torch.float32, device=device)
+        # FF = torch.zeros((im_dim, N, 1), dtype=torch.float32, device=device)
+
+        # FF[:, 2] = z0  # initial state
+
+        return 0, 0, 0
+
+    def forward(self, device, n_pulses, TR, fake_param, test=False):
         """
         :param device: GPU device used for training
         :param nrefocus: number of refocusing pulses
@@ -172,33 +235,43 @@ class EPG(torch.nn.Module):
         :param test: used for testing or not (bool)
         """
         if test:  # fix tissue parameters with predefined values for testing
-            PD = torch.ones((100, 1), dtype=torch.float16, device=device) * 0.6
-            T1 = torch.ones((100, 1), dtype=torch.float16, device=device) * 779
-            T2 = torch.ones((100, 1), dtype=torch.float16, device=device) * 45
+            PD = torch.ones((100, 1), dtype=torch.float32, device=device) * 0.6
+            T1 = torch.ones((100, 1), dtype=torch.float32, device=device) * 779
+            T2 = torch.ones((100, 1), dtype=torch.float32, device=device) * 45
         else:
             PD = fake_param[0, 0, :, :]
             T1 = fake_param[0, 1, :, :] * 5000 + 1e-2
             T2 = fake_param[0, 2, :, :] * 1500 + 1e-2
 
-        # refocusing pulse series (rad)
-        if nrefocus == 1:  # T1w
-            a0 = [70 * math.pi / 180] + [math.pi]
-            Ntr = 5
-        else:  # PDw, T2w, FLAIR
-            a0 = [math.pi / 2] + [120 * math.pi / 180] * nrefocus
-            Ntr = 2
+        # Cast params to tensors
+        # ESP = torch.tensor([ESP], dtype=torch.float32)
+        # TE = torch.tensor([TE], dtype=torch.float32)
+        TR = torch.tensor([TR], dtype=torch.float32)
+        # TI = torch.tensor([TI], dtype=torch.float32)
 
-        Tdelay = TR - ESP*(nrefocus+0.5)
-        Xi = torch.exp(-Tdelay/T1)
+        s, _, _ = self.EPG_GRE(
+            device, torch.tensor([0.05] * 100, dtype=torch.float32),T1, T2, TR
+        )
 
-        for ii in range(Ntr):  # simulate multiple TRs
-            if ii == 0:
-                s, _, Zn = self.EPG_TSE(device, a0, ESP, T1, T2, PD, inversion, TI)  # overwrite signal each TR
-            else:
-                s, _, Zn = self.EPG_TSE(device, a0, ESP, T1, T2, z0, inversion, TI)  # overwrite signal each TR
+        # # refocusing pulse series (rad)
+        # if nrefocus == 1:  # T1w
+        #     a0 = [70 * math.pi / 180] + [math.pi]
+        #     Ntr = 5
+        # else:  # PDw, T2w, FLAIR
+        #     a0 = [math.pi / 2] + [120 * math.pi / 180] * nrefocus
+        #     Ntr = 2
 
-            z0 = Zn[:, 0, -1]  # at final shot
-            z0 = Xi * torch.unsqueeze(z0, 1) + 1 - Xi  # regrow
+        # Tdelay = TR - ESP * (nrefocus + 0.5)
+        # Xi = torch.exp(-Tdelay / T1)
+
+        # for ii in range(Ntr):  # simulate multiple TRs
+        #     if ii == 0:
+        #         s, _, Zn = self.EPG_TSE(device, a0, ESP, T1, T2, PD, inversion, TI)  # overwrite signal each TR
+        #     else:
+        #         s, _, Zn = self.EPG_TSE(device, a0, ESP, T1, T2, z0, inversion, TI)  # overwrite signal each TR
+
+        #     z0 = Zn[:, 0, -1]  # at final shot
+        #     z0 = Xi * torch.unsqueeze(z0, 1) + 1 - Xi  # regrow
 
         # contrast is determined by echo that fills central k-space (~effective echo time)
         return torch.abs(s[:, math.ceil(TE / ESP) - 1])*PD[:, 0]
@@ -209,5 +282,10 @@ if __name__ == "__main__":
     EPG_model = EPG()
     for i in range(10):  # evaluate multiple times
         now = time.time()
-        fake = EPG_model.forward('cuda:1', 1, 14, 14, 864, False, 0,  0, True)
-        print(time.time() - now, fake[0])
+        fake = EPG_model.forward(
+            'cpu', 100, 864, 0, True
+        )
+        print(
+            f"Simulation done. Took {(time.time() - now) * 1000.:.1f} ms"
+            f" - Result: {fake[0]:.4f}"
+        )
