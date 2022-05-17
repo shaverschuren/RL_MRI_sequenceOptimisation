@@ -267,9 +267,9 @@ class EPG(torch.nn.Module):
             T = T.reshape(1, N, N)
 
             # Apply T to the EPG state matrix
-            F[:, kidx, jj] = torch.matmul(T[0, kidx, kidx], FF[:, kidx])
-            # FF[:, kidx] = torch.matmul(T[:, :kidx[-1]+1, :kidx[-1]+1], FF[:, kidx])
-            # F[:, kidx, jj - 1] = torch.squeeze(torch.bmm(ES[:, :kidx[-1]+1, :kidx[-1]+1], FF[:, kidx]) + b[:, kidx])
+            # F[:, kidx, jj] = torch.matmul(T[0, kidx, kidx], FF[:, kidx])
+            FF[:, kidx] = torch.matmul(T[:, :kidx[-1] + 1, :kidx[-1] + 1], FF[:, kidx])
+            F[:, kidx, jj - 1] = torch.squeeze(torch.bmm(ES[:, :kidx[-1] + 1, :kidx[-1] + 1], FF[:, kidx]) + b[:, kidx])
 
             # If we're at the end of the echo train, break the loop
             if jj == np2 - 1:
@@ -301,9 +301,9 @@ class EPG(torch.nn.Module):
         :param test: used for testing or not (bool)
         """
         if test:  # fix tissue parameters with predefined values for testing
-            PD = torch.ones((256, 1), dtype=torch.float32, device=device) * 0.6
-            T1 = torch.ones((256, 1), dtype=torch.float32, device=device) * 779
-            T2 = torch.ones((256, 1), dtype=torch.float32, device=device) * 45
+            PD = torch.ones((1, 1), dtype=torch.float32, device=device) * 0.6
+            T1 = torch.ones((1, 1), dtype=torch.float32, device=device) * 779
+            T2 = torch.ones((1, 1), dtype=torch.float32, device=device) * 45
         else:
             PD = quantitative_maps[0, 0, :, :]
             T1 = quantitative_maps[0, 1, :, :] * 5000 + 1e-2
@@ -316,7 +316,8 @@ class EPG(torch.nn.Module):
         # TI = torch.tensor([TI], dtype=torch.float32)
 
         s, _, _ = self.EPG_GRE(
-            device, torch.tensor([0.05] * 100, dtype=torch.float32), T1, T2, TR
+            device, torch.tensor([0.05] * n_pulses, dtype=torch.float32),
+            T1, T2, TR
         )
 
         # # refocusing pulse series (rad)
@@ -347,15 +348,15 @@ class EPG(torch.nn.Module):
 if __name__ == "__main__":
     EPG_model = EPG()
     import matplotlib.pyplot as plt
-    for i in range(10):  # Evaluate multiple times
+    for i in range(1):  # Evaluate multiple times
         now = time.time()
         signals = EPG_model.forward(
-            'cpu', 100, 864, 0.05, True
+            'cpu', 100, 50, None, True
         )
         print(
             f"Simulation done. Took {(time.time() - now) * 1000.:.1f} ms"
             # f" - Result: {torch.mean(fake)[0]:.4f}"
         )
 
-        plt.plot(list(range(100)), np.array(signals[150]))
+        plt.plot(list(range(100)), np.array(signals[0]))
         plt.show()
