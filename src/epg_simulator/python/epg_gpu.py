@@ -152,6 +152,13 @@ class EPG(torch.nn.Module):
 
         return F[:, 0, :], Fn, Zn
 
+    def EPG_GRE(self):
+        """Function for GPU-accelerated single-compartment Gradient Echo EPG
+
+        TODO: Write this whole thing... MATLAB counterpart (not GPU optimized):
+        https://github.com/mriphysics/EPG-X/blob/master/EPGX-src/EPG_GRE.m
+        """
+
     def forward(self, device, nrefocus, ESP, TE, TR, inversion, TI, fake_param, test=False):
         """
         :param device: GPU device used for training
