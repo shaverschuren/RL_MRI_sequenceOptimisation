@@ -25,7 +25,7 @@ class EPG(torch.nn.Module):
     @staticmethod
     def EPG_shift_matrices(device, Nmax):
         N = (Nmax + 1) * 3
-        S = torch.zeros((N * N, 1), dtype=torch.float32, device=device)
+        S = torch.zeros((N * N, 1), dtype=torch.complex64, device=device)
 
         kidx = list(range(3, N, 3))  # miss out F1+
         sidx = [x - 3 for x in kidx]  # negative states shift 4 back
@@ -54,6 +54,29 @@ class EPG(torch.nn.Module):
         res = a.unsqueeze(-1).unsqueeze(-3) * b.unsqueeze(-2).unsqueeze(-4)
         siz0 = res.shape[:-4]
         return res.reshape(siz0 + siz1)
+
+    @staticmethod
+    def RF_rot(device, alpha, phi):
+        """RF rotation along an arbitrary direction/phase
+
+        Here, note that by convention:
+        Along x-axis -> phi = 0
+        Along y-axis -> phi = pi / 2
+        """
+
+        RR = torch.zeros((3, 3), device=device, dtype=torch.complex64)
+
+        RR[0, 0] = torch.cos(alpha / 2) ** 2
+        RR[1, 0] = torch.exp(-2 * phi * 1j) * torch.sin(alpha / 2) ** 2
+        RR[2, 0] = -0.5 * 1j * torch.exp(-1j * phi) * torch.sin(alpha)
+        RR[0, 1] = torch.conj(RR[1, 0])
+        RR[1, 1] = RR[0, 0]
+        RR[2, 1] = 0.5 * 1j * torch.exp(1j * phi) * torch.sin(alpha)
+        RR[0, 2] = -1j * torch.exp(1j * phi) * torch.sin(alpha)
+        RR[1, 2] = 1j * torch.exp(-1j * phi) * torch.sin(alpha)
+        RR[2, 2] = torch.cos(alpha)
+
+        return RR
 
     @staticmethod
     def RF_rot_ex(device, alpha):
@@ -225,38 +248,42 @@ class EPG(torch.nn.Module):
         E = torch.diag_embed(torch.stack([E2, E2, E1], dim=2))[:, 0, :, :]
 
         # Define regrowth matrix (Naturally only Z0 grows back)
-        b = torch.zeros((im_dim, N, 1), dtype=torch.float32, device=device)
+        b = torch.zeros((im_dim, N, 1), dtype=torch.complex64, device=device)
         b[:, 2, :] = 1 - E1
 
         # We don't use diffusion, so E is the same for all EPG orders
         E = self.kron(torch.unsqueeze(
-            torch.eye(kmax + 1, dtype=torch.float32, device=device), 0
+            torch.eye(kmax + 1, dtype=torch.complex64, device=device), 0
         ), E)
 
         # Define composite relaxation-shift matrix
         ES = torch.matmul(E, S)
 
         # Pre-allocate RF matrix and store the indices of the top left corner
-        T = torch.zeros((1, N, N), dtype=torch.float32, device=device)
+        T = torch.zeros((1, N, N), dtype=torch.complex64, device=device)
 
         i1 = [y + ii for y in [x * N for x in range(3)] for ii in range(3)]
         ksft = 3 * (3 * (kmax + 1) + 1)
 
         # Define F matrix
-        F = torch.zeros((im_dim, N, np2), dtype=torch.float32, device=device)
+        F = torch.zeros((im_dim, N, np2), dtype=torch.complex64, device=device)
 
         # Define initial state
-        FF = torch.zeros((im_dim, N, 1), dtype=torch.float32, device=device)
+        FF = torch.zeros((im_dim, N, 1), dtype=torch.complex64, device=device)
         FF[:, 2] = 1.  # initial state
 
         # Main body: loop over the pulse train
         for jj in range(np2):
             # Get the RF rotation matrix
-            A = self.RF_rot_ex(device, abs(theta[jj]))
+            A = self.RF_rot(
+                device,
+                torch.abs(theta[jj]),
+                torch.angle(theta[jj])
+            )
 
             # Get max number of states
             kmax_current = kmax_per_pulse[jj]
-            kidx = list(range(3 * kmax_per_pulse[jj]))
+            kidx = list(range(3 * (kmax_current + 1)))
 
             # Build new T, given the current rotation matrix
             # TODO: Look at the computing cost of this reshaping
@@ -267,17 +294,20 @@ class EPG(torch.nn.Module):
             T = T.reshape(1, N, N)
 
             # Apply T to the EPG state matrix
-            # F[:, kidx, jj] = torch.matmul(T[0, kidx, kidx], FF[:, kidx])
-            FF[:, kidx] = torch.matmul(T[:, :kidx[-1] + 1, :kidx[-1] + 1], FF[:, kidx])
-            F[:, kidx, jj - 1] = torch.squeeze(torch.bmm(ES[:, :kidx[-1] + 1, :kidx[-1] + 1], FF[:, kidx]) + b[:, kidx])
+            # TODO: Done till here!
+            F[:, :kidx[-1] + 1, jj] = torch.matmul(T[:, :kidx[-1] + 1, :kidx[-1] + 1], FF[:, kidx, :])
+            # FF[:, kidx] = torch.matmul(T[:, :kidx[-1] + 1, :kidx[-1] + 1], FF[:, kidx])
+            # F[:, kidx, jj - 1] = torch.squeeze(torch.bmm(ES[:, :kidx[-1] + 1, :kidx[-1] + 1], FF[:, kidx]) + b[:, kidx])
 
             # If we're at the end of the echo train, break the loop
             if jj == np2 - 1:
                 break
 
             # Calculate state evolution
-            # FF[:, kidx] = torch.matmul(ES[:, kidx, kidx], F[:, kidx, jj]) + b[:, kidx]
-            FF[:, kidx] = torch.bmm(ES[:, :kidx[-1] + 1, :kidx[-1] + 1], torch.unsqueeze(F[:, :kidx[-1] + 1, jj - 1].clone(), 2)) + b[:, kidx]
+            FF[0, kidx] = torch.matmul(ES[0, :kidx[-1] + 1, :kidx[-1] + 1], F[:, :kidx[-1] + 1, jj]) + b[:, kidx]
+            # Deal with complex conjugate after shift
+            FF[0] = torch.conj(FF[0])
+            # FF[:, kidx] = torch.bmm(ES[:, :kidx[-1] + 1, :kidx[-1] + 1], torch.unsqueeze(F[:, :kidx[-1] + 1, jj - 1].clone(), 2)) + b[:, kidx]
 
         idx = list(range(4, F.shape[1], 3))[::-1] + [0] + list(range(3, F.shape[1], 3))
         idx.pop(0)
@@ -301,9 +331,9 @@ class EPG(torch.nn.Module):
         :param test: used for testing or not (bool)
         """
         if test:  # fix tissue parameters with predefined values for testing
-            PD = torch.ones((1, 1), dtype=torch.float32, device=device) * 0.6
-            T1 = torch.ones((1, 1), dtype=torch.float32, device=device) * 779
-            T2 = torch.ones((1, 1), dtype=torch.float32, device=device) * 45
+            PD = torch.ones((10, 1), dtype=torch.float32, device=device) * 0.6
+            T1 = torch.ones((10, 1), dtype=torch.float32, device=device) * 700
+            T2 = torch.ones((10, 1), dtype=torch.float32, device=device) * 40
         else:
             PD = quantitative_maps[0, 0, :, :]
             T1 = quantitative_maps[0, 1, :, :] * 5000 + 1e-2
@@ -316,7 +346,8 @@ class EPG(torch.nn.Module):
         # TI = torch.tensor([TI], dtype=torch.float32)
 
         s, _, _ = self.EPG_GRE(
-            device, torch.tensor([0.05] * n_pulses, dtype=torch.float32),
+            device,
+            torch.tensor([0.25 * torch.pi] * n_pulses, dtype=torch.complex64),
             T1, T2, TR
         )
 
@@ -351,12 +382,12 @@ if __name__ == "__main__":
     for i in range(1):  # Evaluate multiple times
         now = time.time()
         signals = EPG_model.forward(
-            'cpu', 100, 50, None, True
+            'cpu', 20, 50, None, True
         )
         print(
             f"Simulation done. Took {(time.time() - now) * 1000.:.1f} ms"
             # f" - Result: {torch.mean(fake)[0]:.4f}"
         )
 
-        plt.plot(list(range(100)), np.array(signals[0]))
+        plt.plot(list(range(10)), np.array(signals[0]))
         plt.show()
