@@ -15,7 +15,7 @@ from typing import Union                            # noqa: E402
 import time                                         # noqa: E402
 import numpy as np                                  # noqa: E402
 import torch                                        # noqa: E402
-from epg_simulator.python import epg                # noqa: E402
+from epg_simulator.python.epg_gpu import EPG        # noqa: E402
 
 
 class SimulatorObject():
@@ -55,8 +55,11 @@ class SimulatorObject():
         # Intiialize quantative maps
         self.init_quantative_maps()
 
-        # Check sequence
-        if sequence != "GRE":
+        # Check sequence and initialize EPG model
+        if sequence == "GRE":
+            # Initialize EPG model
+            self.epg = EPG()
+        else:
             raise NotImplementedError()
 
     def init_quantative_maps(self):
@@ -93,9 +96,27 @@ class SimulatorObject():
         self.T2_map_torch = torch.FloatTensor(self.T2_map_np)
         self.PD_map_torch = torch.FloatTensor(self.PD_map_np)
 
+        # Store original shape and then flatten the tensors
+        self.img_shape = self.T1_map_torch.size()
+
+        self.T1_map_torch = torch.reshape(
+            self.T1_map_torch, (self.img_shape[0] * self.img_shape[1], 1)
+        )
+        self.T2_map_torch = torch.reshape(
+            self.T2_map_torch, (self.img_shape[0] * self.img_shape[1], 1)
+        )
+        self.PD_map_torch = torch.reshape(
+            self.PD_map_torch, (self.img_shape[0] * self.img_shape[1], 1)
+        )
+
+        # Stack maps
+        self.maps = torch.stack(
+            (self.T1_map_torch, self.T2_map_torch, self.PD_map_torch)
+        )
+
     def forward(
         self,
-        alphas: np.ndarray,
+        theta: torch.Tensor,
         tr: float = 0.050
     ):
         """Function implementing a forward simulation of a pulse train
@@ -105,12 +126,11 @@ class SimulatorObject():
         """
 
         # Quick tryout
-        F0, _, _ = epg.epg_as_numpy(
-            len(alphas), alphas, tr,
-            0.6, 0.01
+        signals = self.epg.forward(
+            self.device, theta, tr, self.maps
         )
 
-        return F0
+        return signals
 
 
 if __name__ == "__main__":
@@ -124,11 +144,11 @@ if __name__ == "__main__":
     print(f"Initialization done!    Took {initialization_time:.4f} seconds")
 
     # Run a tryout simulation
-    F0 = simulator.forward(alphas=np.arange(50, 0, -0.5))
+    signals = simulator.forward(theta=torch.arange(50, 0, -0.5))
     simulation_time = time.time() - initialization_time - start_time
     print(f"Simulation done!        Took {simulation_time:.4f} seconds")
 
-    # For debugging purposes, plot result
-    import matplotlib.pyplot as plt
-    plt.plot(np.array(list(range(1, len(F0) + 1))), np.abs(F0))
-    plt.show()
+    # # For debugging purposes, plot result
+    # import matplotlib.pyplot as plt
+    # plt.plot(np.array(list(range(1, len(signals) + 1))), np.abs(signals))
+    # plt.show()

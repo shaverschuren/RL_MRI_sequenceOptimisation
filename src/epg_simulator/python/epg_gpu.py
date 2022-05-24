@@ -9,6 +9,7 @@ by Sjors Verschuren in 05/2022.
 """
 
 import math
+from typing import Union
 import numpy as np
 import torch
 import time
@@ -96,7 +97,7 @@ class EPG(torch.nn.Module):
         T2: torch.Tensor,
         TR: torch.Tensor
     ):
-        """Function for GPU-accelerated single-compartment Gradient Echo EPG
+        """Method for GPU-accelerated single-compartment Gradient Echo EPG
 
         This code was adapted from
         https://github.com/mriphysics/EPG-X/EPGX-src/EPG_GRE.m, rewritten in
@@ -242,17 +243,18 @@ class EPG(torch.nn.Module):
 
         return F[:, 0, :], Fn, Zn
 
-    def forward(self, device, n_pulses, TR, quantitative_maps, test=False):
-        """
-        :param device: GPU device used for training
-        :param nrefocus: number of refocusing pulses
-        :param ESP: echo spacing (ms)
-        :param TE: echo time (ms)
-        :param TR: repetition time (ms)
-        :param inversion: whether inversion pulse is applied or not (bool)
-        :param TI: inversion time (ms)
-        :param quantititative_maps: synthesized q*-maps
-        :param test: used for testing or not (bool)
+    def forward(
+        self,
+        device: torch.device,
+        theta: Union[torch.Tensor, list],
+        TR: Union[torch.Tensor, float],
+        quantitative_maps: torch.Tensor,
+        test: bool = False
+    ):
+        """Main forward method
+
+        This function simply takes in the simulation parameters
+        and returns the signal after each pulse for each voxel.
         """
 
         # Fix tissue parameters with predefined values if testing.
@@ -262,22 +264,19 @@ class EPG(torch.nn.Module):
             T1 = torch.ones((256, 1), dtype=torch.float32, device=device) * 700
             T2 = torch.ones((256, 1), dtype=torch.float32, device=device) * 40
         else:
-            PD = quantitative_maps[0, 0, :, :]
-            T1 = quantitative_maps[0, 1, :, :]
-            T2 = quantitative_maps[0, 2, :, :]
+            PD = quantitative_maps[0, :, :]
+            T1 = quantitative_maps[1, :, :]
+            T2 = quantitative_maps[2, :, :]
 
-        # Cast params to tensors
-        TR = torch.tensor([TR], dtype=torch.float32)
+        # Cast params to tensors if applicable
+        if type(TR) != torch.Tensor:
+            TR = torch.tensor([TR], dtype=torch.float32)
+        if type(theta) != torch.Tensor:
+            theta = torch.tensor(theta, dtype=torch.complex64)
 
         # Run GRE simulation
-        s, _, _ = self.EPG_GRE(
-            device,
-            torch.tensor([0.25 * torch.pi] * n_pulses, dtype=torch.complex64),
-            T1, T2, TR
-        )
+        s, _, _ = self.EPG_GRE(device, theta, T1, T2, TR)
 
-        # TODO: contrast is determined by echo that fills central k-space (?)
-        # torch.abs(s[:, math.ceil(TE / ESP) - 1]) * PD[:, 0]
         return torch.abs(s) * PD
 
 
@@ -298,7 +297,11 @@ if __name__ == "__main__":
     for i in range(1 if plot else 10):
         now = time.time()
         signals = EPG_model.forward(
-            'cpu', 100, 50, None, True
+            'cpu',
+            torch.tensor(
+                [0.25 * torch.pi] * 100,
+                dtype=torch.complex64
+            ), 50, None, True
         )
         print(
             f"Simulation done. Took {(time.time() - now) * 1000.:.1f} ms"
