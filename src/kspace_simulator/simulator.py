@@ -15,6 +15,7 @@ from typing import Union                            # noqa: E402
 import time                                         # noqa: E402
 import numpy as np                                  # noqa: E402
 import torch                                        # noqa: E402
+import torch.nn.functional as F                     # noqa: E402
 from epg_simulator.python.epg_gpu import EPG        # noqa: E402
 
 
@@ -127,6 +128,8 @@ class SimulatorObject():
 
         Note that we've only implemented GRE so far.
         The k-space filling trajectory is (for now) only cartesian sequential.
+        We built in oversampling in the readout direction for better
+        simulation of actual acquisition.
         """
 
         # Run EPG simulation
@@ -139,17 +142,26 @@ class SimulatorObject():
             signals.reshape((*self.img_shape, len(theta))).permute(2, 0, 1)
         )
 
+        # Pad signals in the readout direction for effective RO oversampling
+        signals = F.pad(signals, (2, self.img_shape[1] // 2), "constant", 0.)
+
         # Fast Fourier Transform (2D)
         k_spaces = torch.fft.fft2(signals)
 
         # Simulate k-space filling
-        k_space = torch.zeros(self.img_shape, dtype=torch.complex64)
+        k_space = torch.zeros(
+            (self.img_shape[0], self.img_shape[1] * 2),
+            dtype=torch.complex64
+        )
 
         for line in range(self.img_shape[0]):
             k_space[line] = k_spaces[line][line]
 
         # Inverse Fourier
         image = torch.fft.ifft2(k_space)
+
+        # Remove padding
+        image = image[:, self.img_shape[1] // 2:(self.img_shape[1] * 3) // 2]
 
         # Return image
         return image
