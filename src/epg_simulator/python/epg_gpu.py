@@ -248,7 +248,7 @@ class EPG(torch.nn.Module):
         device: torch.device,
         theta: Union[torch.Tensor, list],
         TR: Union[torch.Tensor, float],
-        quantitative_maps: torch.Tensor,
+        quantitative_maps: Union[None, torch.Tensor],
         test: bool = False
     ):
         """Main forward method
@@ -264,9 +264,14 @@ class EPG(torch.nn.Module):
             T1 = torch.ones((256, 1), dtype=torch.float32, device=device) * 700
             T2 = torch.ones((256, 1), dtype=torch.float32, device=device) * 40
         else:
-            PD = quantitative_maps[0, :, :]
-            T1 = quantitative_maps[1, :, :]
-            T2 = quantitative_maps[2, :, :]
+            if quantitative_maps:
+                PD = quantitative_maps[0, :, :]
+                T1 = quantitative_maps[1, :, :]
+                T2 = quantitative_maps[2, :, :]
+            else:
+                raise ValueError(
+                    "If not in test mode, quantitative_maps must be passed"
+                )
 
         # Cast params to tensors if applicable
         if type(TR) != torch.Tensor:
@@ -297,7 +302,7 @@ if __name__ == "__main__":
     for i in range(1 if plot else 10):
         now = time.time()
         signals = EPG_model.forward(
-            'cpu',
+            torch.device('cpu'),
             torch.tensor(
                 [0.25 * torch.pi] * 100,
                 dtype=torch.complex64
