@@ -87,9 +87,13 @@ class SimulatorObject():
                 )
 
         # If everything is valid, import the quantitative maps
-        self.T1_map_np = np.load(os.path.join(map_dir, "T1.npy"))
-        self.T2_map_np = np.load(os.path.join(map_dir, "T2.npy"))
-        self.PD_map_np = np.load(os.path.join(map_dir, "PD.npy"))
+        # self.T1_map_np = np.load(os.path.join(map_dir, "T1.npy"))
+        # self.T2_map_np = np.load(os.path.join(map_dir, "T2.npy"))
+        # self.PD_map_np = np.load(os.path.join(map_dir, "PD.npy"))
+
+        self.T1_map_np = np.ones((4, 4)) * 0.600
+        self.T2_map_np = np.ones((4, 4)) * 0.040
+        self.PD_map_np = np.ones((4, 4)) * 1.
 
         # Load into tensors (used for GPU acceleration)
         self.T1_map_torch = torch.FloatTensor(self.T1_map_np)
@@ -125,22 +129,30 @@ class SimulatorObject():
         The k-space filling trajectory is (for now) only cartesian sequential.
         """
 
-        # Quick tryout
+        # Run EPG simulation
         signals = self.epg.forward(
             self.device, theta, torch.tensor([tr]), self.maps
         )
 
-        # Fourier
-        # torch.fft.fft2()
+        # Reshape into stack of original image shape
+        signals = torch.abs(
+            signals.reshape((*self.img_shape, len(theta))).permute(2, 0, 1)
+        )
+
+        # Fast Fourier Transform (2D)
+        k_spaces = torch.fft.fft2(signals)
 
         # Simulate k-space filling
+        k_space = torch.zeros(self.img_shape, dtype=torch.complex64)
+
+        for line in range(self.img_shape[0]):
+            k_space[line] = k_spaces[line][line]
 
         # Inverse Fourier
-        # torch.fft.ifft2()
+        image = torch.fft.ifft2(k_space)
 
         # Return image
-
-        return signals
+        return image
 
 
 if __name__ == "__main__":
@@ -154,7 +166,7 @@ if __name__ == "__main__":
     print(f"Initialization done!    Took {initialization_time:.4f} seconds")
 
     # Run a tryout simulation
-    signals = simulator.forward(theta=torch.arange(50, 0, -0.5))
+    signals = simulator.forward(theta=torch.ones((256)) * .25 * torch.pi)
     simulation_time = time.time() - initialization_time - start_time
     print(f"Simulation done!        Took {simulation_time:.4f} seconds")
 
