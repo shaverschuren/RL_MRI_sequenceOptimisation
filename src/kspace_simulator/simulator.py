@@ -130,6 +130,16 @@ class SimulatorObject():
             self.device, theta, torch.tensor([tr]), self.maps
         )
 
+        # Fourier
+        # torch.fft.fft2()
+
+        # Simulate k-space filling
+
+        # Inverse Fourier
+        # torch.fft.ifft2()
+
+        # Return image
+
         return signals
 
 
