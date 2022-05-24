@@ -178,7 +178,7 @@ if __name__ == "__main__":
     print(f"Initialization done!    Took {initialization_time:.4f} seconds")
 
     # Run a tryout simulation
-    image = simulator.forward(theta=torch.ones((32)) * .25 * torch.pi)
+    image = simulator.forward(theta=torch.ones((64)) * .25 * torch.pi)
     simulation_time = time.time() - initialization_time - start_time
     print(f"Simulation done!        Took {simulation_time:.4f} seconds")
 
