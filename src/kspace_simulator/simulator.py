@@ -127,7 +127,7 @@ class SimulatorObject():
 
         # Quick tryout
         signals = self.epg.forward(
-            self.device, theta, tr, self.maps
+            self.device, theta, torch.tensor([tr]), self.maps
         )
 
         return signals

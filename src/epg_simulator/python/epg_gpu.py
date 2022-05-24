@@ -246,8 +246,8 @@ class EPG(torch.nn.Module):
     def forward(
         self,
         device: torch.device,
-        theta: Union[torch.Tensor, list],
-        TR: Union[torch.Tensor, float],
+        theta: torch.Tensor,
+        TR: torch.Tensor,
         quantitative_maps: Union[None, torch.Tensor],
         test: bool = False
     ):
@@ -306,7 +306,7 @@ if __name__ == "__main__":
             torch.tensor(
                 [0.25 * torch.pi] * 100,
                 dtype=torch.complex64
-            ), 50, None, True
+            ), torch.tensor([50]), None, True
         )
         print(
             f"Simulation done. Took {(time.time() - now) * 1000.:.1f} ms"
