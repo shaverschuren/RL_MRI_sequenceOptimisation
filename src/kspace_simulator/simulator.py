@@ -88,13 +88,9 @@ class SimulatorObject():
                 )
 
         # If everything is valid, import the quantitative maps
-        # self.T1_map_np = np.load(os.path.join(map_dir, "T1.npy"))
-        # self.T2_map_np = np.load(os.path.join(map_dir, "T2.npy"))
-        # self.PD_map_np = np.load(os.path.join(map_dir, "PD.npy"))
-
-        self.T1_map_np = np.ones((4, 4)) * 0.600
-        self.T2_map_np = np.ones((4, 4)) * 0.040
-        self.PD_map_np = np.ones((4, 4)) * 1.
+        self.T1_map_np = np.load(os.path.join(map_dir, "T1.npy"))
+        self.T2_map_np = np.load(os.path.join(map_dir, "T2.npy"))
+        self.PD_map_np = np.load(os.path.join(map_dir, "PD.npy"))
 
         # Load into tensors (used for GPU acceleration)
         self.T1_map_torch = torch.FloatTensor(self.T1_map_np)
@@ -143,7 +139,11 @@ class SimulatorObject():
         )
 
         # Pad signals in the readout direction for effective RO oversampling
-        signals = F.pad(signals, (2, self.img_shape[1] // 2), "constant", 0.)
+        signals = F.pad(
+            signals,
+            (self.img_shape[1] // 2, self.img_shape[1] // 2),
+            "constant", 0.
+        )
 
         # Fast Fourier Transform (2D)
         k_spaces = torch.fft.fft2(signals)
@@ -164,7 +164,7 @@ class SimulatorObject():
         image = image[:, self.img_shape[1] // 2:(self.img_shape[1] * 3) // 2]
 
         # Return image
-        return image
+        return torch.abs(image)
 
 
 if __name__ == "__main__":
@@ -178,11 +178,12 @@ if __name__ == "__main__":
     print(f"Initialization done!    Took {initialization_time:.4f} seconds")
 
     # Run a tryout simulation
-    signals = simulator.forward(theta=torch.ones((256)) * .25 * torch.pi)
+    image = simulator.forward(theta=torch.ones((32)) * .25 * torch.pi)
     simulation_time = time.time() - initialization_time - start_time
     print(f"Simulation done!        Took {simulation_time:.4f} seconds")
 
-    # # For debugging purposes, plot result
-    # import matplotlib.pyplot as plt
+    # For debugging purposes, plot result
+    import matplotlib.pyplot as plt
+    plt.imshow(image)
     # plt.plot(np.array(list(range(1, len(signals) + 1))), np.abs(signals))
-    # plt.show()
+    plt.show()
