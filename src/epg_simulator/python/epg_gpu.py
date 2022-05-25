@@ -1,4 +1,4 @@
-"""EPGX Simulation module
+"""EPG-GPU Simulation module
 
 This module performs EPG simulations on the GPU.
 It is based upon some MATLAB code, as was written
