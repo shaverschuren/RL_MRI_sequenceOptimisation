@@ -113,7 +113,7 @@ class SimulatorObject():
         # Stack maps
         self.maps = torch.stack(
             (self.T1_map_torch, self.T2_map_torch, self.PD_map_torch)
-        )
+        ).to(self.device)
 
     def forward(
         self,
@@ -154,7 +154,8 @@ class SimulatorObject():
 
         # Run EPG simulation
         signals = self.epg.forward(
-            self.device, theta, torch.tensor([tr]), self.maps
+            self.device, theta, torch.tensor([tr], device=self.device),
+            self.maps
         )
 
         # Reshape into stack of original image shape
@@ -207,7 +208,7 @@ if __name__ == "__main__":
     print(f"Simulation done!        Took {simulation_time:.4f} seconds")
 
     # For debugging purposes, plot result
-    import matplotlib.pyplot as plt
-    plt.imshow(image)
+    # import matplotlib.pyplot as plt
+    # plt.imshow(image)
     # plt.plot(np.array(list(range(1, len(signals) + 1))), np.abs(signals))
-    plt.show()
+    # plt.show()

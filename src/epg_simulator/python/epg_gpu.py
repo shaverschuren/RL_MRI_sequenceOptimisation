@@ -164,7 +164,9 @@ class EPG(torch.nn.Module):
         # Define relaxation matrix
         E1 = torch.exp(-TR / T1)
         E2 = torch.exp(-TR / T2)
-        E = torch.diag_embed(torch.stack([E2, E2, E1], dim=2))[:, 0, :, :]
+        E = torch.diag_embed(
+            torch.stack([E2, E2, E1], dim=2)
+        )[:, 0, :, :].to(device)
 
         # Define regrowth matrix (Naturally only Z0 grows back)
         b = torch.zeros((im_dim, N, 1), dtype=torch.complex64, device=device)
@@ -275,9 +277,9 @@ class EPG(torch.nn.Module):
 
         # Cast params to tensors if applicable
         if type(TR) != torch.Tensor:
-            TR = torch.tensor([TR], dtype=torch.float32)
+            TR = torch.tensor([TR], dtype=torch.float32, device=device)
         if type(theta) != torch.Tensor:
-            theta = torch.tensor(theta, dtype=torch.complex64)
+            theta = torch.tensor(theta, dtype=torch.complex64, device=device)
 
         # Run GRE simulation
         s, _, _ = self.EPG_GRE(device, theta, T1, T2, TR)
@@ -302,11 +304,11 @@ if __name__ == "__main__":
     for i in range(1 if plot else 10):
         now = time.time()
         signals = EPG_model.forward(
-            torch.device('cpu'),
+            torch.device('cuda'),
             torch.tensor(
                 [0.25 * torch.pi] * 100,
                 dtype=torch.complex64
-            ), torch.tensor([50]), None, True
+            ), torch.tensor([50], device=torch.device('cuda')), None, True
         )
         print(
             f"Simulation done. Took {(time.time() - now) * 1000.:.1f} ms"
