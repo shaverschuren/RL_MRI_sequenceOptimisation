@@ -118,15 +118,39 @@ class SimulatorObject():
     def forward(
         self,
         theta: torch.Tensor,
-        tr: float = 0.050
+        tr: float = 0.050,
+        n_prep: int = 1
     ):
-        """Function implementing a forward simulation of a pulse train
+        """Method implementing a forward simulation of a pulse train
 
         Note that we've only implemented GRE so far.
         The k-space filling trajectory is (for now) only cartesian sequential.
         We built in oversampling in the readout direction for better
         simulation of actual acquisition.
+
+        Parameters
+        ----------
+            theta : torch.Tensor
+                Tensor containing the (complex) RF pulse info, being
+                amplitude and phase. Shape is (n_pulses,)
+            tr : float
+                Repetition time used in the simulation. Default: 50 ms
+            n_prep : int
+                Number of preparation pulses used in the simulation.
+                Here, the length of theta minus number of preperation pulses
+                should equal the amount of k-space lines in the phase
+                encoding direction!
         """
+
+        # Check the validity of the passed parameters
+        if len(theta) - n_prep != self.img_shape[0]:
+            raise ValueError(
+                "The amount of pulses (i.e. length of theta) minus "
+                "the number of preparation pulses (n_prep) should equal "
+                "the amount of k-space lines in the phase encoding direction."
+                f"\nGot {len(theta)} (n_pulses) - {n_prep} (n_prep) = "
+                f"{len(theta) - n_prep} != {self.img_shape[0]}"
+            )
 
         # Run EPG simulation
         signals = self.epg.forward(
@@ -155,7 +179,7 @@ class SimulatorObject():
         )
 
         for line in range(self.img_shape[0]):
-            k_space[line] = k_spaces[line][line]
+            k_space[line] = k_spaces[line + n_prep][line]
 
         # Inverse Fourier
         image = torch.fft.ifft2(k_space)
@@ -164,7 +188,7 @@ class SimulatorObject():
         image = image[:, self.img_shape[1] // 2:(self.img_shape[1] * 3) // 2]
 
         # Return image
-        return torch.abs(image)
+        return torch.abs(image), signals
 
 
 if __name__ == "__main__":
@@ -178,7 +202,7 @@ if __name__ == "__main__":
     print(f"Initialization done!    Took {initialization_time:.4f} seconds")
 
     # Run a tryout simulation
-    image = simulator.forward(theta=torch.ones((64)) * .25 * torch.pi)
+    image, _ = simulator.forward(theta=torch.ones((65)) * .25 * torch.pi)
     simulation_time = time.time() - initialization_time - start_time
     print(f"Simulation done!        Took {simulation_time:.4f} seconds")
 
