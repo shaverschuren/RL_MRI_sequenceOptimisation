@@ -297,6 +297,9 @@ if __name__ == "__main__":
     if plot:
         import matplotlib.pyplot as plt
 
+    # Identify device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     # Create EPG model
     EPG_model = EPG()
 
@@ -304,11 +307,11 @@ if __name__ == "__main__":
     for i in range(1 if plot else 10):
         now = time.time()
         signals = EPG_model.forward(
-            torch.device('cuda'),
+            device,
             torch.tensor(
                 [0.25 * torch.pi] * 100,
                 dtype=torch.complex64
-            ), torch.tensor([50], device=torch.device('cuda')), None, True
+            ), torch.tensor([50], device=device), None, True
         )
         print(
             f"Simulation done. Took {(time.time() - now) * 1000.:.1f} ms"
