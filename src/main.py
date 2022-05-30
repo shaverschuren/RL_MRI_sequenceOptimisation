@@ -51,6 +51,13 @@ def parse_args():
         default="rdpg"
     )
     optional.add_argument(
+        "--single_fa", "-sf", action="store_true",
+        help=(
+            "If passed, we train the model to optimize a single flip angle. "
+            "If not, we optimize the entirety of the echo train."
+        )
+    )
+    optional.add_argument(
         "--pretrained_path", metavar="pretrained_path", type=str,
         help="Optional: Path to pretrained model"
     )
@@ -59,24 +66,21 @@ def parse_args():
         help="Optional: Override the number of episodes to train with"
     )
     optional.add_argument(
-        '--keep_files', '-kf', metavar='keep_files', type=bool, nargs='?',
-        default=False, const=True,
+        '--keep_files', '-kf', action="store_true",
         help=(
             "Whether to keep or clear the communication files already there. "
             "If argument is passed, keep them."
         )
     )
     optional.add_argument(
-        '--keep_queue', '-kq', metavar='keep_queue', type=bool, nargs='?',
-        default=False, const=True,
+        '--keep_queue', '-kq', action="store_true",
         help=(
             "Whether to keep or clear the RabbitMQ queue. "
             "If argument is passed, keep it."
         )
     )
     optional.add_argument(
-        "--auto_done", "-ad", type=bool, nargs="?", metavar="auto_done",
-        default=False, const=True,
+        "--auto_done", "-ad", action="store_true",
         help="Optional: Override the 'done' signal given by the model"
     )
 
