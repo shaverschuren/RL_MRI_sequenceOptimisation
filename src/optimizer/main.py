@@ -52,6 +52,13 @@ def parse_args():
         help="Mode to operate in. Available: train/test/both/validation"
     )
     optional.add_argument(
+        "--single_fa", "-sf", action="store_true",
+        help=(
+            "If passed, we train the model to optimize a single flip angle. "
+            "If not, we optimize the entirety of the echo train."
+        )
+    )
+    optional.add_argument(
         "--pretrained_path", type=str,
         help="Optional: Path to pretrained model"
     )

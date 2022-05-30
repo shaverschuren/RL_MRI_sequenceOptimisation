@@ -104,6 +104,49 @@ def read_config():
     return config
 
 
+def check_args(args, config):
+    """Check arguments and config file validity"""
+
+    # Argument check
+    if args.metric.lower() not in ["snr", "cnr"]:
+        raise ValueError(
+            "The 'metric' argument should be in ['snr', 'cnr']"
+        )
+    if args.platform.lower() not in ["scan", "sim", "epg"]:
+        raise ValueError(
+            "The 'platform' argument should be in ['scan', 'sim', 'epg']"
+        )
+    if args.mode.lower() not in ["train", "test", "both", "validation"]:
+        raise ValueError(
+            "The 'mode' argument should be in "
+            "['train', 'test', 'both', 'validation']"
+        )
+    if args.agent.lower() not in ['dqn', 'ddpg', 'rdpg', 'validation']:
+        raise ValueError(
+            "The 'agent' argument should be in "
+            "['dqn', 'ddpg', 'rdpg', 'validation']"
+        )
+
+    # Config check (only for 'sim' and 'scan' modes)
+    if args.platform.lower() in ["sim", "scan"]:
+        # Check if all necessary fields are there
+        if not all(
+            elem in config.keys()
+            for elem in ["param_loc", "data_loc", "data_store_loc"]
+        ):
+            raise UserWarning(
+                "Config file incomplete. It should contain the following "
+                "fields:\n['param_loc', 'data_loc', 'data_store_loc']"
+            )
+
+    # Argument interaction check
+    if not args.single_fa and args.platform.lower() != "epg":
+        raise NotImplementedError(
+            "The full echo train optimization is only implemented for "
+            "the 'epg' mode for now."
+        )
+
+
 def clear_files():
     """Clear communication files (read from config file)"""
 
@@ -187,6 +230,8 @@ def launch_processes(args):
         process_call.extend(["--pretrained_path", args.pretrained_path])
     if args.episodes:
         process_call.extend(["--episodes", args.episodes])
+    if args.single_fa:
+        process_call.extend(["--single_fa"])
     if args.auto_done:
         process_call.extend(["--auto_done"])
     if args.keep_queue:
@@ -215,6 +260,9 @@ if __name__ == "__main__":
 
     # Read config file
     config = read_config()
+
+    # Check argument validity
+    check_args(args, config)
 
     # If applicable, clear files
     if not args.keep_files:
