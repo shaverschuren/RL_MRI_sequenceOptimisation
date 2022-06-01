@@ -9,7 +9,7 @@ by Sjors Verschuren in 09/2021."""
 from typing import Union, Tuple
 import numpy as np
 # import torch
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from numba import njit
 import numba 
 import pdb
@@ -365,6 +365,7 @@ def example(format: str = "numpy", plot: bool = True, verbose: bool = True):
 
     # Import timing
     import time
+    if plot: import matplotlib.pyplot as plt
 
     # Define parameters
     T1 = 0.600          # T1 relaxation time of the spin [s]
