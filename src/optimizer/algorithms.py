@@ -737,10 +737,19 @@ class RDPG(object):
         else:
             self.device = device
 
+        # Determine n_actions
+        if single_fa: n_actions = 2 if model_done else 1
+        else: n_actions = env.n_actions + 1 if model_done else env.n_actions
+        # Determine n_states
+        if single_fa: n_states = 2
+        else: n_states = [env.img_shape, env.n_pulses]
+
         # Setup agent
         self.agent = agents.RDPGAgent(
             env.action_space,
-            n_actions=2 if model_done else 1,
+            n_actions=n_actions,
+            n_states=n_states,
+            single_fa=single_fa,
             epsilon_decay=1. - (10. / float(self.n_episodes))
         )
         if self.pretrained_path: self.agent.load(pretrained_path)

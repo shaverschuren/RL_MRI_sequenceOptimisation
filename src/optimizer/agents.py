@@ -665,11 +665,22 @@ class RDPGAgent(object):
             )
         else:
             # Define model for the multi-pulse optimization case
-            self.actor = None
-            self.critic = None
-            self.actor_target = None
-            self.critic_target = None
-            raise NotImplementedError("Not done here yet!")
+            self.actor = models.RecurrentModel_ConvConcatFC(
+                self.n_states[0], self.n_states[1], "tanh",
+                self.n_actions, hidden_size=64
+            )
+            self.critic = models.RecurrentModel_ConvConcatFC(
+                self.n_states[0], self.n_states[1] + self.n_actions, "tanh",
+                self.n_actions, hidden_size=64
+            )
+            self.actor_target = models.RecurrentModel_ConvConcatFC(
+                self.n_states[0], self.n_states[1], "tanh",
+                self.n_actions, hidden_size=64
+            )
+            self.critic_target = models.RecurrentModel_ConvConcatFC(
+                self.n_states[0], self.n_states[1] + self.n_actions, "tanh",
+                self.n_actions, hidden_size=64
+            )
 
         # We initialize the target networks as copies of the original networks
         for target_param, param in zip(
@@ -701,7 +712,7 @@ class RDPGAgent(object):
 
         # Get action from actor model
         with torch.no_grad():
-            pure_action, _ = self.actor(torch.unsqueeze(state, 0))
+            pure_action, _ = self.actor(state[0], state[1])
         pure_action = torch.squeeze(pure_action, 0).detach().numpy()
         # Add noise (if training)
         noise = (
