@@ -354,6 +354,7 @@ class RecurrentModel_ConvConcatFC(nn.Module):
             input_img_size: tuple[int], input_vector_size: int,
             output_activation: str,
             output_size: int,
+            hidden_size: int,
             conv_architecture: list = [0],
             fc_architecture: list = [0],
             rnn_architecture: list = [0],
@@ -365,6 +366,7 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         self.input_img_size = input_img_size
         self.input_vector_size = input_vector_size
         self.output_size = output_size
+        self.hidden_size = hidden_size
         self.output_activation = output_activation
         self.conv_architecture = conv_architecture
         self.fc_architecture = fc_architecture
@@ -376,11 +378,11 @@ class RecurrentModel_ConvConcatFC(nn.Module):
 
         # Build stacks
         if self.device:
-            self.stack_conv = nn.Sequential(self.dict_conv).to(device)
+            self.stack_cnn = nn.Sequential(self.dict_cnn).to(device)
             self.stack_fc = nn.Sequential(self.dict_fc).to(device)
             self.stack_rnn = nn.Sequential(self.dict_rnn).to(device)
         else:
-            self.stack_conv = nn.Sequential(self.dict_conv)
+            self.stack_cnn = nn.Sequential(self.dict_cnn)
             self.stack_fc = nn.Sequential(self.dict_fc)
             self.stack_rnn = nn.Sequential(self.dict_rnn)
 
@@ -391,28 +393,46 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         then an LSTM block and finally the output layer.
         """
 
-        raise NotImplementedError("Not done here yet!")
+        # Define some parameters here for now. Might move to
+        # __init__
+        cnn_output_size = 128
+        fc_output_size = 128
+        rnn_input_size = cnn_output_size + fc_output_size
 
-        # Init architecture list
-        architecture_list = []
+        # Create CNN architecture list
+        cnn_list = [
+            ("conv1", nn.Conv2d(1, 4, 5)),
+            (("relu1", nn.ReLU())),
+            ("pool1", nn.MaxPool2d(2, 2)),
+            ("conv2", nn.Conv2d(4, 16, 5)),
+            (("relu2", nn.ReLU())),
+            ("pool2", nn.MaxPool2d(2, 2)),
+            ("flatten", nn.Flatten(0, 1)),
+            ("fc1", nn.Linear(16 * 5 * 5, cnn_output_size)),
+            (("relu3", nn.ReLU()))
+        ]
 
-        # TODO: Will have to revert this to the format we used before,
-        # but for now this works quite well. So... I'm not touching it.
+        # Create FC architecture list
+        fc_list = [
+            ("fc1", nn.Linear(self.input_vector_size, 128)),
+            (("relu1", nn.ReLU())),
+            ("fc2", nn.Linear(128, 128)),
+            (("relu2", nn.ReLU())),
+            ("fc3", nn.Linear(128, fc_output_size)),
+            (("relu3", nn.ReLU())),
+        ]
+
+        # Create RNN architecture list
+        rnn_list = []
         self.lstm_idx = 2
-
-        architecture_list.append(
+        rnn_list.append(
             (
                 "fc1",
-                nn.Linear(self.input_size, self.hidden_size)
+                nn.Linear(rnn_input_size, self.hidden_size)
             )
         )
-        architecture_list.append(
-            (
-                "relu1",
-                nn.ReLU()
-            )
-        )
-        architecture_list.append(
+        rnn_list.append(("relu1", nn.ReLU()))
+        rnn_list.append(
             (
                 "lstm",
                 nn.LSTM(
@@ -422,128 +442,30 @@ class RecurrentModel_ConvConcatFC(nn.Module):
                 )
             )
         )
-        architecture_list.append(
+        rnn_list.append(
             (
                 "fc2",
-                nn.Linear(self.hidden_size, 64)
+                nn.Linear(self.hidden_size, self.output_size)
             )
         )
-        architecture_list.append(
-            (
-                "relu2",
-                nn.ReLU()
-            )
-        )
-        architecture_list.append(
+        rnn_list.append(("relu2", nn.ReLU()))
+        rnn_list.append(
             (
                 "output",
-                nn.Linear(64, self.output_size)
+                nn.Linear(self.output_size, self.output_size)
             )
         )
         if self.output_activation.lower() == "tanh":
-            architecture_list.append(
-                (
-                    "tanh",
-                    nn.Tanh()
-                )
-            )
+            rnn_list.append(("tanh", nn.Tanh()))
         elif self.output_activation.lower() == "none":
             pass
         else:
             raise RuntimeError()
-        # # Append list with layers
-        # layer_i = -1
-        # for layer_i in range(len(self.fully_connected_architecture) - 1):
-        #     # Define layer name
-        #     layer_name = f'fc{layer_i + 1}'
-        #     # Add linear layer
-        #     architecture_list.append(
-        #         (
-        #             layer_name,
-        #             nn.Linear(
-        #                 self.fully_connected_architecture[layer_i],
-        #                 self.fully_connected_architecture[layer_i + 1])
-        #         )
-        #     )
-        #     # Add activation function
-        #     architecture_list.append(
-        #         (f"relu{layer_i + 1}", nn.ReLU())
-        #     )
 
-        # # Add LSTM module and concurrent relu layer
-        # self.lstm_idx = 2 * (layer_i + 1)
-        # architecture_list.append(
-        #     (
-        #         "lstm",
-        #         nn.LSTMCell(
-        #             input_size=self.fully_connected_architecture[-1],
-        #             hidden_size=self.hidden_size
-        #         )
-        #     )
-        # )
-        # architecture_list.append(
-        #     (
-        #         f"relu_lstm", nn.ReLU()
-        #     )
-        # )
-
-        # # # Define layer name
-        # # layer_name = f'fc{layer_i + 2}'
-        # # # Add linear layer
-        # # architecture_list.append(
-        # #     (
-        # #         layer_name,
-        # #         nn.Linear(
-        # #             self.hidden_size,
-        # #             self.hidden_size)
-        # #     )
-        # # )
-        # # # Add activation function
-        # # architecture_list.append(
-        # #     (f"relu{layer_i + 2}", nn.ReLU())
-        # # )
-
-        # # Add final output layer and its activation function
-        # architecture_list.append(
-        #     (
-        #         "output",
-        #         nn.Linear(
-        #             self.hidden_size,
-        #             self.output_size)
-        #     )
-        # )
-        # if str(self.output_activation).lower() == 'relu':
-        #     architecture_list.append(
-        #         (f"relu_output", nn.ReLU())
-        #     )
-        # elif str(self.output_activation).lower() == 'leaky_relu':
-        #     architecture_list.append(
-        #         (f"leaky_relu_output", nn.LeakyReLU())
-        #     )
-        # elif str(self.output_activation).lower() == 'tanh':
-        #     architecture_list.append(
-        #         (f"tanh_output", nn.Tanh())
-        #     )
-        # elif str(self.output_activation).lower() == 'sigmoid':
-        #     architecture_list.append(
-        #         (f"sigmoid_output", nn.Sigmoid())
-        #     )
-        # elif str(self.output_activation).lower() == 'softmax':
-        #     architecture_list.append(
-        #         (f"softmax_output", nn.Softmax())
-        #     )
-        # elif str(self.output_activation).lower() == 'none':
-        #     pass
-        # else:
-        #     raise ValueError(
-        #         "Activation function not supported. "
-        #         "Expected either 'relu', 'leaky_relu', 'tanh', "
-        #         "'sigmoid' or 'softmax', but got "
-        #         f"'{self.output_activation}'."
-        #     )
-
-        # Fill ordered dict
-        self.architecture_dict = OrderedDict(architecture_list)
+        # Fill ordered dicts
+        self.dict_cnn = OrderedDict(cnn_list)
+        self.dict_fc = OrderedDict(fc_list)
+        self.dict_rnn = OrderedDict(rnn_list)
 
     def forward(self, img, vector, hidden=None):
         """Implement forward pass
@@ -573,26 +495,33 @@ class RecurrentModel_ConvConcatFC(nn.Module):
                 The hidden states after the forward pass
         """
 
-        raise NotImplementedError("Not done here yet!")
+        # Pass image through cnn stack
+        cnn_out = self.stack_cnn(img)
 
-        # Pass through the first fully connected layers
-        x = self.stack[:self.lstm_idx](x)
+        # Pass vector through fc stack
+        fc_out = self.stack_fc(vector)
+
+        # Concatenate cnn_out and fc_out
+        rnn_in = self.stack_rnn[:self.lstm_idx](
+            torch.concat([cnn_out, fc_out])
+        )
+
         # Pass through the LSTM module and extract x, hidden states
         if hidden is None:
-            x, (hx, cx) = self.stack[self.lstm_idx](
-                torch.unsqueeze(x, 0), (self.hx, self.cx)
+            rnn_out, (hx, cx) = self.stack_rnn[self.lstm_idx](
+                torch.unsqueeze(rnn_in, 0), (self.hx, self.cx)
             )
             self.hx = hx
             self.cx = cx
         else:
-            x, (hx, cx) = self.stack[self.lstm_idx](
-                torch.unsqueeze(x, 0), hidden
+            rnn_out, (hx, cx) = self.stack_rnn[self.lstm_idx](
+                torch.unsqueeze(rnn_in, 0), hidden
             )
         # Pass through rest of the stack and extract output
-        x = torch.squeeze(x, 0)
-        x = self.stack[self.lstm_idx + 1:](x)
+        rnn_out = torch.squeeze(rnn_out, 0)
+        out = self.stack_rnn[self.lstm_idx + 1:](rnn_out)
 
-        return output, (hx, cx)
+        return out, (hx, cx)
 
     def reset_hidden_state(self, batch_size=1):
         """Reset hidden state of the lstm module"""
