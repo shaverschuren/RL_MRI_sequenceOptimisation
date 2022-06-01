@@ -1490,10 +1490,10 @@ class KspaceEnv(object):
         if self.homogeneous_initialization: self.set_homogeneous_dists()
         # Set environment to starting state
         self.reset()
-        # # Set n_actions and n_states
-        # if not validation_mode:
-        #     self.n_actions = len(self.action_space._info)
-        #     self.n_states = len(self.state)
+        # Set n_actions and n_states
+        if not validation_mode:
+            self.n_actions = len(self.action_space._info)
+            self.n_states = len(self.state)
 
     def read_config(self):
         """Read info from config file for scanner interaction"""
@@ -1637,9 +1637,9 @@ class KspaceEnv(object):
 
         # Perform normalisation for all parameters
         # fa
-        if hasattr(self, "fa"):
-            self.fa_norm = float(
-                (self.fa - 0.)
+        if hasattr(self, "fa_init"):
+            self.fa_init_norm = float(
+                (self.fa_init - 0.)
                 / (90. - 0.)
             )
         # theta
@@ -1671,7 +1671,8 @@ class KspaceEnv(object):
         # Define flip angle train
         if theta is None: theta = self.theta
         # Cast to tensor
-        theta = torch.tensor(theta, dtype=torch.complex64)
+        if type(theta) != torch.Tensor:
+            theta = torch.tensor(theta, dtype=torch.complex64)
 
         # Perform simulation
         self.recent_img, _ = self.simulator.forward(

@@ -257,6 +257,7 @@ def init_optimizer(env, args: argparse.Namespace):
             env=env, log_dir=args.log_dir,
             n_episodes=n_episodes,
             model_done=args.auto_done,
+            single_fa=args.single_fa,
             pretrained_path=args.pretrained_path
         )
     elif args.agent == "validation":

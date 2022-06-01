@@ -693,6 +693,7 @@ class RDPG(object):
             n_ticks: int = 10,  # TODO: 30
             batch_size: int = 64,
             model_done: bool = True,
+            single_fa: bool = False,
             pretrained_path: Union[str, os.PathLike, None] = None,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
@@ -711,6 +712,9 @@ class RDPG(object):
                 Batch size used for optimization
             model_done: bool
                 Whether model should give "done" command
+            single_fa : bool
+                If True, we only optimize a single flip angle.
+                If False, we optimize the entirety of the echo train.
             pretrained_path : str | os.PathLike | None
                 Path to pretrained model
         """
@@ -723,6 +727,7 @@ class RDPG(object):
         self.n_ticks = n_ticks
         self.batch_size = batch_size
         self.model_done = model_done
+        self.single_fa = single_fa
         self.pretrained_path = pretrained_path
 
         # Setup device
@@ -763,10 +768,13 @@ class RDPG(object):
 
         # Define datafields
         self.logs_fields = [
-            "img", "fa", "fa_norm", self.metric, f"{self.metric}_norm",
+            "img", self.metric, f"{self.metric}_norm",
             "error", "done", "epsilon", "critic_loss", "policy_loss",
             "n_scans", "reward", "performance"
         ]
+        if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
+        else: self.logs_fields.extend(["theta", "theta_norm"])
+
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
             self.logs_path, self.logs_fields
@@ -807,18 +815,19 @@ class RDPG(object):
                 )
 
             # Scalars (first state if applicable -> state0)
-            self.logger.log_scalar(
-                field="fa",
-                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=float(self.env.fa),
-                step=-1
-            )
-            self.logger.log_scalar(
-                field="fa_norm",
-                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=float(self.env.fa_norm),
-                step=-1
-            )
+            if self.single_fa:
+                self.logger.log_scalar(
+                    field="fa",
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                    value=float(self.env.fa),
+                    step=-1
+                )
+                self.logger.log_scalar(
+                    field="fa_norm",
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+                    value=float(self.env.fa_norm),
+                    step=-1
+                )
             self.logger.log_scalar(
                 field=self.metric,
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
@@ -870,6 +879,8 @@ class RDPG(object):
         # Log this step to tensorboard
         # (but only for 100 training episodes because of speed issues)
         run_type = "train" if self.train else "test"
+
+        # TODO: Implement proper logging for theta
 
         if (
             run_type == "test"
@@ -1133,9 +1144,21 @@ class RDPG(object):
                 f"\nInitial FA:\t{self.env.fa:4.1f} [deg]"
                 "\n-----------------------------------"
             )
+        elif isinstance(self.env, environments.KspaceEnv):
+            print_str = (
+                "\n========== "
+                f"Episode {self.episode + 1:3d}/"
+                f"{self.n_episodes if self.train else 20:3d}"
+                " ==========\n"
+                "\n-----------------------------------"
+                f"\nInitial FA:\t{self.env.fa_init:4.1f} [deg]"
+                "\n-----------------------------------"
+            )
         else:
-            print(self.env.__class__)
-            raise RuntimeError()
+            raise NotImplementedError(
+                f"The passed environment class ({self.env.__class__}) "
+                "is not supported in algorithms.py"
+            )
 
         # Print the string
         print(print_str)
