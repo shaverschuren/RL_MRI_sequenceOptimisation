@@ -12,6 +12,7 @@ may be performed over both snr and cnr.
 import os
 from typing import Union
 import json
+import glob
 import time
 import h5py
 import warnings
@@ -19,6 +20,7 @@ import numpy as np
 import random
 import torch
 import epg_simulator.python.epg_numba as epg
+import kspace_simulator.simulator as kspace_sim
 from util import roi
 
 
@@ -1402,6 +1404,506 @@ class ScannerEnv(object):
                 [0., 0.],
                 device=self.device
             )
+
+        # Store in history
+        self.history.append(self.state)
+
+        # If applicable, print line
+        if verbose:
+            print(
+                "\rResetting environment... Done"
+                "                  "
+            )
+
+
+class KspaceEnv(object):
+    """Class to represent a reinforcement learning environment
+    for full echo train flip angle optimization on an MRI acquisition
+    simulator.
+    """
+
+    def __init__(
+            self,
+            config_path: Union[str, os.PathLike],
+            log_dir: Union[str, os.PathLike],
+            metric: str = "snr",
+            model_done: bool = False,
+            homogeneous_initialization: bool = True,
+            n_episodes: Union[int, None] = None,
+            n_prep_pulses: int = 1,
+            fa_range: list[float] = [5., 45.],
+            validation_mode: bool = False,
+            device: Union[torch.device, None] = None):
+        """Initializes and builds attributes for this class
+
+            Parameters
+            ----------
+                metric : str
+                    Optimization metric (either snr or cnr)
+                config_path : str | bytes | os.PathLike
+                    Path to config file
+                log_dir : str | bytes | os.PathLike
+                    Path to log directory
+                model_done : bool
+                    Whether the model may give the "done" command as part
+                    of the action space
+                homogeneous_initialization : bool
+                    Whether to draw the initial flip angles from a
+                    homogeneous distribution (for training)
+                n_episodes : int | None
+                    Number of episodes
+                n_prep_pulses : int
+                    Number of preparation pulses used in simulation
+                fa_range : list[float]
+                    Range of initial flip angles
+                validation_mode : bool
+                    If True, use validation mode
+                device : None | torch.device
+                    Torch device
+            """
+
+        # Setup attributes
+        self.config_path = config_path
+        self.log_dir = log_dir
+        self.metric = metric
+        self.model_done = model_done
+        self.homogeneous_initialization = homogeneous_initialization
+        self.n_episodes = n_episodes
+        self.n_prep_pulses = n_prep_pulses
+        self.fa_range = fa_range
+        self.validation_mode = validation_mode
+        self.episode = 0
+        self.tick = 0
+
+        # Setup device
+        if not device:
+            self.device = \
+                torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+
+        # Read config
+        self.read_config()
+        # Initialize action space
+        self.init_actionspace()
+        # Set homogeneous fa_initial dist
+        if self.homogeneous_initialization: self.set_homogeneous_dists()
+        # Set environment to starting state
+        self.reset()
+        # # Set n_actions and n_states
+        # if not validation_mode:
+        #     self.n_actions = len(self.action_space._info)
+        #     self.n_states = len(self.state)
+
+    def read_config(self):
+        """Read info from config file for scanner interaction"""
+
+        # Read config file
+        with open(self.config_path, 'r') as f:
+            self.config = json.load(f)
+
+        # Define communication paths
+        self.data_dir = self.config["kspace_sim_data_loc"]
+
+        # Get subjects from data directory
+        subject_dirs = glob.glob(
+            os.path.join(self.data_dir, "[0-999]_[0-999]")
+        )
+
+        # Check all these subjects for the appropriate files
+        if len(subject_dirs) > 0:
+            # Check whether all appropriate files are present
+            incomplete_subjects = []
+            for dir in subject_dirs:
+                if not (
+                    os.path.exists(os.path.join(dir, "T1.npy"))
+                    and os.path.exists(os.path.join(dir, "T2.npy"))
+                    and os.path.exists(os.path.join(dir, "PD.npy"))
+                ):
+                    incomplete_subjects.append(dir)
+            # Remove incomplete subject folders from list and give warning
+            if len(incomplete_subjects) > 0:
+                # Remove incomplete subjects from the subject directory list
+                subject_dirs = [
+                    dir for dir in subject_dirs
+                    if dir not in incomplete_subjects
+                ]
+                # Throw warning
+                incomplete_subjects.sort()
+                warnings.warn(
+                    "\nWarning! Some of the data directories passed are "
+                    "incomplete.\nEvery directory is required to contain the "
+                    "following files: T1.npy; T2.npy; PD.npy."
+                    "\nThe directories that didn't match this criterium are:\n"
+                    + "\n".join(incomplete_subjects) + "\n"
+                )
+
+            # Read one file to determine the number of acquisition pulses.
+            # We won't check whether these are the same for every image for
+            # now, but if this is not the case, we'll get errors later on!
+            tryout_map = np.load(os.path.join(subject_dirs[0], "T1.npy"))
+            self.img_shape = np.shape(tryout_map)
+            self.n_acq_pulses = self.img_shape[0]  # 0-axis is the PA direction
+
+            # Define the number of total pulses
+            self.n_pulses = self.n_prep_pulses + self.n_acq_pulses
+
+            # Store subject directories in self
+            self.subject_dirs = subject_dirs
+
+        else:
+            raise FileNotFoundError(
+                f"The given data directory ({self.data_dir}) "
+                "does not contain folders with the appropriate "
+                "name convention ('[0-999]_[0-999]')"
+            )
+
+    def init_actionspace(self):
+        """Initialize action space
+
+        For continuous mode, use 1 output (fa)
+        For discrete mode, use 4 outputs (fa up down, small big)
+
+        If model_done, add the "done" command to the action space
+        """
+
+        if not self.validation_mode:
+            # Set action space type to continuous
+            _type = "continuous"
+
+            # Add FA actions for prep pulses
+            action_names = [
+                f"Change FA (prep pulse #{fa_i + 1})"
+                for fa_i in range(self.n_prep_pulses)
+            ]
+            action_ranges = np.array([[-1., 1.]] * self.n_prep_pulses)
+            action_deltas = None
+            # Add FA actions for acquisition pulses
+            action_names.extend([
+                f"Change FA (acq pulse #{fa_i + 1})"
+                for fa_i in range(self.n_acq_pulses)
+            ])
+            action_ranges = np.concatenate(
+                (action_ranges, np.array([[-1., 1.]] * self.n_acq_pulses)),
+                axis=0
+            )
+
+            # Append action space with "done" if applicable
+            if self.model_done:
+
+                action_names.append("Done")
+                action_ranges = np.concatenate(
+                    (action_ranges, np.array([[-1., 1.]])), axis=0
+                )
+
+            self.action_space = ActionSpace(
+                action_names=action_names,
+                action_ranges=action_ranges,
+                action_deltas=action_deltas,
+                _type=_type
+            )
+
+    def set_homogeneous_dists(self):
+        """Determine a set of uniformly distributed lists
+        for the initializations per episode.
+        """
+
+        # Check whether self.n_episodes is defined
+        if not self.n_episodes:
+            raise UserWarning(
+                "If homogeneous_initialization=True, "
+                "n_episodes MUST be defined"
+            )
+
+        # Create list of initial and optimal flip angles
+        # (uniformly distributed in range)
+        self.initial_fa_list = list(np.linspace(
+            self.fa_range[0], self.fa_range[1],
+            self.n_episodes
+        ))
+
+    def norm_parameters(self):
+        """Update normalized scan parameters"""
+
+        # Perform normalisation for all parameters
+        # fa
+        if hasattr(self, "fa"):
+            self.fa_norm = float(
+                (self.fa - 0.)
+                / (90. - 0.)
+            )
+        # theta
+        if hasattr(self, "theta"):
+            self.theta_norm = (
+                (self.theta - 0.)
+                / (90. - 0.)
+            )
+        # snr / cnr
+        if hasattr(self, self.metric):
+            setattr(
+                self, f"{self.metric}_norm",
+                getattr(self, self.metric) / self.metric_calibration
+            )
+
+    def perform_simulation(self, theta=None, verbose=True):
+        """Perform scan by passing parameters to scanner"""
+
+        # Define flip angle train
+        if theta is None: theta = self.theta
+        # Cast to tensor
+        theta = torch.tensor(theta, dtype=torch.complex64)
+
+        # Perform simulation
+        self.recent_img, _ = self.simulator.forward(
+            theta, tr=0.050, n_prep=self.n_prep_pulses
+        )
+
+        return self.recent_img
+
+    def run_simulation_and_update(self):
+        """Runs a scan and updates snr/cnr parameter accordingly"""
+
+        # Perform scan and extract image
+        img = self.perform_simulation()
+
+        # Extract roi
+        # TODO: Look at ROIs
+        raise NotImplementedError("Still have to look at the ROIs")
+        img_roi = roi.extract_rois(img, self.roi)
+
+        # Determine either snr or cnr (based on mode)
+        if self.metric == "snr":
+            # Check ROI validity
+            if not len(img_roi) == 1:
+                raise UserWarning(
+                    "In snr mode, only one ROI should be selected."
+                )
+            # Calculate SNR
+            img_roi = np.array(img_roi)
+            self.snr = float(np.mean(img_roi))
+        elif self.metric == "cnr":
+            # Check ROI validity
+            if not len(img_roi) == 2:
+                raise UserWarning(
+                    "In cnr mode, two ROIs should be selected."
+                )
+            # Calculate CNR (signal difference / weighted avg. over variance)
+            self.cnr = float(
+                np.abs(
+                    np.mean(img_roi[0]) - np.mean(img_roi[1])
+                )
+            )
+
+    def define_reward(self):
+        """Define reward for last step"""
+
+        # Define reward as either +/- 1 for increase or decrease in signal
+        if self.state[0] > self.old_state[0]:
+            reward_float = 1.0
+        else:
+            reward_float = -1.0
+
+        # Scale reward with signal difference
+        if float(self.old_state[0]) < 1e-2:
+            # If old_state signal is too small, set reward gain to 20
+            reward_gain = 20.
+        else:
+            # Calculate relative signal difference and derive reward gain
+            snr_diff = (
+                abs(self.state[0] - self.old_state[0])
+                / self.old_state[0]
+            )
+            reward_gain = snr_diff * 100.
+
+            # If reward is lower than 0.01, penalise
+            # the system for taking steps that are too small.
+            if reward_gain < 0.01:
+                reward_float = -1.0
+                reward_gain = 0.05
+            # If reward gain is higher than 20, use 20
+            # We do this to prevent blowing up rewards near the edges
+            if reward_gain > 20.: reward_gain = 20.
+
+        # If reward is negative, increase gain
+        if reward_float < 0.:
+            reward_gain *= 2.0
+
+        # Define reward
+        reward_float *= reward_gain
+
+        # Scale reward with step_i (faster improvement yields bigger rewards)
+        # Only scale the positives, though.
+        if reward_float > 0.:
+            reward_float *= np.exp(-self.tick / 20.)
+
+        # Store reward in tensor
+        self.reward = torch.tensor(
+            [float(reward_float)], device=self.device
+        )
+
+    def define_done(self, action):
+        """Define done for last step"""
+
+        # If not model_done, use hard-coded criterion. Else, use the action
+        if self.model_done:
+            self.done = torch.tensor(
+                0 if action[1] < 0. else 1,
+                device=self.device)
+        else:
+            # Extract history of this episode
+            metric_history = [float(state[0]) for state in self.history]
+            # Define patience
+            patience = 10 if len(metric_history) > 9 else len(metric_history)
+
+            # Determine whether snr/cnr has improved in our patience period
+            done = 0
+            max_idx = metric_history.index(max(metric_history))
+
+            if max_idx >= len(metric_history) - patience:
+                done = 0
+            else:
+                done = 1
+
+        # TODO: Testing --> done also given at final tick
+        if len(self.history) > 29:
+            done = 1
+            # else:
+            #     done = 0
+
+            # Define done
+            self.done = torch.tensor(done, device=self.device)
+
+    def step(self, action):
+        """Run a single step of the RL loop
+
+        - Perform action
+        - Run EPG simulation
+        - Determine state
+        - Determine reward
+        - Determine done
+        """
+
+        # Update counter
+        self.tick += 1
+
+        # Check action validity and perform action
+        action_np = action.detach().numpy()
+
+        if (
+            (self.action_space.low <= action_np).all()
+            and (action_np <= self.action_space.high).all()
+        ):
+            # Adjust flip angle
+            delta = float(action[0]) * self.fa / 2
+            self.fa += delta
+        else:
+            raise RuntimeError(
+                "Action not in action space. Expected something "
+                f"in range {self.action_space.ranges} but got "
+                f"{action_np}"
+            )
+
+        # Correct for flip angle out of bounds
+        if self.fa < 0.0: self.fa = 0.0
+        if self.fa > 180.0: self.fa = 180.0
+
+        # Run EPG
+        self.run_scan_and_update()
+
+        # Update normalized scan parameters
+        self.norm_parameters()
+
+        # Define new state
+        self.old_state = self.state
+        if not self.recurrent_model:
+            self.state = torch.tensor(
+                [
+                    getattr(self, f"{self.metric}_norm"), self.fa_norm,
+                    float(self.old_state[0]), float(self.old_state[1])
+                ],
+                device=self.device
+            )
+        else:
+            self.state = torch.tensor(
+                [
+                    getattr(self, f"{self.metric}_norm"), self.fa_norm
+                ],
+                device=self.device
+            )
+        # Store in history
+        self.history.append(self.state)
+
+        # Define reward
+        self.define_reward()
+
+        # Define done
+        self.define_done(action_np)
+
+        return self.state, self.reward, self.done
+
+    def reset(self, fa=None, verbose=True):
+        """Reset environment for next episode"""
+
+        # If applicable, print line
+        if verbose:
+            print(
+                "Resetting environment... ",
+                end="", flush=True
+            )
+
+        # Update counters and reset done
+        self.episode += 1
+        self.tick = 0
+        self.done = False
+        self.history = []
+
+        # Set new fa_initial
+        if self.homogeneous_initialization:
+            # Set initial flip angle. Here, we randomly sample from the
+            # uniformly distributed list we created earlier.
+            self.fa_init = float(self.initial_fa_list.pop(
+                random.randint(0, len(self.initial_fa_list) - 1)
+            ))
+        else:
+            # Randomly set fa
+            self.fa_init = random.uniform(
+                self.fa_range[0], self.fa_range[1]
+            )
+
+        # If fa is passed, overwrite it
+        if fa: self.fa_init = fa
+
+        # Setup pulse train
+        self.theta = np.array(
+            [self.fa_init] * self.n_pulses,
+            dtype=np.complex64
+        )
+
+        # Normalize parameters
+        self.norm_parameters()
+
+        # Define the simulator class we'll use
+        # TODO: Still have to implement subject dir selection
+        self.simulator = kspace_sim.SimulatorObject(
+            self.subject_dirs[0], device=self.device
+        )
+
+        # Run single simulation step and define initial state (if applicable)
+        # Run simulation
+        self.run_simulation_and_update()
+
+        # TODO: Done with rewrite until here:
+        raise NotImplementedError("Not done yet.")
+
+        # Perform metric calibration
+        self.metric_calibration = getattr(self, f"{self.metric}")
+        # Normalize parameters
+        self.norm_parameters()
+        # Set state ([metric, theta_1, theta_2, ..., theta_n])
+        self.state = torch.tensor(
+            [getattr(self, f"{self.metric}_norm"), *self.theta],
+            device=self.device
+        )
 
         # Store in history
         self.history.append(self.state)

@@ -181,28 +181,38 @@ def init_environment(args: argparse.Namespace):
     else: raise RuntimeError()
 
     # Initialize environment
-    if args.platform == "scan":
-        env = environments.ScannerEnv(
-            config_path=args.config_path,
-            log_dir=args.log_dir,
-            fa_range=fa_range,
-            metric=args.metric, action_space_type=action_space_type,
-            model_done=args.auto_done,
-            recurrent_model=recurrent_model,
-            validation_mode=validation_mode
-        )
-    elif args.platform == "epg":
-        env = environments.SimulationEnv(
-            mode=args.metric, fa_range=fa_range,
-            action_space_type=action_space_type,
-            model_done=args.auto_done,
-            recurrent_model=recurrent_model,
-            lock_material_params=validation_mode,
-            validation_mode=validation_mode
-        )
+    if args.single_fa:
+        if args.platform == "scan":
+            env = environments.ScannerEnv(
+                config_path=args.config_path,
+                log_dir=args.log_dir,
+                fa_range=fa_range,
+                metric=args.metric, action_space_type=action_space_type,
+                model_done=args.auto_done,
+                recurrent_model=recurrent_model,
+                validation_mode=validation_mode
+            )
+        elif args.platform == "epg":
+            env = environments.SimulationEnv(
+                mode=args.metric, fa_range=fa_range,
+                action_space_type=action_space_type,
+                model_done=args.auto_done,
+                recurrent_model=recurrent_model,
+                lock_material_params=validation_mode,
+                validation_mode=validation_mode
+            )
+        else:
+            raise RuntimeError(
+                "This shouldn't happen"
+            )
     else:
-        raise RuntimeError(
-            "This shouldn't happen"
+        env = environments.KspaceEnv(
+            config_path=args.config_path,
+            n_episodes=args.episodes,
+            log_dir=args.log_dir,
+            metric=args.metric, fa_range=fa_range,
+            model_done=args.auto_done,
+            validation_mode=validation_mode
         )
 
     return env
