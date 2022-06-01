@@ -515,7 +515,8 @@ class RDPGAgent(object):
     def __init__(
             self,
             action_space: environments.ActionSpace,
-            n_states: int = 2,
+            single_fa: bool = False,
+            n_states: Union[list[tuple[int]], int] = 2,
             n_actions: int = 2,
             gamma: float = 0.2,  # TODO: 0.99
             epsilon: float = 1.,
@@ -533,8 +534,17 @@ class RDPGAgent(object):
         ----------
             action_space : environments.ActionSpace
                 Action space object
-            n_states : int
+            single_fa : bool
+                If True, we only optimize a single flip angle.
+                If False, we optimize the entirety of the echo train.
+            n_states : list[int] | int
                 Number of values passed in "state" (amount of input neurons)
+                If single_fa=False, i.e. we are optimizing the entire pulse
+                train, the state consists of a 2D image and a 1D vector of
+                flip angles. In this case, a list is passed containing the
+                sizes of these vectors.
+                If single_fa=True, a simple integer value provides the size
+                of the 1D state vector.
             n_actions : int
                 Number of possible actions (amount of output neurons)
             gamma : float
@@ -561,6 +571,7 @@ class RDPGAgent(object):
 
         # Setup attributes
         self.action_space = action_space
+        self.single_fa = single_fa
         self.n_states = n_states
         self.n_actions = n_actions
         self.gamma = gamma
@@ -580,8 +591,21 @@ class RDPGAgent(object):
         else:
             self.device = device
 
+        # Check args
+        self.arg_check()
+
         # Initialize model
         self.init_model()
+
+    def arg_check(self):
+        """Check arguments"""
+
+        if not self.single_fa:
+            if type(self.n_states) != list:
+                raise TypeError(
+                    "If not self.single_fa, we expect n_states "
+                    f"to be a list, but got {type(self.n_states)}"
+                )
 
     def init_model(self):
         """Constructs reinforcement learning model
@@ -591,51 +615,61 @@ class RDPGAgent(object):
         Optimizer: Adam with lr alpha
         """
 
-        # Define hidden size
-        hidden_size = 64
+        if self.single_fa:
+            # Define model for single_fa case
 
-        # Construct actor models (network + target network)
-        self.actor = models.RecurrentModel_LSTM(
-            input_size=self.n_states,
-            output_size=self.n_actions,
-            hidden_size=hidden_size,
-            fully_connected_architecture=[
-                self.n_states, 64, 128, hidden_size
-            ],
-            output_activation="tanh",
-            device=self.device
-        )
-        self.critic = models.RecurrentModel_LSTM(
-            input_size=self.n_states + self.n_actions,
-            output_size=self.n_actions,
-            hidden_size=hidden_size,
-            fully_connected_architecture=[
-                self.n_states + self.n_actions, 64, 128, hidden_size
-            ],
-            output_activation="none",
-            device=self.device
-        )
-        # Construct critic models (network + target network)
-        self.actor_target = models.RecurrentModel_LSTM(
-            input_size=self.n_states,
-            output_size=self.n_actions,
-            hidden_size=hidden_size,
-            fully_connected_architecture=[
-                self.n_states, 64, 128, hidden_size
-            ],
-            output_activation="tanh",
-            device=self.device
-        )
-        self.critic_target = models.RecurrentModel_LSTM(
-            input_size=self.n_states + self.n_actions,
-            output_size=self.n_actions,
-            hidden_size=hidden_size,
-            fully_connected_architecture=[
-                self.n_states + self.n_actions, 64, 128, hidden_size
-            ],
-            output_activation="none",
-            device=self.device
-        )
+            # Define hidden size
+            hidden_size = 64
+
+            # Construct actor models (network + target network)
+            self.actor = models.RecurrentModel_LSTM(
+                input_size=self.n_states,
+                output_size=self.n_actions,
+                hidden_size=hidden_size,
+                fully_connected_architecture=[
+                    self.n_states, 64, 128, hidden_size
+                ],
+                output_activation="tanh",
+                device=self.device
+            )
+            self.critic = models.RecurrentModel_LSTM(
+                input_size=self.n_states + self.n_actions,
+                output_size=self.n_actions,
+                hidden_size=hidden_size,
+                fully_connected_architecture=[
+                    self.n_states + self.n_actions, 64, 128, hidden_size
+                ],
+                output_activation="none",
+                device=self.device
+            )
+            # Construct critic models (network + target network)
+            self.actor_target = models.RecurrentModel_LSTM(
+                input_size=self.n_states,
+                output_size=self.n_actions,
+                hidden_size=hidden_size,
+                fully_connected_architecture=[
+                    self.n_states, 64, 128, hidden_size
+                ],
+                output_activation="tanh",
+                device=self.device
+            )
+            self.critic_target = models.RecurrentModel_LSTM(
+                input_size=self.n_states + self.n_actions,
+                output_size=self.n_actions,
+                hidden_size=hidden_size,
+                fully_connected_architecture=[
+                    self.n_states + self.n_actions, 64, 128, hidden_size
+                ],
+                output_activation="none",
+                device=self.device
+            )
+        else:
+            # Define model for the multi-pulse optimization case
+            self.actor = None
+            self.critic = None
+            self.actor_target = None
+            self.critic_target = None
+            raise NotImplementedError("Not done here yet!")
 
         # We initialize the target networks as copies of the original networks
         for target_param, param in zip(
