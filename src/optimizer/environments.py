@@ -1426,7 +1426,7 @@ class KspaceEnv(object):
             self,
             config_path: Union[str, os.PathLike],
             log_dir: Union[str, os.PathLike],
-            metric: str = "snr",
+            metric: str = "cnr",
             model_done: bool = False,
             homogeneous_initialization: bool = True,
             n_episodes: Union[int, None] = None,
@@ -1519,6 +1519,8 @@ class KspaceEnv(object):
                     os.path.exists(os.path.join(dir, "T1.npy"))
                     and os.path.exists(os.path.join(dir, "T2.npy"))
                     and os.path.exists(os.path.join(dir, "PD.npy"))
+                    and os.path.exists(os.path.join(dir, "mask_1.npy"))
+                    and os.path.exists(os.path.join(dir, "mask_2.npy"))
                 ):
                     incomplete_subjects.append(dir)
             # Remove incomplete subject folders from list and give warning
@@ -1533,10 +1535,18 @@ class KspaceEnv(object):
                 warnings.warn(
                     "\nWarning! Some of the data directories passed are "
                     "incomplete.\nEvery directory is required to contain the "
-                    "following files: T1.npy; T2.npy; PD.npy."
+                    "following files: T1.npy; T2.npy; PD.npy; mask_1.npy; "
+                    "mask_2.npy."
                     "\nThe directories that didn't match this criterium are:\n"
                     + "\n".join(incomplete_subjects) + "\n"
                 )
+
+                # Check whether any comlete subjects remain
+                if len(subject_dirs) == 0:
+                    raise UserWarning(
+                        "No valid data directories remain. "
+                        "Please consult te previous warning for instructions."
+                    )
 
             # Read one file to determine the number of acquisition pulses.
             # We won't check whether these are the same for every image for
@@ -1645,6 +1655,16 @@ class KspaceEnv(object):
                 getattr(self, self.metric) / self.metric_calibration
             )
 
+    def setup_rois(self, subject_dir):
+        """Setup the ROIs for the current episode"""
+
+        # Load masks
+        mask_1 = np.load(os.path.join(subject_dir, "mask_1.npy"))
+        mask_2 = np.load(os.path.join(subject_dir, "mask_2.npy"))
+
+        # Store in self
+        self.roi = np.array([mask_1, mask_2], dtype=bool)
+
     def perform_simulation(self, theta=None, verbose=True):
         """Perform scan by passing parameters to scanner"""
 
@@ -1658,6 +1678,9 @@ class KspaceEnv(object):
             theta, tr=0.050, n_prep=self.n_prep_pulses
         )
 
+        # Cast to np array
+        self.recent_img = self.recent_img.detach().numpy()
+
         return self.recent_img
 
     def run_simulation_and_update(self):
@@ -1666,31 +1689,26 @@ class KspaceEnv(object):
         # Perform scan and extract image
         img = self.perform_simulation()
 
-        # Extract roi
-        # TODO: Look at ROIs
-        raise NotImplementedError("Still have to look at the ROIs")
-        img_roi = roi.extract_rois(img, self.roi)
+        # Extract rois
+        img_roi = [img[self.roi[0]], img[self.roi[1]]]
 
-        # Determine either snr or cnr (based on mode)
+        # Determine the CNR metric, which we will use
+        # for the 'seperability' of the two ROIs (WM/GM) or in other
+        # applications the 'detectability' of lesions in a background tissue.
+        # TODO: We might have to use another metric here later on!
+        # This one really isn't perfect at all. Maybe Smith et al.
+        # lesion detectability.
+
         if self.metric == "snr":
-            # Check ROI validity
-            if not len(img_roi) == 1:
-                raise UserWarning(
-                    "In snr mode, only one ROI should be selected."
-                )
-            # Calculate SNR
-            img_roi = np.array(img_roi)
-            self.snr = float(np.mean(img_roi))
-        elif self.metric == "cnr":
-            # Check ROI validity
-            if not len(img_roi) == 2:
-                raise UserWarning(
-                    "In cnr mode, two ROIs should be selected."
-                )
-            # Calculate CNR (signal difference / weighted avg. over variance)
+            raise NotImplementedError("Only CNR is implemented")
+        else:
+            # Calculate CNR (signal difference / variances)
             self.cnr = float(
                 np.abs(
                     np.mean(img_roi[0]) - np.mean(img_roi[1])
+                ) /
+                np.sqrt(
+                    np.var(img_roi[0]) + np.var(img_roi[1])
                 )
             )
 
@@ -1808,28 +1826,22 @@ class KspaceEnv(object):
         if self.fa > 180.0: self.fa = 180.0
 
         # Run EPG
-        self.run_scan_and_update()
+        self.run_simulation_and_update()
 
         # Update normalized scan parameters
         self.norm_parameters()
 
         # Define new state
+        # TODO: Implement proper state containing img + thetas
+        raise NotImplementedError()
         self.old_state = self.state
-        if not self.recurrent_model:
-            self.state = torch.tensor(
-                [
-                    getattr(self, f"{self.metric}_norm"), self.fa_norm,
-                    float(self.old_state[0]), float(self.old_state[1])
-                ],
-                device=self.device
-            )
-        else:
-            self.state = torch.tensor(
-                [
-                    getattr(self, f"{self.metric}_norm"), self.fa_norm
-                ],
-                device=self.device
-            )
+        self.state = torch.tensor(
+            [
+                getattr(self, f"{self.metric}_norm"), self.fa_norm
+            ],
+            device=self.device
+        )
+
         # Store in history
         self.history.append(self.state)
 
@@ -1888,18 +1900,22 @@ class KspaceEnv(object):
             self.subject_dirs[0], device=self.device
         )
 
+        # Define the ROIs used for this episode
+        self.setup_rois(self.subject_dirs[0])
+
         # Run single simulation step and define initial state (if applicable)
         # Run simulation
         self.run_simulation_and_update()
 
-        # TODO: Done with rewrite until here:
-        raise NotImplementedError("Not done yet.")
-
         # Perform metric calibration
         self.metric_calibration = getattr(self, f"{self.metric}")
+
         # Normalize parameters
         self.norm_parameters()
+
         # Set state ([metric, theta_1, theta_2, ..., theta_n])
+        # TODO: This has to be implemented in a clever way somehow!
+        raise NotImplementedError()
         self.state = torch.tensor(
             [getattr(self, f"{self.metric}_norm"), *self.theta],
             device=self.device
