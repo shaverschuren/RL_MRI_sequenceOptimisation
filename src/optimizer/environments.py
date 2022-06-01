@@ -1678,8 +1678,8 @@ class KspaceEnv(object):
             theta, tr=0.050, n_prep=self.n_prep_pulses
         )
 
-        # Cast to np array
-        self.recent_img = self.recent_img.detach().numpy()
+        # # Cast to np array
+        # self.recent_img = self.recent_img.detach().numpy()
 
         return self.recent_img
 
@@ -1704,11 +1704,11 @@ class KspaceEnv(object):
         else:
             # Calculate CNR (signal difference / variances)
             self.cnr = float(
-                np.abs(
-                    np.mean(img_roi[0]) - np.mean(img_roi[1])
+                torch.abs(
+                    torch.mean(img_roi[0]) - torch.mean(img_roi[1])
                 ) /
-                np.sqrt(
-                    np.var(img_roi[0]) + np.var(img_roi[1])
+                torch.sqrt(
+                    torch.var(img_roi[0]) + torch.var(img_roi[1])
                 )
             )
 
@@ -1812,8 +1812,8 @@ class KspaceEnv(object):
             and (action_np <= self.action_space.high).all()
         ):
             # Adjust flip angle
-            delta = float(action[0]) * self.fa / 2
-            self.fa += delta
+            deltas = action_np * self.theta / 2
+            self.theta += deltas
         else:
             raise RuntimeError(
                 "Action not in action space. Expected something "
@@ -1822,8 +1822,8 @@ class KspaceEnv(object):
             )
 
         # Correct for flip angle out of bounds
-        if self.fa < 0.0: self.fa = 0.0
-        if self.fa > 180.0: self.fa = 180.0
+        self.theta[self.theta > 180.] = 180.
+        self.theta[self.theta < 0.] = 0.
 
         # Run EPG
         self.run_simulation_and_update()
@@ -1832,15 +1832,11 @@ class KspaceEnv(object):
         self.norm_parameters()
 
         # Define new state
-        # TODO: Implement proper state containing img + thetas
-        raise NotImplementedError()
         self.old_state = self.state
-        self.state = torch.tensor(
-            [
-                getattr(self, f"{self.metric}_norm"), self.fa_norm
-            ],
-            device=self.device
-        )
+        self.state = [
+            self.recent_img,
+            self.theta
+        ]
 
         # Store in history
         self.history.append(self.state)
@@ -1886,9 +1882,9 @@ class KspaceEnv(object):
         if fa: self.fa_init = fa
 
         # Setup pulse train
-        self.theta = np.array(
+        self.theta = torch.tensor(
             [self.fa_init] * self.n_pulses,
-            dtype=np.complex64
+            dtype=torch.complex64
         )
 
         # Normalize parameters
@@ -1913,13 +1909,11 @@ class KspaceEnv(object):
         # Normalize parameters
         self.norm_parameters()
 
-        # Set state ([metric, theta_1, theta_2, ..., theta_n])
-        # TODO: This has to be implemented in a clever way somehow!
-        raise NotImplementedError()
-        self.state = torch.tensor(
-            [getattr(self, f"{self.metric}_norm"), *self.theta],
-            device=self.device
-        )
+        # Set state ([tensor(2D image), tensor(1D FA vector)])
+        self.state = [
+            self.recent_img,
+            self.theta
+        ]
 
         # Store in history
         self.history.append(self.state)
