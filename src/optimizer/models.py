@@ -407,8 +407,9 @@ class RecurrentModel_ConvConcatFC(nn.Module):
             ("conv2", nn.Conv2d(4, 16, 5)),
             (("relu2", nn.ReLU())),
             ("pool2", nn.MaxPool2d(2, 2)),
-            ("flatten", nn.Flatten(0, 1)),
-            ("fc1", nn.Linear(16 * 5 * 5, cnn_output_size)),
+            ("flatten", nn.Flatten()),
+            # TODO: This isn't quite right yet
+            ("fc1", nn.Linear(16 * self.input_img_size[0] ** 2, cnn_output_size)),
             (("relu3", nn.ReLU()))
         ]
 
