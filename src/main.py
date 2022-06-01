@@ -145,6 +145,11 @@ def check_args(args, config):
             "The full echo train optimization is only implemented for "
             "the 'epg' mode for now."
         )
+    if not args.single_fa and args.agent.lower() not in ["rdpg", "validation"]:
+        raise NotImplementedError(
+            "The full echo train optimization is only implemented for "
+            "the 'rdpg' optimizer (because this works best)."
+        )
 
 
 def clear_files():
