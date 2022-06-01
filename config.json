@@ -3,5 +3,6 @@
     "param_loc": "/nfs/rtsan01/RT-Temp/TomBruijnen/machine_flip_angles.txt",
     "data_loc": "/nfs/rtsan01/RT-Temp/TomBruijnen/img_data.h5",
     "data_store_loc": "/nfs/rtsan01/RT-Temp/TomBruijnen/RL_debug_data",
-    "matlab_util_loc": "/nfs/arch11/researchData/USER/tbruijne/Projects_Main/ReconSocket/recon-socket-repo/recon-socket/matlab_scripts/caspr/utils"
+    "matlab_util_loc": "/nfs/arch11/researchData/USER/tbruijne/Projects_Main/ReconSocket/recon-socket-repo/recon-socket/matlab_scripts/caspr/utils",
+    "kspace_sim_data_loc": "tmp/"
 }
