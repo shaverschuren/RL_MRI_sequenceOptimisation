@@ -1207,11 +1207,13 @@ class RDPG(object):
             # Create episodic memory element (history)
             # for states and next_states
             if self.single_fa:
-                states = torch.FloatTensor(
-                    [[0.] * self.env.n_states], device=self.device
+                states = torch.zeros(
+                    (1, self.env.n_states), device=self.device,
+                    dtype=torch.float
                 )
-                next_states = torch.FloatTensor(
-                    [[0.] * self.env.n_states], device=self.device
+                next_states = torch.zeros(
+                    (1, self.env.n_states), device=self.device,
+                    dtype=torch.float
                 )
             else:
                 states = [
@@ -1236,9 +1238,9 @@ class RDPG(object):
                 ]
 
             # Define actions/rewards tensors
-            actions = torch.FloatTensor(
-                [[0.] * self.env.n_actions], device=self.device)
-            rewards = torch.FloatTensor([0.], device=self.device)
+            actions = torch.zeros(
+                (1, self.env.n_actions), device=self.device)
+            rewards = torch.zeros((1), device=self.device)
 
             # Print some info
             self.verbose_episode()
@@ -1257,15 +1259,28 @@ class RDPG(object):
 
                 # Add states and next_states to history
                 if self.single_fa:
-                    states = torch.cat((states, torch.unsqueeze(state, 0)))
+                    states = torch.cat(
+                        (states, torch.unsqueeze(state, 0))  # type: ignore
+                    )
                     next_states = torch.cat(
-                        (next_states, torch.unsqueeze(next_state, 0))
+                        (
+                            next_states,
+                            torch.unsqueeze(next_state, 0)  # type: ignore
+                        )
                     )
                 else:
-                    states[0] = torch.cat((states[0], torch.unsqueeze(state[0], 0)))
-                    states[1] = torch.cat((states[1], torch.unsqueeze(state[1], 0)))
-                    next_states[0] = torch.cat((next_states[0], torch.unsqueeze(next_state[0], 0)))
-                    next_states[1] = torch.cat((next_states[1], torch.unsqueeze(next_state[1], 0)))
+                    states[0] = torch.cat(
+                        (states[0], torch.unsqueeze(state[0], 0))
+                    )
+                    states[1] = torch.cat(
+                        (states[1], torch.unsqueeze(state[1], 0))
+                    )
+                    next_states[0] = torch.cat(
+                        (next_states[0], torch.unsqueeze(next_state[0], 0))
+                    )
+                    next_states[1] = torch.cat(
+                        (next_states[1], torch.unsqueeze(next_state[1], 0))
+                    )
                 # Add action/reward to history
                 actions = torch.cat((actions, torch.unsqueeze(action, 0)))
                 rewards = torch.cat((rewards, reward))
