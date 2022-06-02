@@ -1815,7 +1815,7 @@ class KspaceEnv(object):
         self.tick += 1
 
         # Check action validity and perform action
-        action_np = action.detach().numpy()
+        action_np = action.cpu().detach().numpy()
 
         if (
             (self.action_space.low <= action_np).all()
