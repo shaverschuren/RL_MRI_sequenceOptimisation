@@ -204,31 +204,36 @@ class EpisodicMemory(object):
             'Transition', transition_contents
         )
 
-    def push(self, states, actions, rewards, next_states):
+    def push(self, *args):
         """Save an episode worth of transitions"""
 
+        # Check whether right amount of args is passed
+        if not len(args) == len(self.transition_contents):
+            raise ValueError(
+                f"The transition contents are: {self.transition_contents}"
+                f", so {len(self.transition_contents)} arguments were "
+                f"expected, but got {len(args)}"
+            )
+
         # Define amount of transitions passed
-        n_transitions = len(states)
+        n_transitions = args[0].shape[0]
 
         # Check if the right amount of args are passed
-        if not n_transitions == len(actions) and n_transitions == len(rewards):
+        if not all(n_transitions == arg.shape[0] for arg in args):
             raise ValueError(
                 "The number of datapoints passed"
-                " is incorrect. 'states', 'actions' and 'rewards' should "
-                f"be the same length."
+                " is incorrect. All to-be-pushed tensors should "
+                f"be the same size at axis 0."
             )
 
         # If OK, append history and rewards to memory
         trajectory = []
         for i in range(n_transitions):
-            # Extract action, state, reward per step
-            state = states[i]
-            action = actions[i]
-            reward = rewards[i]
-            next_state = next_states[i]
+            # Extract data fields
+            transition_contents = [arg[i] for arg in args]
             # Append data to memory
             trajectory.append(
-                self.Transition(state, action, reward, next_state)
+                self.Transition(*transition_contents)
             )
         self.memory.append(trajectory)
 

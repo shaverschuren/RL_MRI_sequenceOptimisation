@@ -755,7 +755,14 @@ class RDPG(object):
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
-        self.memory = training.EpisodicMemory(self.n_episodes // 4)
+        self.memory = training.EpisodicMemory(
+            self.n_episodes // 4,
+            ('state', 'action', 'reward', 'next_state') if self.single_fa
+            else (
+                'state_img', 'state_fa', 'action',
+                'reward', 'next_state_img', 'next_state_fa'
+            )
+        )
         # Setup logger
         self.setup_logger()
 
@@ -1305,9 +1312,16 @@ class RDPG(object):
                     break
 
             # Update memory with previous episode (remove first step)
-            self.memory.push(
-                states[1:], actions[1:], rewards[1:], next_states[1:]
-            )
+            if self.single_fa:
+                self.memory.push(
+                    states[1:], actions[1:], rewards[1:], next_states[1:]
+                )
+            else:
+                self.memory.push(
+                    states[0][1:], states[1][1:],
+                    actions[1:], rewards[1:],
+                    next_states[0][1:], next_states[1][1:]
+                )
 
             # If training, update model
             if train:
