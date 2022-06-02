@@ -877,8 +877,8 @@ class RDPG(object):
 
         print(
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-            f"Action: {float(action[0]):5.2f} - "
-            f"FA: {float(self.env.fa):5.1f} - "
+            # f"Action: {float(action[0]):5.2f} - "
+            # f"FA: {float(self.env.fa):5.1f} - "
             f"{self.metric.upper()}: "
             f"{float(getattr(self.env, self.metric)):5.2f} -"
             " Reward: "
@@ -914,18 +914,18 @@ class RDPG(object):
                 )
 
             # Scalars (current state -> state1)
-            self.logger.log_scalar(
-                field="fa",
-                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=float(self.env.fa),
-                step=self.tick
-            )
-            self.logger.log_scalar(
-                field="fa_norm",
-                tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                value=float(self.env.fa_norm),
-                step=self.tick
-            )
+            # self.logger.log_scalar(
+            #     field="fa",
+            #     tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            #     value=float(self.env.fa),
+            #     step=self.tick
+            # )
+            # self.logger.log_scalar(
+            #     field="fa_norm",
+            #     tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
+            #     value=float(self.env.fa_norm),
+            #     step=self.tick
+            # )
             self.logger.log_scalar(
                 field=self.metric,
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
@@ -1204,17 +1204,41 @@ class RDPG(object):
             # Reset agent
             self.agent.reset()
 
-            # Create episodic memory element (history) and
-            # define initial action/reward
-            states = torch.FloatTensor(
-                [[0.] * self.env.n_states], device=self.device
-            )
+            # Create episodic memory element (history)
+            # for states and next_states
+            if self.single_fa:
+                states = torch.FloatTensor(
+                    [[0.] * self.env.n_states], device=self.device
+                )
+                next_states = torch.FloatTensor(
+                    [[0.] * self.env.n_states], device=self.device
+                )
+            else:
+                states = [
+                    torch.zeros(
+                        (1, *self.env.img_shape), device=self.device,
+                        dtype=torch.float
+                    ),
+                    torch.zeros(
+                        (1, self.env.n_actions), device=self.device,
+                        dtype=torch.complex64
+                    )
+                ]
+                next_states = [
+                    torch.zeros(
+                        (1, *self.env.img_shape), device=self.device,
+                        dtype=torch.float
+                    ),
+                    torch.zeros(
+                        (1, self.env.n_actions), device=self.device,
+                        dtype=torch.complex64
+                    )
+                ]
+
+            # Define actions/rewards tensors
             actions = torch.FloatTensor(
                 [[0.] * self.env.n_actions], device=self.device)
             rewards = torch.FloatTensor([0.], device=self.device)
-            next_states = torch.FloatTensor(
-                [[0.] * self.env.n_states], device=self.device
-            )
 
             # Print some info
             self.verbose_episode()
@@ -1231,14 +1255,20 @@ class RDPG(object):
                 # Simulate step
                 next_state, reward, done = self.env.step(action)
 
-                # Add action/reward for previous transition
-                # to the history
-                states = torch.cat((states, torch.unsqueeze(state, 0)))
+                # Add states and next_states to history
+                if self.single_fa:
+                    states = torch.cat((states, torch.unsqueeze(state, 0)))
+                    next_states = torch.cat(
+                        (next_states, torch.unsqueeze(next_state, 0))
+                    )
+                else:
+                    states[0] = torch.cat((states[0], torch.unsqueeze(state[0], 0)))
+                    states[1] = torch.cat((states[1], torch.unsqueeze(state[1], 0)))
+                    next_states[0] = torch.cat((next_states[0], torch.unsqueeze(next_state[0], 0)))
+                    next_states[1] = torch.cat((next_states[1], torch.unsqueeze(next_state[1], 0)))
+                # Add action/reward to history
                 actions = torch.cat((actions, torch.unsqueeze(action, 0)))
                 rewards = torch.cat((rewards, reward))
-                next_states = torch.cat(
-                    (next_states, torch.unsqueeze(next_state, 0))
-                )
 
                 # Log step results
                 self.log_step(state, action, reward, next_state, done)
