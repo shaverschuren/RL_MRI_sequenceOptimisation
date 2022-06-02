@@ -1766,7 +1766,7 @@ class KspaceEnv(object):
         # If not model_done, use hard-coded criterion. Else, use the action
         if self.model_done:
             self.done = torch.tensor(
-                0 if action[1] < 0. else 1,
+                0 if action[-1] < 0. else 1,
                 device=self.device)
         else:
             # Extract history of this episode
@@ -1813,7 +1813,7 @@ class KspaceEnv(object):
             and (action_np <= self.action_space.high).all()
         ):
             # Adjust flip angle
-            deltas = action_np * self.theta / 2
+            deltas = action * self.theta / 2
             self.theta += deltas
         else:
             raise RuntimeError(
@@ -1823,8 +1823,8 @@ class KspaceEnv(object):
             )
 
         # Correct for flip angle out of bounds
-        self.theta[self.theta > 180.] = 180.
-        self.theta[self.theta < 0.] = 0.
+        self.theta[torch.abs(self.theta) > 180.] = 180.
+        self.theta[torch.abs(self.theta) < 0.] = 0.
 
         # Run EPG
         self.run_simulation_and_update()
