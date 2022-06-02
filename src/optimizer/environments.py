@@ -1703,7 +1703,10 @@ class KspaceEnv(object):
         if self.metric == "snr":
             raise NotImplementedError("Only CNR is implemented")
         else:
-            # Calculate CNR (signal difference / variances)
+            # Store previous CNR
+            if hasattr(self, "cnr"): self.old_cnr = self.cnr
+
+            # Calculate new CNR (signal difference / variances)
             self.cnr = float(
                 torch.abs(
                     torch.mean(img_roi[0]) - torch.mean(img_roi[1])
@@ -1716,23 +1719,27 @@ class KspaceEnv(object):
     def define_reward(self):
         """Define reward for last step"""
 
+        # Retrieve old and new CNR values
+        cnr_old = self.old_cnr
+        cnr_new = self.cnr
+
         # Define reward as either +/- 1 for increase or decrease in signal
-        if self.state[0] > self.old_state[0]:
+        if cnr_new > cnr_old:
             reward_float = 1.0
         else:
             reward_float = -1.0
 
         # Scale reward with signal difference
-        if float(self.old_state[0]) < 1e-2:
+        if float(cnr_old) < 1e-2:
             # If old_state signal is too small, set reward gain to 20
             reward_gain = 20.
         else:
             # Calculate relative signal difference and derive reward gain
-            snr_diff = (
-                abs(self.state[0] - self.old_state[0])
-                / self.old_state[0]
+            cnr_diff = (
+                abs(cnr_new - cnr_old)
+                / cnr_old
             )
-            reward_gain = snr_diff * 100.
+            reward_gain = cnr_diff * 100.
 
             # If reward is lower than 0.01, penalise
             # the system for taking steps that are too small.
@@ -1764,24 +1771,26 @@ class KspaceEnv(object):
         """Define done for last step"""
 
         # If not model_done, use hard-coded criterion. Else, use the action
-        if self.model_done:
-            self.done = torch.tensor(
-                0 if action[-1] < 0. else 1,
-                device=self.device)
-        else:
-            # Extract history of this episode
-            metric_history = [float(state[0]) for state in self.history]
-            # Define patience
-            patience = 10 if len(metric_history) > 9 else len(metric_history)
+        # if self.model_done:
+        #     self.done = torch.tensor(
+        #         0 if action[-1] < 0. else 1,
+        #         device=self.device)
+        # else:
+        #     # Extract history of this episode
+        #     metric_history = [float(state[0]) for state in self.history]
+        #     # Define patience
+        #     patience = 10 if len(metric_history) > 9 else len(metric_history)
 
-            # Determine whether snr/cnr has improved in our patience period
-            done = 0
-            max_idx = metric_history.index(max(metric_history))
+        #     # Determine whether snr/cnr has improved in our patience period
+        #     done = 0
+        #     max_idx = metric_history.index(max(metric_history))
 
-            if max_idx >= len(metric_history) - patience:
-                done = 0
-            else:
-                done = 1
+        #     if max_idx >= len(metric_history) - patience:
+        #         done = 0
+        #     else:
+        #         done = 1
+
+        done = 0
 
         # TODO: Testing --> done also given at final tick
         if len(self.history) > 29:
