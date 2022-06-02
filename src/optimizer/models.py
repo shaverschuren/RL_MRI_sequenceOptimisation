@@ -351,7 +351,7 @@ class RecurrentModel_ConvConcatFC(nn.Module):
     """
     def __init__(
             self,
-            input_img_size: tuple[int], input_vector_size: int,
+            input_img_size: tuple[int, int], input_vector_size: int,
             output_activation: str,
             output_size: int,
             hidden_size: int,
@@ -407,9 +407,12 @@ class RecurrentModel_ConvConcatFC(nn.Module):
             ("conv2", nn.Conv2d(4, 16, 5)),
             (("relu2", nn.ReLU())),
             ("pool2", nn.MaxPool2d(2, 2)),
-            ("flatten", nn.Flatten()),
-            # TODO: This isn't quite right yet
-            ("fc1", nn.Linear(16 * self.input_img_size[0] ** 2, cnn_output_size)),
+            ("flatten", nn.Flatten(1)),
+            ("fc1", nn.Linear(
+                16 * (self.input_img_size[0] // 4 - 3)
+                * (self.input_img_size[1] // 4 - 3),
+                cnn_output_size
+            )),
             (("relu3", nn.ReLU()))
         ]
 
@@ -500,11 +503,12 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         cnn_out = self.stack_cnn(img)
 
         # Pass vector through fc stack
-        fc_out = self.stack_fc(vector)
+        # For now, we remove the phase and only optimize the amplitude
+        fc_out = self.stack_fc(torch.abs(vector))
 
         # Concatenate cnn_out and fc_out
         rnn_in = self.stack_rnn[:self.lstm_idx](
-            torch.concat([cnn_out, fc_out])
+            torch.concat([cnn_out, fc_out], 1)
         )
 
         # Pass through the LSTM module and extract x, hidden states
