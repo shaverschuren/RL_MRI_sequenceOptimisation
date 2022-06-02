@@ -1332,8 +1332,8 @@ class RDPG(object):
                     self.agent.update(batch)
 
             # Log episode results
-            if train:
-                self.log_episode()
+            # if train:
+            #     self.log_episode()
 
             # Update epsilon
             self.agent.update_epsilon()

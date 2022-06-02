@@ -794,56 +794,114 @@ class RDPGAgent(object):
         # Process all trajectories in parallel, however
         for t in range(len(batch)):
 
-            # Extract states, actions, rewards, next_states
-            states = [transition.state for transition in batch[t]]
+            # Extract states & next_states. Here, differentiate between
+            # the single fa and pulse train optimizations since we store
+            # the states a bit differently.
+            if self.single_fa:
+                # Extract states & next_states
+                states = [transition.state for transition in batch[t]]
+                next_states = [transition.next_state for transition in batch[t]]
+                # Cast to tensors
+                states = torch.cat(
+                    [state.unsqueeze(0) for state in states]
+                ).to(self.device)
+                next_states = torch.cat(
+                    [next_state.unsqueeze(0) for next_state in next_states]
+                ).to(self.device)
+            else:
+                # Extract states & next_states
+                states_img = [transition.state_img for transition in batch[t]]
+                states_fa = [transition.state_fa for transition in batch[t]]
+                next_states_img = [
+                    transition.next_state_img for transition in batch[t]
+                ]
+                next_states_fa = [
+                    transition.next_state_fa for transition in batch[t]
+                ]
+                # Cast to tensors
+                states_img = torch.cat([
+                    state_img.view(1, 1, *state_img.shape)
+                    for state_img in states_img
+                ]).to(self.device)
+                states_fa = torch.cat(
+                    [state_fa.unsqueeze(0) for state_fa in states_fa]
+                ).to(self.device)
+                next_states_img = torch.cat([
+                    next_state_img.view(1, 1, *next_state_img.shape)
+                    for next_state_img in next_states_img
+                ]).to(self.device)
+                next_states_fa = torch.cat([
+                    next_state_fa.unsqueeze(0)
+                    for next_state_fa in next_states_fa
+                ]).to(self.device)
+
+            # Extract actions & rewards
             actions = [transition.action for transition in batch[t]]
             rewards = [transition.reward for transition in batch[t]]
-            next_states = [transition.next_state for transition in batch[t]]
-
             # Cast to tensors
-            states = torch.cat(
-                [state.unsqueeze(0) for state in states]
-            ).to(self.device)
             actions = torch.cat(
                 [action.unsqueeze(0) for action in actions]
             ).to(self.device)
             rewards = torch.unsqueeze(torch.cat(
                 [reward.unsqueeze(0) for reward in rewards]
             ).to(self.device), 1)
-            next_states = torch.cat(
-                [next_state.unsqueeze(0) for next_state in next_states]
-            ).to(self.device)
 
             # Determine target value (Q-prime)
             with torch.no_grad():
                 # Compute next_Q and update target hidden states
-                next_actions, hidden_actor_target_1 = self.actor_target(
-                    next_states, hidden_actor_target[t]
-                )
-                next_Q, hidden_critic_target_1 = self.critic_target(
-                    torch.cat([next_states, next_actions], 1),
-                    hidden_critic_target[t]
-                )
+                if self.single_fa:
+                    next_actions, hidden_actor_target_1 = self.actor_target(
+                        next_states, hidden_actor_target[t]
+                    )
+                    next_Q, hidden_critic_target_1 = self.critic_target(
+                        torch.cat([next_states, next_actions], 1),
+                        hidden_critic_target[t]
+                    )
+                else:
+                    next_actions, hidden_actor_target_1 = self.actor_target(
+                        next_states_img, next_states_fa, hidden_actor_target[t]
+                    )
+                    next_Q, hidden_critic_target_1 = self.critic_target(
+                        next_states_img,
+                        torch.cat([next_states_fa, next_actions], 1),
+                        hidden_critic_target[t]
+                    )
                 # Compute Q_target (R + discount * Qnext)
                 Q_target = rewards + self.gamma * next_Q
 
             # Compute actual Q-values and policy for this timestep
-            Q, hidden_critic_1 = self.critic(
-                torch.cat([states, actions], 1),
-                hidden_critic[t]
-            )
-            policy, hidden_actor_1 = self.actor(states, hidden_actor[t])
+            if self.single_fa:
+                Q, hidden_critic_1 = self.critic(
+                    torch.cat([states, actions], 1),
+                    hidden_critic[t]
+                )
+                policy, hidden_actor_1 = self.actor(states, hidden_actor[t])
+            else:
+                Q, hidden_critic_1 = self.critic(
+                    states_img, torch.cat([states_fa, actions], 1),
+                    hidden_critic[t]
+                )
+                policy, hidden_actor_1 = \
+                    self.actor(states_img, states_fa, hidden_actor[t])
 
             # Compute critic loss
             critic_loss = self.critic_criterion(Q, Q_target)
 
             # Compute actor loss
-            policy_loss = -torch.mean(
-                self.critic(
-                    torch.cat([states, policy], 1),
-                    hidden_critic[t]
-                )[0]
-            )
+            if self.single_fa:
+                policy_loss = -torch.mean(
+                    self.critic(
+                        torch.cat([states, policy], 1),
+                        hidden_critic[t]
+                    )[0]
+                )
+            else:
+                policy_loss = -torch.mean(
+                    self.critic(
+                        states_img, torch.cat([states_fa, policy], 1),
+                        hidden_critic[t]
+                    )[0]
+                )
 
             # Store losses
             policy_loss_sums[update_count] += policy_loss
