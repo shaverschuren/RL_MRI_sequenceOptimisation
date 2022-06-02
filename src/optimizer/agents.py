@@ -731,7 +731,9 @@ class RDPGAgent(object):
             self.action_space.high
         )
 
-        return torch.FloatTensor(noisy_action, device=self.device)
+        return torch.tensor(
+            noisy_action, dtype=torch.float, device=self.device
+        )
 
     def update(self, batch):
         """Updates the models based on a given batch
