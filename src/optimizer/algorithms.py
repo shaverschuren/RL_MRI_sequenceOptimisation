@@ -907,8 +907,10 @@ class RDPG(object):
 
             # Image
             if (
-                isinstance(self.env, environments.ScannerEnv)
-                and hasattr(self.env, 'recent_img')
+                (
+                    isinstance(self.env, environments.ScannerEnv)
+                    or isinstance(self.env, environments.KspaceEnv)
+                ) and hasattr(self.env, 'recent_img')
             ):
                 self.logger.log_image(
                     field="img",
