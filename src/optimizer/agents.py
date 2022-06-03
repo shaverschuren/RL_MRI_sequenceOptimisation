@@ -667,19 +667,23 @@ class RDPGAgent(object):
             # Define model for the multi-pulse optimization case
             self.actor = models.RecurrentModel_ConvConcatFC(
                 self.n_states[0], self.n_states[1], "tanh",
-                self.n_actions, hidden_size=64
+                self.n_actions, hidden_size=64,
+                device=self.device
             )
             self.critic = models.RecurrentModel_ConvConcatFC(
                 self.n_states[0], self.n_states[1] + self.n_actions, "tanh",
-                self.n_actions, hidden_size=64
+                self.n_actions, hidden_size=64,
+                device=self.device
             )
             self.actor_target = models.RecurrentModel_ConvConcatFC(
                 self.n_states[0], self.n_states[1], "tanh",
-                self.n_actions, hidden_size=64
+                self.n_actions, hidden_size=64,
+                device=self.device
             )
             self.critic_target = models.RecurrentModel_ConvConcatFC(
                 self.n_states[0], self.n_states[1] + self.n_actions, "tanh",
-                self.n_actions, hidden_size=64
+                self.n_actions, hidden_size=64,
+                device=self.device
             )
 
         # We initialize the target networks as copies of the original networks
@@ -719,7 +723,7 @@ class RDPGAgent(object):
                     torch.unsqueeze(torch.unsqueeze(state[0], 0), 0),
                     torch.unsqueeze(state[1], 0)
                 )
-        pure_action = torch.squeeze(pure_action, 0).detach().numpy()
+        pure_action = torch.squeeze(pure_action, 0).cpu().detach().numpy()
         # Add noise (if training)
         noise = (
             np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))

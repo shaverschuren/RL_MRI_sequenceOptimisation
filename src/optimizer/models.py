@@ -531,5 +531,9 @@ class RecurrentModel_ConvConcatFC(nn.Module):
     def reset_hidden_state(self, batch_size=1):
         """Reset hidden state of the lstm module"""
 
-        self.hx = Variable(torch.zeros(2, batch_size, self.hidden_size))
-        self.cx = Variable(torch.zeros(2, batch_size, self.hidden_size))
+        self.hx = Variable(
+            torch.zeros(2, batch_size, self.hidden_size)
+        ).to(self.device)
+        self.cx = Variable(
+            torch.zeros(2, batch_size, self.hidden_size)
+        ).to(self.device)

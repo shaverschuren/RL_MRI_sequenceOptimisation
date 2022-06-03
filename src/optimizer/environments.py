@@ -1672,7 +1672,9 @@ class KspaceEnv(object):
         if theta is None: theta = self.theta
         # Cast to tensor
         if type(theta) != torch.Tensor:
-            theta = torch.tensor(theta, dtype=torch.complex64)
+            theta = torch.tensor(
+                theta, dtype=torch.complex64, device=self.device
+            )
 
         # Perform simulation
         self.recent_img, _ = self.simulator.forward(
@@ -1894,7 +1896,8 @@ class KspaceEnv(object):
         # Setup pulse train
         self.theta = torch.tensor(
             [self.fa_init] * self.n_pulses,
-            dtype=torch.complex64
+            dtype=torch.complex64,
+            device=self.device
         )
 
         # Normalize parameters

@@ -176,7 +176,8 @@ class SimulatorObject():
         # Simulate k-space filling
         k_space = torch.zeros(
             (self.img_shape[0], self.img_shape[1] * 2),
-            dtype=torch.complex64
+            dtype=torch.complex64,
+            device=self.device
         )
 
         for line in range(self.img_shape[0]):
