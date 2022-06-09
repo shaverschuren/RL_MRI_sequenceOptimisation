@@ -983,20 +983,20 @@ class RDPG(object):
 
         # Extract recent memory
         recent_memory = self.memory.get_recent_memory(6)
-        recent_states = [transition.state for transition in recent_memory]
-        recent_next_states = [
-            transition.next_state for transition in recent_memory
-        ]
-        recent_metrics = [float(state[0]) for state in recent_next_states]
-        recent_fa = [float(state[1]) for state in recent_next_states]
+        # recent_states = [transition.state for transition in recent_memory]
+        # recent_next_states = [
+        #     transition.next_state for transition in recent_memory
+        # ]
+        # recent_metrics = [float(state[0]) for state in recent_next_states]
+        # recent_fa = [float(state[1]) for state in recent_next_states]
 
-        # Find "best" fa/metric in recent memory
-        best_idx = np.argmax(recent_metrics)
-        best_metric = (
-            float(recent_metrics[best_idx])
-            * self.env.metric_calibration
-        )
-        best_fa = float(recent_fa[best_idx]) * 90.
+        # # Find "best" fa/metric in recent memory
+        # best_idx = np.argmax(recent_metrics)
+        # best_metric = (
+        #     float(recent_metrics[best_idx])
+        #     * self.env.metric_calibration
+        # )
+        # best_fa = float(recent_fa[best_idx]) * 90.
 
         # Find cumulative reward
         previous_trajectory = self.memory.memory[-1]
@@ -1006,18 +1006,18 @@ class RDPG(object):
         cumulative_reward = sum(rewards)
 
         # Log scalars
-        self.logger.log_scalar(
-            field="fa",
-            tag=f"{self.logs_tag}_train_episodes",
-            value=best_fa,
-            step=self.episode
-        )
-        self.logger.log_scalar(
-            field=self.metric,
-            tag=f"{self.logs_tag}_train_episodes",
-            value=best_metric,
-            step=self.episode
-        )
+        # self.logger.log_scalar(
+        #     field="fa",
+        #     tag=f"{self.logs_tag}_train_episodes",
+        #     value=best_fa,
+        #     step=self.episode
+        # )
+        # self.logger.log_scalar(
+        #     field=self.metric,
+        #     tag=f"{self.logs_tag}_train_episodes",
+        #     value=best_metric,
+        #     step=self.episode
+        # )
         self.logger.log_scalar(
             field="epsilon",
             tag=f"{self.logs_tag}_train_episodes",
@@ -1334,8 +1334,8 @@ class RDPG(object):
                     self.agent.update(batch)
 
             # Log episode results
-            # if train:
-            #     self.log_episode()
+            if train:
+                self.log_episode()
 
             # Update epsilon
             self.agent.update_epsilon()
