@@ -1,4 +1,4 @@
-/ldata/
+/data/
   |
   |--- subject1/
   .
