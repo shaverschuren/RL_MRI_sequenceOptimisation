@@ -1,3 +1,5 @@
+"""Simple script to make some mock-up 2D data"""
+
 import os
 
 src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
