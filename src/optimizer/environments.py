@@ -1507,7 +1507,7 @@ class KspaceEnv(object):
 
         # Get subjects from data directory
         subject_dirs = glob.glob(
-            os.path.join(self.data_dir, "[0-999]_[0-999]")
+            os.path.join(self.data_dir, "[0-9][0-9]_[0-999]")
         )
 
         # Check all these subjects for the appropriate files
