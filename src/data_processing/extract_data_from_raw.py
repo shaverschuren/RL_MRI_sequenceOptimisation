@@ -10,12 +10,13 @@ if root not in sys.path: sys.path.append(root)
 if src not in sys.path: sys.path.append(src)
 
 # File specific imports
-from typing import Union        # noqa: 402
-from glob import glob           # noqa: 402
-from scipy.io import loadmat    # noqa: 402
-import warnings                 # noqa: 402
-import numpy as np              # noqa: 402
-import nibabel as nib           # noqa: 402
+from typing import Union            # noqa: 402
+from glob import glob               # noqa: 402
+from scipy.io import loadmat        # noqa: 402
+import warnings                     # noqa: 402
+import numpy as np                  # noqa: 402
+import nibabel as nib               # noqa: 402
+import matplotlib.pyplot as plt     # noqa: 402
 
 
 def main(
@@ -119,6 +120,40 @@ def main(
             np.save(os.path.join(slice_dir, "GM_mask.npy"), GM_mask[slice_i])
             np.save(os.path.join(slice_dir, "WM_mask.npy"), WM_mask[slice_i])
             np.save(os.path.join(slice_dir, "CSF_mask.npy"), CSF_mask[slice_i])
+
+            # Also create a single image per folder for visual inspection
+            fig, axs = plt.subplots(2, 3)
+
+            fig.suptitle(
+                f"Visual inspection for subject #{subject_i}, slice #{slice_i}"
+            )
+
+            # Plot images
+            axs[0, 0].imshow(T1[slice_i], cmap='gray')          # type: ignore
+            axs[0, 1].imshow(T2[slice_i], cmap='gray')          # type: ignore
+            axs[0, 2].imshow(PD[slice_i], cmap='gray')          # type: ignore
+            axs[1, 0].imshow(GM_mask[slice_i], cmap='gray')     # type: ignore
+            axs[1, 1].imshow(WM_mask[slice_i], cmap='gray')     # type: ignore
+            axs[1, 2].imshow(CSF_mask[slice_i], cmap='gray')    # type: ignore
+
+            # Set titles
+            axs[0, 0].set_title("T1")                           # type: ignore
+            axs[0, 1].set_title("T2")                           # type: ignore
+            axs[0, 2].set_title("PD")                           # type: ignore
+            axs[1, 0].set_title("GM mask")                      # type: ignore
+            axs[1, 1].set_title("WM mask")                      # type: ignore
+            axs[1, 2].set_title("CSF mask")                     # type: ignore
+
+            # Remove axes
+            axs[0, 0].axis('off')                               # type: ignore
+            axs[0, 1].axis('off')                               # type: ignore
+            axs[0, 2].axis('off')                               # type: ignore
+            axs[1, 0].axis('off')                               # type: ignore
+            axs[1, 1].axis('off')                               # type: ignore
+            axs[1, 2].axis('off')                               # type: ignore
+
+            plt.savefig(os.path.join(slice_dir, "vis_inspection.png"))
+            plt.close()
 
         print(f"\033[FProcessing subject #{subject_i}... Done")
 
