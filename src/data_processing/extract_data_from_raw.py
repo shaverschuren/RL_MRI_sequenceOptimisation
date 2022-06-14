@@ -121,6 +121,9 @@ def main(
             np.save(os.path.join(slice_dir, "WM_mask.npy"), WM_mask[slice_i])
             np.save(os.path.join(slice_dir, "CSF_mask.npy"), CSF_mask[slice_i])
 
+            np.save(os.path.join(slice_dir, "mask_1.npy"), GM_mask[slice_i])
+            np.save(os.path.join(slice_dir, "mask_2.npy"), WM_mask[slice_i])
+
             # Also create a single image per folder for visual inspection
             fig, axs = plt.subplots(2, 3)
 
