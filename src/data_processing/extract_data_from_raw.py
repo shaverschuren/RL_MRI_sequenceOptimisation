@@ -76,14 +76,17 @@ def main(
         )
         # Import the masks
         masks = [
-            np.moveaxis(np.array(nib.load(path).dataobj), [2, 0, 1], [0, 1, 2])
+            np.moveaxis(
+                np.array(nib.load(path).dataobj)[16:-16, 16:-16, :],
+                [2, 0, 1], [0, 1, 2]
+            )
             for path in mask_paths
         ]
 
         # Load in separate arrays
-        T1 = qmaps[0]
-        T2 = qmaps[1]
-        PD = qmaps[2]
+        PD = qmaps[0]
+        T1 = qmaps[1]
+        T2 = qmaps[2]
         GM_mask = masks[0]
         WM_mask = masks[1]
         CSF_mask = masks[2]
@@ -119,7 +122,7 @@ def main(
 
         print(f"\033[FProcessing subject #{subject_i}... Done")
 
-    print("------------------------------\nExtraction finished. Exiting.")
+    print("------------------------------\n\nExtraction finished. Exiting.")
 
 
 if __name__ == "__main__":
