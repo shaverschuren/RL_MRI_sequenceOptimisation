@@ -1560,6 +1560,7 @@ class KspaceEnv(object):
 
             # Store subject directories in self
             self.subject_dirs = subject_dirs
+            self.remaining_subject_dirs = subject_dirs
 
         else:
             raise FileNotFoundError(
@@ -1664,6 +1665,20 @@ class KspaceEnv(object):
 
         # Store in self
         self.roi = np.array([mask_1, mask_2], dtype=bool)
+
+    def select_subject_dir(self):
+        """Select the subject directory for current episode"""
+
+        # If applicable, renew the subject dir list
+        if len(self.remaining_subject_dirs) == 0:
+            self.remaining_subject_dirs = self.subject_dirs
+
+        # Randomly select index
+        idx = random.randint(0, len(self.remaining_subject_dirs) - 1)
+        # Retrieve directory
+        self.current_dir = self.remaining_subject_dirs[idx]
+        # Remove directory from list
+        self.remaining_subject_dirs.pop(idx)
 
     def perform_simulation(self, theta=None, verbose=True):
         """Perform scan by passing parameters to scanner"""
@@ -1903,10 +1918,13 @@ class KspaceEnv(object):
         # Normalize parameters
         self.norm_parameters()
 
+        # Select subject directory to use for this episode
+        self.select_subject_dir()
+
         # Define the simulator class we'll use
         # TODO: Still have to implement subject dir selection
         self.simulator = kspace_sim.SimulatorObject(
-            self.subject_dirs[0], device=self.device
+            self.current_dir, device=self.device
         )
 
         # Define the ROIs used for this episode
