@@ -987,20 +987,6 @@ class RDPG(object):
 
         # Extract recent memory
         recent_memory = self.memory.get_recent_memory(6)
-        # recent_states = [transition.state for transition in recent_memory]
-        # recent_next_states = [
-        #     transition.next_state for transition in recent_memory
-        # ]
-        # recent_metrics = [float(state[0]) for state in recent_next_states]
-        # recent_fa = [float(state[1]) for state in recent_next_states]
-
-        # # Find "best" fa/metric in recent memory
-        # best_idx = np.argmax(recent_metrics)
-        # best_metric = (
-        #     float(recent_metrics[best_idx])
-        #     * self.env.metric_calibration
-        # )
-        # best_fa = float(recent_fa[best_idx]) * 90.
 
         # Find cumulative reward
         previous_trajectory = self.memory.memory[-1]
@@ -1010,18 +996,6 @@ class RDPG(object):
         cumulative_reward = sum(rewards)
 
         # Log scalars
-        # self.logger.log_scalar(
-        #     field="fa",
-        #     tag=f"{self.logs_tag}_train_episodes",
-        #     value=best_fa,
-        #     step=self.episode
-        # )
-        # self.logger.log_scalar(
-        #     field=self.metric,
-        #     tag=f"{self.logs_tag}_train_episodes",
-        #     value=best_metric,
-        #     step=self.episode
-        # )
         self.logger.log_scalar(
             field="epsilon",
             tag=f"{self.logs_tag}_train_episodes",
@@ -1040,6 +1014,19 @@ class RDPG(object):
             value=cumulative_reward,
             step=self.episode
         )
+
+        # Log theta (if applicable)
+        if hasattr(self.env, "theta"):
+            # Loop over flip angles in the pulse train
+            for i in range(len(self.env.theta)):
+                step = -self.env.n_prep_pulses + i
+
+                self.logger.log_scalar(
+                    field="theta",
+                    tag=f"{self.logs_tag}_theta_episode_{self.episode + 1}",
+                    value=float(self.env.theta[i]),
+                    step=step
+                )
 
         # Log losses (if applicable)
         if (
@@ -1100,6 +1087,20 @@ class RDPG(object):
 
         # If theoretical optimum is known, log the error
         if isinstance(self.env, environments.SimulationEnv):
+            # Extract recent states and metrics
+            recent_next_states = [
+                transition.next_state for transition in recent_memory
+            ]
+            recent_metrics = [float(state[0]) for state in recent_next_states]
+            recent_fa = [float(state[1]) for state in recent_next_states]
+
+            # Find "best" fa/metric in recent memory
+            best_idx = np.argmax(recent_metrics)
+            best_metric = (
+                float(recent_metrics[best_idx])
+                * self.env.metric_calibration
+            )
+            best_fa = float(recent_fa[best_idx]) * 90.
             # Find optimal fa and snr/cnr
             optimal_fa = self.env.optimal_fa
             optimal_metric = getattr(self.env, f"optimal_{self.metric}")
@@ -1110,6 +1111,20 @@ class RDPG(object):
                 relative_error = max(
                     0., optimal_metric - best_metric
                 ) / best_metric
+
+            # Log FA/metric data
+            self.logger.log_scalar(
+                field="fa",
+                tag=f"{self.logs_tag}_train_episodes",
+                value=best_fa,
+                step=self.episode
+            )
+            self.logger.log_scalar(
+                field=self.metric,
+                tag=f"{self.logs_tag}_train_episodes",
+                value=best_metric,
+                step=self.episode
+            )
 
             # Log the error
             self.logger.log_scalar(
