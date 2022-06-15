@@ -24,7 +24,7 @@ def main(
     raw_dir: Union[str, os.PathLike],
     processed_dir: Union[str, os.PathLike],
     subject_regex: str = "MRSTAT[0-9][0-9]",  # Two-digit subject number
-    resolution_limit: int = 128
+    resolution_limit: int = 64
 ):
     """Main extraction funciton"""
 
@@ -135,6 +135,16 @@ def main(
         # Create directories for all 2D slices of this subject
         # and fill them up with 2D slices of all maps and masks
         for slice_i in range(n_slices):
+
+            # Check whether there are enough WM/GM voxels to work with
+            # If not, skip this slice. This could be the case in the first
+            # and last couple of slices.
+            if not (
+                np.count_nonzero(WM_mask[slice_i]) > 5
+                and np.count_nonzero(GM_mask[slice_i]) > 5
+            ):
+                continue
+
             # Create directory (if it doesn't already exist)
             slice_dir = os.path.join(processed_dir, f"{subject_i}_{slice_i}")
             if not os.path.isdir(slice_dir):
