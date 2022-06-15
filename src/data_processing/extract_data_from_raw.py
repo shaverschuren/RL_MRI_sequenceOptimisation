@@ -119,24 +119,37 @@ def main(
                 os.mkdir(slice_dir)
 
             # Extract slices and resample if necessary
-            T1_slice = T1[slice_i] if not resample else resize(
-                T1[slice_i], (resolution_limit, resolution_limit)
-            )
-            T2_slice = T2[slice_i] if not resample else resize(
-                T2[slice_i], (resolution_limit, resolution_limit)
-            )
-            PD_slice = PD[slice_i] if not resample else resize(
-                PD[slice_i], (resolution_limit, resolution_limit)
-            )
-            GM_mask_slice = GM_mask[slice_i] if not resample else resize(
-                GM_mask[slice_i], (resolution_limit, resolution_limit)
-            )
-            WM_mask_slice = WM_mask[slice_i] if not resample else resize(
-                WM_mask[slice_i], (resolution_limit, resolution_limit)
-            )
-            CSF_mask_slice = CSF_mask[slice_i] if not resample else resize(
-                CSF_mask[slice_i], (resolution_limit, resolution_limit)
-            )
+            if not resample:
+                # Just select slices without resampling
+                T1_slice = T1[slice_i]
+                T2_slice = T2[slice_i]
+                PD_slice = PD[slice_i]
+                GM_mask_slice = GM_mask[slice_i]
+                WM_mask_slice = WM_mask[slice_i]
+                CSF_mask_slice = CSF_mask[slice_i]
+            else:
+                # Select slices and resample to max resolution
+                T1_slice = resize(
+                    T1[slice_i], (resolution_limit, resolution_limit)
+                )
+                T2_slice = resize(
+                    T2[slice_i], (resolution_limit, resolution_limit)
+                )
+                PD_slice = resize(
+                    PD[slice_i], (resolution_limit, resolution_limit)
+                )
+                GM_mask_slice = np.array(resize(
+                    GM_mask[slice_i], (resolution_limit, resolution_limit)
+                ) > 0.5, dtype=np.bool8
+                )
+                WM_mask_slice = np.array(resize(
+                    WM_mask[slice_i], (resolution_limit, resolution_limit)
+                ) > 0.5, dtype=np.bool8
+                )
+                CSF_mask_slice = np.array(resize(
+                    CSF_mask[slice_i], (resolution_limit, resolution_limit)
+                ) > 0.5, dtype=np.bool8
+                )
 
             # Save the appropriate slices to this folder
             np.save(os.path.join(slice_dir, "T1.npy"), T1_slice)
