@@ -80,7 +80,10 @@ def main(
         # Import the masks
         masks = [
             np.moveaxis(
-                np.array(nib.load(path).dataobj)[16:-16, 16:-16, :],
+                np.array(
+                    nib.load(path).dataobj,
+                    dtype=np.float64
+                )[16:-16, 16:-16, :],
                 [2, 0, 1], [0, 1, 2]
             )
             for path in mask_paths
@@ -106,61 +109,47 @@ def main(
             )
             continue
 
-        # Check for resample necessity
-        resample = any(dim > resolution_limit for dim in T1.shape)
+        # Get the number of slices
+        n_slices = np.shape(T1)[0]
+
+        # Check for resample necessity and resample if necessary
+        if any(dim > resolution_limit for dim in T1.shape):
+            # maps
+            T1 = resize(T1, tuple([n_slices] + [resolution_limit] * 2))
+            T2 = resize(T2, tuple([n_slices] + [resolution_limit] * 2))
+            PD = resize(PD, tuple([n_slices] + [resolution_limit] * 2))
+            # masks
+            GM_mask = np.array(
+                resize(GM_mask, tuple([n_slices] + [resolution_limit] * 2)) > 0.5,  # noqa: E501
+                dtype=np.uint8
+            )
+            WM_mask = np.array(
+                resize(WM_mask, tuple([n_slices] + [resolution_limit] * 2)) > 0.5,  # noqa: E501
+                dtype=np.uint8
+            )
+            CSF_mask = np.array(
+                resize(CSF_mask, tuple([n_slices] + [resolution_limit] * 2)) > 0.5,  # noqa: E501
+                dtype=np.uint8
+            )
 
         # Create directories for all 2D slices of this subject
         # and fill them up with 2D slices of all maps and masks
-        n_slices = np.shape(T1)[0]
         for slice_i in range(n_slices):
             # Create directory (if it doesn't already exist)
             slice_dir = os.path.join(processed_dir, f"{subject_i}_{slice_i}")
             if not os.path.isdir(slice_dir):
                 os.mkdir(slice_dir)
 
-            # Extract slices and resample if necessary
-            if not resample:
-                # Just select slices without resampling
-                T1_slice = T1[slice_i]
-                T2_slice = T2[slice_i]
-                PD_slice = PD[slice_i]
-                GM_mask_slice = GM_mask[slice_i]
-                WM_mask_slice = WM_mask[slice_i]
-                CSF_mask_slice = CSF_mask[slice_i]
-            else:
-                # Select slices and resample to max resolution
-                T1_slice = resize(
-                    T1[slice_i], (resolution_limit, resolution_limit)
-                )
-                T2_slice = resize(
-                    T2[slice_i], (resolution_limit, resolution_limit)
-                )
-                PD_slice = resize(
-                    PD[slice_i], (resolution_limit, resolution_limit)
-                )
-                GM_mask_slice = np.array(resize(
-                    GM_mask[slice_i], (resolution_limit, resolution_limit)
-                ) > 0.5, dtype=np.bool8
-                )
-                WM_mask_slice = np.array(resize(
-                    WM_mask[slice_i], (resolution_limit, resolution_limit)
-                ) > 0.5, dtype=np.bool8
-                )
-                CSF_mask_slice = np.array(resize(
-                    CSF_mask[slice_i], (resolution_limit, resolution_limit)
-                ) > 0.5, dtype=np.bool8
-                )
-
             # Save the appropriate slices to this folder
-            np.save(os.path.join(slice_dir, "T1.npy"), T1_slice)
-            np.save(os.path.join(slice_dir, "T2.npy"), T2_slice)
-            np.save(os.path.join(slice_dir, "PD.npy"), PD_slice)
-            np.save(os.path.join(slice_dir, "GM_mask.npy"), GM_mask_slice)
-            np.save(os.path.join(slice_dir, "WM_mask.npy"), WM_mask_slice)
-            np.save(os.path.join(slice_dir, "CSF_mask.npy"), CSF_mask_slice)
+            np.save(os.path.join(slice_dir, "T1.npy"), T1[slice_i])
+            np.save(os.path.join(slice_dir, "T2.npy"), T2[slice_i])
+            np.save(os.path.join(slice_dir, "PD.npy"), PD[slice_i])
+            np.save(os.path.join(slice_dir, "GM_mask.npy"), GM_mask[slice_i])
+            np.save(os.path.join(slice_dir, "WM_mask.npy"), WM_mask[slice_i])
+            np.save(os.path.join(slice_dir, "CSF_mask.npy"), CSF_mask[slice_i])
 
-            np.save(os.path.join(slice_dir, "mask_1.npy"), GM_mask_slice)
-            np.save(os.path.join(slice_dir, "mask_2.npy"), WM_mask_slice)
+            np.save(os.path.join(slice_dir, "mask_1.npy"), GM_mask[slice_i])
+            np.save(os.path.join(slice_dir, "mask_2.npy"), WM_mask[slice_i])
 
             # Also create a single image per folder for visual inspection
             fig, axs = plt.subplots(2, 3)
@@ -170,12 +159,12 @@ def main(
             )
 
             # Plot images
-            axs[0, 0].imshow(T1_slice, cmap='gray')          # type: ignore
-            axs[0, 1].imshow(T2_slice, cmap='gray')          # type: ignore
-            axs[0, 2].imshow(PD_slice, cmap='gray')          # type: ignore
-            axs[1, 0].imshow(GM_mask_slice, cmap='gray')     # type: ignore
-            axs[1, 1].imshow(WM_mask_slice, cmap='gray')     # type: ignore
-            axs[1, 2].imshow(CSF_mask_slice, cmap='gray')    # type: ignore
+            axs[0, 0].imshow(T1[slice_i], cmap='gray')          # type: ignore
+            axs[0, 1].imshow(T2[slice_i], cmap='gray')          # type: ignore
+            axs[0, 2].imshow(PD[slice_i], cmap='gray')          # type: ignore
+            axs[1, 0].imshow(GM_mask[slice_i], cmap='gray')     # type: ignore
+            axs[1, 1].imshow(WM_mask[slice_i], cmap='gray')     # type: ignore
+            axs[1, 2].imshow(CSF_mask[slice_i], cmap='gray')    # type: ignore
 
             # Set titles
             axs[0, 0].set_title("T1")                           # type: ignore
