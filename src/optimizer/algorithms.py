@@ -12,6 +12,7 @@ from typing import Union
 import numpy as np
 from datetime import datetime
 import torch
+import json
 from optimizer import agents, environments
 from util import training, loggers
 
@@ -782,6 +783,9 @@ class RDPG(object):
         # Setup model checkpoint path
         self.model_path = os.path.join(self.logs_path, "model.pt")
 
+        # Setup dynamic variable checkpoint path
+        self.variable_path = os.path.join(self.logs_path, "dynamic_vars.json")
+
         # Define datafields
         self.logs_fields = [
             "img", self.metric, f"{self.metric}_norm",
@@ -1347,6 +1351,12 @@ class RDPG(object):
             ):
                 # Update most recent backup
                 self.agent.save(self.model_path)
+                # Save dynamic variables for this training session
+                with open(self.variable_path, "w") as outfile:
+                    json.dump({
+                        "episode": self.episode,
+                        "epsilon": self.agent.epsilon
+                    }, outfile)
                 # Update "best" backup
                 if self.backup_best:
                     self.agent.save(self.model_path.replace(".pt", "_best.pt"))
