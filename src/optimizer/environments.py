@@ -19,6 +19,7 @@ import warnings
 import numpy as np
 import random
 import torch
+from copy import deepcopy
 import epg_simulator.python.epg_numba as epg
 import kspace_simulator.simulator as kspace_sim
 from util import roi
@@ -1560,7 +1561,7 @@ class KspaceEnv(object):
 
             # Store subject directories in self
             self.subject_dirs = subject_dirs
-            self.remaining_subject_dirs = subject_dirs
+            self.remaining_subject_dirs = deepcopy(subject_dirs)
 
         else:
             raise FileNotFoundError(
@@ -1671,7 +1672,7 @@ class KspaceEnv(object):
 
         # If applicable, renew the subject dir list
         if len(self.remaining_subject_dirs) == 0:
-            self.remaining_subject_dirs = self.subject_dirs
+            self.remaining_subject_dirs = deepcopy(self.subject_dirs)
 
         # Randomly select index
         idx = random.randint(0, len(self.remaining_subject_dirs) - 1)
@@ -1928,7 +1929,7 @@ class KspaceEnv(object):
         )
 
         # Define the ROIs used for this episode
-        self.setup_rois(self.subject_dirs[0])
+        self.setup_rois(self.current_dir)
 
         # Run single simulation step and define initial state (if applicable)
         # Run simulation
