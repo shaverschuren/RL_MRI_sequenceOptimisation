@@ -757,7 +757,7 @@ class RDPG(object):
 
         # Setup memory
         self.memory = training.EpisodicMemory(
-            self.n_episodes // 4,
+            self.n_episodes // 8,
             ('state', 'action', 'reward', 'next_state') if self.single_fa
             else (
                 'state_img', 'state_fa', 'action',
@@ -1016,14 +1016,25 @@ class RDPG(object):
         )
 
         # Log theta (if applicable)
-        if hasattr(self.env, "theta"):
+        run_type = "train" if self.train else "test"
+        if (
+            hasattr(self.env, "theta")
+            and (
+                (not self.train)
+                or (self.episode in list(range(
+                    0, self.n_episodes, self.n_episodes // 100
+                ))))
+        ):
             # Loop over flip angles in the pulse train
             for i in range(len(self.env.theta)):
                 step = -self.env.n_prep_pulses + i
 
                 self.logger.log_scalar(
                     field="theta",
-                    tag=f"{self.logs_tag}_theta_episode_{self.episode + 1}",
+                    tag=(
+                        f"{self.logs_tag}_{run_type}_"
+                        f"theta_episode_{self.episode + 1}"
+                    ),
                     value=float(self.env.theta[i]),
                     step=step
                 )
