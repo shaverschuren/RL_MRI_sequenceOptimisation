@@ -1919,8 +1919,6 @@ class KspaceEnv(object):
             device=self.device
         )
 
-        print(self.theta)
-
         # Normalize parameters
         self.norm_parameters()
 
