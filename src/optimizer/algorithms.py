@@ -757,7 +757,7 @@ class RDPG(object):
 
         # Setup memory
         self.memory = training.EpisodicMemory(
-            self.n_episodes // 8,
+            self.n_episodes // 4 if self.n_episodes < 40000 else 10000,
             ('state', 'action', 'reward', 'next_state') if self.single_fa
             else (
                 'state_img', 'state_fa', 'action',
@@ -1356,12 +1356,29 @@ class RDPG(object):
                 )
 
             # If training, update model
+            # We'll do this multiple times per episode to drastically
+            # improve training times
             if train:
-                # Generate batch
-                batch = self.memory.sample(self.batch_size)
-                # Run training
-                self.policy_loss, self.critic_loss = \
-                    self.agent.update(batch)
+                # Loop 10 (or less) times to update model
+                policy_loss = 0.
+                critic_loss = 0.
+                n_updates = 0
+                for _ in range(
+                    10 if len(self.memory) >= 10 else len(self.memory)
+                ):
+                    # Generate batch
+                    batch = self.memory.sample(self.batch_size)
+                    # Run training
+                    current_policy_loss, current_critic_loss = \
+                        self.agent.update(batch)
+                    # Update losses
+                    policy_loss += current_policy_loss
+                    critic_loss += current_critic_loss
+                    n_updates += 1
+
+                # Store losses
+                self.policy_loss = policy_loss / float(n_updates)
+                self.critic_loss = critic_loss / float(n_updates)
 
             # Log episode results
             if train:
