@@ -401,19 +401,26 @@ class RecurrentModel_ConvConcatFC(nn.Module):
 
         # Create CNN architecture list
         cnn_list = [
-            ("conv1", nn.Conv2d(1, 4, 5)),
+            ("conv1", nn.Conv2d(1, 4, 5, padding=2)),
             (("relu1", nn.ReLU())),
-            ("pool1", nn.MaxPool2d(2, 2)),
-            ("conv2", nn.Conv2d(4, 16, 5)),
+            ("pool1", nn.MaxPool2d(kernel_size=2)),
+            ("conv2", nn.Conv2d(4, 16, 5, padding=2)),
             (("relu2", nn.ReLU())),
-            ("pool2", nn.MaxPool2d(2, 2)),
+            ("pool2", nn.MaxPool2d(kernel_size=2)),
+            ("conv3", nn.Conv2d(16, 32, 5, padding=2)),
+            (("relu3", nn.ReLU())),
+            ("pool3", nn.MaxPool2d(kernel_size=2)),
+            ("conv4", nn.Conv2d(32, 32, 5, padding=2)),
+            (("relu4", nn.ReLU())),
+            ("pool4", nn.MaxPool2d(kernel_size=2)),
             ("flatten", nn.Flatten(1)),
             ("fc1", nn.Linear(
-                16 * (self.input_img_size[0] // 4 - 3)
-                * (self.input_img_size[1] // 4 - 3),
+                (self.input_img_size[0] * self.input_img_size[1]) // 8,
                 cnn_output_size
             )),
-            (("relu3", nn.ReLU()))
+            (("relu5", nn.ReLU())),
+            ("fc2", nn.Linear(cnn_output_size, cnn_output_size)),
+            (("relu6", nn.ReLU()))
         ]
 
         # Create FC architecture list
@@ -449,10 +456,17 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         rnn_list.append(
             (
                 "fc2",
-                nn.Linear(self.hidden_size, self.output_size)
+                nn.Linear(self.hidden_size, 2 * self.output_size)
             )
         )
         rnn_list.append(("relu2", nn.ReLU()))
+        rnn_list.append(
+            (
+                "fc3",
+                nn.Linear(2 * self.output_size, self.output_size)
+            )
+        )
+        rnn_list.append(("relu3", nn.ReLU()))
         rnn_list.append(
             (
                 "output",
