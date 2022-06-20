@@ -1355,6 +1355,8 @@ class RDPG(object):
             # We'll do this multiple times per episode to drastically
             # improve training times
             if train:
+                print("Updating... ", end="", flush=True)
+
                 # Loop 10 (or less) times to update model
                 policy_loss = 0.
                 critic_loss = 0.
@@ -1375,6 +1377,9 @@ class RDPG(object):
                 # Store losses
                 self.policy_loss = policy_loss / float(n_updates)
                 self.critic_loss = critic_loss / float(n_updates)
+
+                # Print done
+                print("Done")
 
             # Log episode results
             if train:
