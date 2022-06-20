@@ -10,6 +10,8 @@ Here, we give implementations for agents used in several algorithms, namely:
 from typing import Union
 import warnings
 import numpy as np
+from perlin_noise import PerlinNoise
+import random
 import torch
 from torch import optim
 import torch.nn.functional as F
@@ -724,11 +726,29 @@ class RDPGAgent(object):
                     torch.unsqueeze(state[1], 0)
                 )
         pure_action = torch.squeeze(pure_action, 0).cpu().detach().numpy()
-        # Add noise (if training)
-        noise = (
-            np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
-            if train else 0.
-        )
+        # Add noise (if training) We'll use 1D Perlin noise for this for some
+        # spatial coherence in the case of a full pulse train optimization.
+        if self.single_fa:
+            # Generate random incoherent noise from normal distribution
+            noise = (
+                np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
+                if train else 0.
+            )
+        else:
+            # Create perlin noise generator
+            perlin_noise = PerlinNoise(
+                octaves=3.5, seed=random.randint(0, 10000)
+            )
+            # Generate the Perlin noise
+            start_idx = random.randint(1, 100)
+            noise = np.array([
+                perlin_noise(idx / len(pure_action))
+                for idx in range(start_idx, len(pure_action) + start_idx)
+            ])
+            # Scale it with epsilon
+            noise *= self.epsilon / np.percentile(np.abs(noise), 95.)
+
+        # Clip the noisy action to the appropriate range
         noisy_action = np.clip(
             pure_action + noise,
             self.action_space.low,
