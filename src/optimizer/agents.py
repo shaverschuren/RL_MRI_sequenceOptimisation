@@ -736,15 +736,18 @@ class RDPGAgent(object):
             )
         else:
             # Create perlin noise generator
-            perlin_noise = PerlinNoise(
-                octaves=3.5, seed=random.randint(0, 10000)
-            )
+            start_idx = random.randint(1, 100)
+            octaves = 0.5 + random.random() * 2.5
+            seed = random.randint(0, 10000)
+            perlin_noise = PerlinNoise(octaves=octaves, seed=seed)
+
             # Generate the Perlin noise
             start_idx = random.randint(1, 100)
             noise = np.array([
                 perlin_noise(idx / len(pure_action))
                 for idx in range(start_idx, len(pure_action) + start_idx)
             ])
+
             # Scale it with epsilon
             noise *= self.epsilon / np.percentile(np.abs(noise), 95.)
 
