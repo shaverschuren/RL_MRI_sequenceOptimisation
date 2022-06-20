@@ -821,7 +821,10 @@ class RDPG(object):
         ):
             # Image
             if (
-                isinstance(self.env, environments.ScannerEnv)
+                (
+                    isinstance(self.env, environments.ScannerEnv)
+                    or isinstance(self.env, environments.KspaceEnv)
+                )
                 and hasattr(self.env, 'recent_img')
             ):
                 self.logger.log_image(
@@ -830,7 +833,7 @@ class RDPG(object):
                         f"{self.logs_tag}_{run_type}_"
                         f"episode_{self.episode + 1}"
                     ),
-                    image=np.array(self.env.recent_img) / 5.,
+                    image=np.array(self.env.recent_img.cpu()) / 5.,
                     step=-1
                 )
 
