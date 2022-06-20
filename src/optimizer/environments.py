@@ -1912,7 +1912,7 @@ class KspaceEnv(object):
         # Setup pulse train
         self.theta = torch.tensor(
             [
-                self.fa_init + (random.random() * 4.) - 2
+                self.fa_init  # + (random.random() * 4.) - 2
                 for _ in range(self.n_pulses)
             ],
             dtype=torch.complex64,
