@@ -760,7 +760,7 @@ class RDPGAgent(object):
                 ]
                 for prep_pulse_neuron in prep_pulse_neurons:
                     noise[prep_pulse_neuron] = \
-                        np.random.normal() * self.epsilon
+                        np.random.normal(0., 1.0 * self.epsilon)
 
             else: noise = 0.
 
