@@ -926,6 +926,26 @@ class RDPG(object):
                     step=self.tick + 1
                 )
 
+            # Log theta (if applicable)
+            if (
+                isinstance(self.env, environments.KspaceEnv)
+                and hasattr(self.env, "theta")
+                and (self.tick == self.n_ticks - 1 or done)
+            ):
+                # Loop over flip angles in the pulse train
+                for i in range(len(self.env.theta)):
+                    step = -self.env.n_prep_pulses + i
+
+                    self.logger.log_scalar(
+                        field="theta",
+                        tag=(
+                            f"{self.logs_tag}_{run_type}_"
+                            f"theta_episode_{self.episode + 1}"
+                        ),
+                        value=float(self.env.theta[i]),
+                        step=step
+                    )
+
             # Scalars (current state -> state1)
             # self.logger.log_scalar(
             #     field="fa",
@@ -1014,30 +1034,6 @@ class RDPG(object):
             value=cumulative_reward,
             step=self.episode
         )
-
-        # Log theta (if applicable)
-        run_type = "train" if self.train else "test"
-        if (
-            hasattr(self.env, "theta")
-            and (
-                (not self.train)
-                or (self.episode in list(range(
-                    0, self.n_episodes, self.n_episodes // 100
-                ))))
-        ):
-            # Loop over flip angles in the pulse train
-            for i in range(len(self.env.theta)):
-                step = -self.env.n_prep_pulses + i
-
-                self.logger.log_scalar(
-                    field="theta",
-                    tag=(
-                        f"{self.logs_tag}_{run_type}_"
-                        f"theta_episode_{self.episode + 1}"
-                    ),
-                    value=float(self.env.theta[i]),
-                    step=step
-                )
 
         # Log losses (if applicable)
         if (
