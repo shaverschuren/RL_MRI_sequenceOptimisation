@@ -726,43 +726,47 @@ class RDPGAgent(object):
                     torch.unsqueeze(state[1], 0)
                 )
         pure_action = torch.squeeze(pure_action, 0).cpu().detach().numpy()
-        # Add noise (if training) We'll use 1D Perlin noise for this for some
-        # spatial coherence in the case of a full pulse train optimization.
-        if self.single_fa:
-            # Generate random incoherent noise from normal distribution
-            noise = (
-                np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
-                if train else 0.
-            )
-        else:
-            if train:
-                # Create perlin noise generator
-                start_idx = random.randint(1, 100)
-                octaves = 0.5 + random.random() * 2.5
-                seed = random.randint(0, 10000)
-                perlin_noise = PerlinNoise(octaves=octaves, seed=seed)
+        # # Add noise (if training) We'll use 1D Perlin noise for this for some
+        # # spatial coherence in the case of a full pulse train optimization.
+        noise = (
+            np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
+            if train else 0.
+        )
+        # if self.single_fa:
+        #     # Generate random incoherent noise from normal distribution
+        #     noise = (
+        #         np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
+        #         if train else 0.
+        #     )
+        # else:
+        #     if train:
+        #         # Create perlin noise generator
+        #         start_idx = random.randint(1, 100)
+        #         octaves = 0.5 + random.random() * 2.5
+        #         seed = random.randint(0, 10000)
+        #         perlin_noise = PerlinNoise(octaves=octaves, seed=seed)
 
-                # Generate the Perlin noise
-                start_idx = random.randint(1, 100)
-                noise = np.array([
-                    perlin_noise(idx / len(pure_action))
-                    for idx in range(start_idx, len(pure_action) + start_idx)
-                ])
+        #         # Generate the Perlin noise
+        #         start_idx = random.randint(1, 100)
+        #         noise = np.array([
+        #             perlin_noise(idx / len(pure_action))
+        #             for idx in range(start_idx, len(pure_action) + start_idx)
+        #         ])
 
-                # Scale it with epsilon
-                noise *= self.epsilon / np.percentile(np.abs(noise), 95.)
+        #         # Scale it with epsilon
+        #         noise *= self.epsilon / np.percentile(np.abs(noise), 95.)
 
-                # For the preparation pulses, just use random noise
-                prep_pulse_neurons = [
-                    neuron['neuron']
-                    for neuron in self.action_space._info
-                    if 'prep pulse' in neuron['name']
-                ]
-                for prep_pulse_neuron in prep_pulse_neurons:
-                    noise[prep_pulse_neuron] = \
-                        np.random.normal(0., 1.0 * self.epsilon)
+        #         # For the preparation pulses, just use random noise
+        #         prep_pulse_neurons = [
+        #             neuron['neuron']
+        #             for neuron in self.action_space._info
+        #             if 'prep pulse' in neuron['name']
+        #         ]
+        #         for prep_pulse_neuron in prep_pulse_neurons:
+        #             noise[prep_pulse_neuron] = \
+        #                 np.random.normal(0., 1.0 * self.epsilon)
 
-            else: noise = 0.
+        #     else: noise = 0.
 
         # Clip the noisy action to the appropriate range
         noisy_action = np.clip(
