@@ -905,15 +905,17 @@ class RDPG(object):
         end_str = "\033[0m"
 
         # Assemble action string and print step summary
-        action_str = "["
-        for action_part in action:
-            action_color = "\033[92m" if action_part > 0. else "\033[91m"
-            action_str += f"{action_color}{float(action_part):5.2f}{end_str}, "
-        action_str = action_str[:-2] + "]"
+        theta_str = "["
+        for i in range(len(action)):
+            action_part = action[i]
+            theta_part = self.env.pulsetrain_param_vector[i]
+            theta_color = "\033[92m↑" if action_part > 0. else "\033[91m↓"
+            theta_str += f"{theta_color}{float(theta_part):6.2f}{end_str}, "
+        theta_str = theta_str[:-2] + "]"
 
         print(
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-            f"Action: {action_str} - "
+            f"Theta knots [deg]: {theta_str} - "
             # f"FA: {float(self.env.fa):5.1f} - "
             f"{self.metric.upper()}: "
             f"{float(getattr(self.env, self.metric)):5.2f} -"
