@@ -793,7 +793,10 @@ class RDPG(object):
             "n_scans", "reward", "performance"
         ]
         if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
-        else: self.logs_fields.extend(["theta", "theta_norm"])
+        else: self.logs_fields.extend([
+            "theta", "theta_norm",
+            *[f"theta_param{i}" for i in range(self.env.n_state_vector)]
+        ])
 
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -851,6 +854,18 @@ class RDPG(object):
                     value=float(self.env.fa_norm),
                     step=-1
                 )
+            else:
+                for i in range(self.env.n_state_vector):
+                    self.logger.log_scalar(
+                        field=f"theta_param{i}",
+                        tag=(
+                            f"{self.logs_tag}_{run_type}_theta_params_"
+                            f"episode_{self.episode + 1}"
+                        ),
+                        value=float(self.env.pulsetrain_param_vector[i]),
+                        step=-1
+                    )
+
             self.logger.log_scalar(
                 field=self.metric,
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
@@ -933,21 +948,34 @@ class RDPG(object):
             if (
                 isinstance(self.env, environments.KspaceEnv)
                 and hasattr(self.env, "theta")
-                and (self.tick == self.n_ticks - 1 or done)
             ):
-                # Loop over flip angles in the pulse train
-                for i in range(len(self.env.theta)):
-                    step = -self.env.n_prep_pulses + i
-
+                # Log theta parametrization values
+                for i in range(self.env.n_state_vector):
                     self.logger.log_scalar(
-                        field="theta",
+                        field=f"theta_param{i}",
                         tag=(
-                            f"{self.logs_tag}_{run_type}_"
-                            f"theta_episode_{self.episode + 1}"
+                            f"{self.logs_tag}_{run_type}_theta_params_"
+                            f"episode_{self.episode + 1}"
                         ),
-                        value=float(self.env.theta[i]),
-                        step=step
+                        value=float(self.env.pulsetrain_param_vector[i]),
+                        step=self.tick
                     )
+
+                # if final stp, log theta
+                if (self.tick == self.n_ticks - 1 or done):
+                    # Loop over flip angles in the pulse train
+                    for i in range(len(self.env.theta)):
+                        step = -self.env.n_prep_pulses + i
+
+                        self.logger.log_scalar(
+                            field="theta",
+                            tag=(
+                                f"{self.logs_tag}_{run_type}_"
+                                f"theta_episode_{self.episode + 1}"
+                            ),
+                            value=float(self.env.theta[i]),
+                            step=step
+                        )
 
             # Scalars (current state -> state1)
             # self.logger.log_scalar(
