@@ -1914,7 +1914,7 @@ class KspaceEnv(object):
             and (action_np <= self.action_space.high).all()
         ):
             # Calculate deltas [-1, 1] -> [3/4, 6/4]
-            deltas = (((action_np + 1.) / 2.) * 0.75 + 0.75)
+            deltas = (((action + 1.) / 2.) * 0.75 + 0.75)
             # Adjust prep pulses
             self.fa_prep *= deltas[0]
             self.theta_prep *= deltas[0]
