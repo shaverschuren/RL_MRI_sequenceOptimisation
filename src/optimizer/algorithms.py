@@ -743,7 +743,7 @@ class RDPG(object):
         else: n_actions = env.n_actions + 1 if model_done else env.n_actions
         # Determine n_states
         if single_fa: n_states = 2
-        else: n_states = [env.img_shape, env.n_pulses]
+        else: n_states = [env.img_shape, env.n_state_vector]
 
         # Setup agent
         self.agent = agents.RDPGAgent(
@@ -1261,7 +1261,7 @@ class RDPG(object):
                     ),
                     torch.zeros(
                         (1, self.env.n_actions), device=self.device,
-                        dtype=torch.complex64
+                        dtype=torch.float
                     )
                 ]
                 next_states = [
@@ -1271,7 +1271,7 @@ class RDPG(object):
                     ),
                     torch.zeros(
                         (1, self.env.n_actions), device=self.device,
-                        dtype=torch.complex64
+                        dtype=torch.float
                     )
                 ]
 

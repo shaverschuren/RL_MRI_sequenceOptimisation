@@ -1476,6 +1476,7 @@ class KspaceEnv(object):
         self.n_episodes = n_episodes
         self.n_prep_pulses = n_prep_pulses
         self.parametrization_n_knots = parametrization_n_knots
+        self.n_state_vector = parametrization_n_knots + 1
         self.fa_range = fa_range
         self.validation_mode = validation_mode
         self.episode = 0
@@ -1912,21 +1913,20 @@ class KspaceEnv(object):
             (self.action_space.low <= action_np).all()
             and (action_np <= self.action_space.high).all()
         ):
-            # Adjust flip angle
-            pass
-            # self.update_theta(action)
-            # deltas = action * self.theta / 2
-            # self.theta += deltas
+            # Adjust prep pulses
+            self.fa_prep *= (action[0] + 2.) / 2.
+            self.theta_prep *= (action[0] + 2.) / 2.
+            # Adjust acq pulses
+            self.pulsetrain_knots *= (action[1:] + 2.) / 2.
+
+            # Adjust theta
+            self.get_pulsetrain_parametrization()
         else:
             raise RuntimeError(
                 "Action not in action space. Expected something "
                 f"in range {self.action_space.ranges} but got "
                 f"{action_np}"
             )
-
-        # Correct for flip angle out of bounds
-        self.theta[torch.abs(self.theta) > 180.] = 180.
-        self.theta[torch.abs(self.theta) < 0.] = 0.
 
         # Run EPG
         self.run_simulation_and_update()
@@ -1938,7 +1938,7 @@ class KspaceEnv(object):
         self.old_state = self.state
         self.state = [
             self.recent_img,
-            self.theta
+            self.pulsetrain_param_vector_norm
         ]
 
         # Store in history
