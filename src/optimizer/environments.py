@@ -1860,8 +1860,8 @@ class KspaceEnv(object):
         n = len(parameters)
 
         # Set x and y for nodes
-        y_nodes = parameters
-        x_nodes = torch.linspace(0, 1, n)
+        y_nodes = deepcopy(parameters).cpu()
+        x_nodes = torch.linspace(0, 1, n).cpu()
 
         # Create 2nd order spline representation
         self.spline_representation = \
