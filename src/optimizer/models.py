@@ -395,8 +395,8 @@ class RecurrentModel_ConvConcatFC(nn.Module):
 
         # Define some parameters here for now. Might move to
         # __init__
-        cnn_output_size = 128
-        fc_output_size = 128
+        cnn_output_size = 64
+        fc_output_size = 32
         rnn_input_size = cnn_output_size + fc_output_size
 
         # Create CNN architecture list
@@ -425,11 +425,11 @@ class RecurrentModel_ConvConcatFC(nn.Module):
 
         # Create FC architecture list
         fc_list = [
-            ("fc1", nn.Linear(self.input_vector_size, 128)),
+            ("fc1", nn.Linear(self.input_vector_size, 32)),
             (("relu1", nn.ReLU())),
-            ("fc2", nn.Linear(128, 128)),
+            ("fc2", nn.Linear(32, 64)),
             (("relu2", nn.ReLU())),
-            ("fc3", nn.Linear(128, fc_output_size)),
+            ("fc3", nn.Linear(64, fc_output_size)),
             (("relu3", nn.ReLU())),
         ]
 
