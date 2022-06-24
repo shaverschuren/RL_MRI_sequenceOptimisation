@@ -751,13 +751,13 @@ class RDPG(object):
             n_actions=n_actions,
             n_states=n_states,
             single_fa=single_fa,
-            epsilon_decay=1. - (10. / float(self.n_episodes))
+            epsilon_decay=1. - (5. / float(self.n_episodes))
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
         self.memory = training.EpisodicMemory(
-            self.n_episodes // 4 if self.n_episodes < 40000 else 10000,
+            self.n_episodes // 2 if self.n_episodes < 20000 else 10000,
             ('state', 'action', 'reward', 'next_state') if self.single_fa
             else (
                 'state_img', 'state_fa', 'action',
