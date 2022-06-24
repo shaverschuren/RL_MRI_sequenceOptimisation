@@ -1920,6 +1920,7 @@ class KspaceEnv(object):
             self.pulsetrain_knots *= (action[1:] + 2.) / 2.
 
             # Adjust theta
+            self.set_pulsetrain_parametrization(self.pulsetrain_knots)
             self.get_pulsetrain_parametrization()
         else:
             raise RuntimeError(
