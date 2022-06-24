@@ -904,9 +904,16 @@ class RDPG(object):
         reward_color = "\033[92m" if reward > 0. else "\033[91m"
         end_str = "\033[0m"
 
+        # Assemble action string and print step summary
+        action_str = "["
+        for action_part in action:
+            action_color = "\033[92m" if action_part > 0. else "\033[91m"
+            action_str += f"{action_color}{float(action_part):5.2f}{end_str}, "
+        action_str = action_str[:-2] + "]"
+
         print(
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-            # f"Action: {float(action[0]):5.2f} - "
+            f"Action: {action_str} - "
             # f"FA: {float(self.env.fa):5.1f} - "
             f"{self.metric.upper()}: "
             f"{float(getattr(self.env, self.metric)):5.2f} -"
