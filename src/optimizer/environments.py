@@ -1989,15 +1989,19 @@ class KspaceEnv(object):
 
         # Set pulse train parameters
         self.pulsetrain_knots = torch.tensor(
-            [self.fa_init] * self.parametrization_n_knots,
-            dtype=torch.float32, device=self.device
+            [
+                self.fa_init * (1. + (random.random() - .5) * .2)
+                for _ in range(self.parametrization_n_knots)
+            ], dtype=torch.float32, device=self.device
         )
 
         # Set preparation pulses
-        self.fa_prep = self.fa_init
+        self.fa_prep = self.fa_init * (1. + (random.random() - .5) * .2)
         self.theta_prep = torch.tensor(
-            [self.fa_prep] * self.n_prep_pulses,
-            dtype=torch.float32, device=self.device
+            [
+                self.fa_init * (1. + (random.random() - .5) * .2)
+                for _ in range(self.n_prep_pulses)
+            ], dtype=torch.float32, device=self.device
         )
 
         # Set parametrization of pulse train
@@ -2013,7 +2017,6 @@ class KspaceEnv(object):
         self.select_subject_dir()
 
         # Define the simulator class we'll use
-        # TODO: Still have to implement subject dir selection
         self.simulator = kspace_sim.SimulatorObject(
             self.current_dir, device=self.device
         )
