@@ -1998,10 +1998,8 @@ class KspaceEnv(object):
         # Set preparation pulses
         self.fa_prep = self.fa_init * (1. + (random.random() - .5) * .2)
         self.theta_prep = torch.tensor(
-            [
-                self.fa_init * (1. + (random.random() - .5) * .2)
-                for _ in range(self.n_prep_pulses)
-            ], dtype=torch.float32, device=self.device
+            [self.fa_init] * self.n_prep_pulses,
+            dtype=torch.float32, device=self.device
         )
 
         # Set parametrization of pulse train
