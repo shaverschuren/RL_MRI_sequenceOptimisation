@@ -19,6 +19,7 @@ import warnings
 import numpy as np
 import random
 import torch
+from scipy import interpolate
 from copy import deepcopy
 import epg_simulator.python.epg_numba as epg
 import kspace_simulator.simulator as kspace_sim
@@ -1432,6 +1433,7 @@ class KspaceEnv(object):
             homogeneous_initialization: bool = True,
             n_episodes: Union[int, None] = None,
             n_prep_pulses: int = 3,
+            parametrization_n_knots: int = 5,
             fa_range: list[float] = [5., 45.],
             validation_mode: bool = False,
             device: Union[torch.device, None] = None):
@@ -1455,6 +1457,8 @@ class KspaceEnv(object):
                     Number of episodes
                 n_prep_pulses : int
                     Number of preparation pulses used in simulation
+                parametrization_n_knots : int
+                    Number of splines used to sample pulse train
                 fa_range : list[float]
                     Range of initial flip angles
                 validation_mode : bool
@@ -1471,6 +1475,8 @@ class KspaceEnv(object):
         self.homogeneous_initialization = homogeneous_initialization
         self.n_episodes = n_episodes
         self.n_prep_pulses = n_prep_pulses
+        self.parametrization_n_knots = parametrization_n_knots
+        self.n_state_vector = parametrization_n_knots + 1
         self.fa_range = fa_range
         self.validation_mode = validation_mode
         self.episode = 0
@@ -1585,19 +1591,20 @@ class KspaceEnv(object):
 
             # Add FA actions for prep pulses
             action_names = [
-                f"Change FA (prep pulse #{fa_i + 1})"
-                for fa_i in range(self.n_prep_pulses)
+                f"Change FA (prep pulses)"
             ]
-            action_ranges = np.array([[-1., 1.]] * self.n_prep_pulses)
+            action_ranges = np.array([[-1., 1.]])
             action_deltas = None
             # Add FA actions for acquisition pulses
             action_names.extend([
-                f"Change FA (acq pulse #{fa_i + 1})"
-                for fa_i in range(self.n_acq_pulses)
+                f"Change FA node #{node_i} (acq pulses)"
+                for node_i in range(self.parametrization_n_knots)
             ])
             action_ranges = np.concatenate(
-                (action_ranges, np.array([[-1., 1.]] * self.n_acq_pulses)),
-                axis=0
+                (
+                    action_ranges,
+                    np.array([[-1., 1.]] * self.parametrization_n_knots)
+                ), axis=0
             )
 
             # Append action space with "done" if applicable
@@ -1648,6 +1655,17 @@ class KspaceEnv(object):
         if hasattr(self, "theta"):
             self.theta_norm = (
                 (self.theta - 0.)
+                / (90. - 0.)
+            )
+        # Pulsetrain parameters d
+        if hasattr(self, "pulsetrain_knots"):
+            self.pulsetrain_knots_norm = (
+                (self.pulsetrain_knots - 0.)
+                / (90. - 0.)
+            )
+        if hasattr(self, "pulsetrain_param_vector"):
+            self.pulsetrain_param_vector_norm = (
+                (self.pulsetrain_param_vector - 0.)
                 / (90. - 0.)
             )
         # snr / cnr
@@ -1819,6 +1837,62 @@ class KspaceEnv(object):
             # Define done
             self.done = torch.tensor(done, device=self.device)
 
+    # def update_theta(self, action):
+    #     """Update theta (if applicable) using pulse train parametrization"""
+
+    def set_pulsetrain_parametrization(self, parameters: torch.Tensor):
+        """Set parametrization of pulse train
+
+        Here, we define this parametrization as a n-order
+        polynomial, defined at 0<x<1 and 0<y<1. Here, x=0
+        is the first pulse while x=1 is the last pulse. Also,
+        y=0 corresponds to a flip angle of 0 deg, while y=1 corresponds
+        to a flip angle of 180 deg.
+
+        To retrieve the individual flip angles from this interpolation,
+        use interpolate.splev(x, self.spline_representation, der=0)
+        """
+
+        if len(parameters) != self.parametrization_n_knots:
+            raise ValueError("Argument count doesn't match n_splines")
+
+        # Set n
+        n = len(parameters)
+
+        # Set x and y for nodes
+        y_nodes = deepcopy(parameters).cpu()
+        x_nodes = torch.linspace(0, 1, n).cpu()
+
+        # Create 2nd order spline representation
+        self.spline_representation = \
+            interpolate.splrep(x_nodes, y_nodes, s=0, k=2)
+
+    def get_pulsetrain_parametrization(self):
+        """Get individual flip angles from parametrization"""
+
+        # Get x-values on spline x-axis
+        x_theta = torch.linspace(0, 1, self.n_acq_pulses)
+
+        # Get theta and clip to proper range
+        theta_acq = np.array(interpolate.splev(
+            x_theta, self.spline_representation, der=0
+        )).clip(0., 180.)
+
+        # Cast to tensor
+        self.theta_acq = torch.tensor(
+            theta_acq, dtype=torch.float32, device=self.device
+        )
+
+        # Combine preparation and accquisition pulses
+        self.theta = torch.concat((self.theta_prep, self.theta_acq), 0)
+
+        # Store the pulsetrain param vector. This is given by:
+        # [fa prep, fa knot acq 1, fa knot acq 2, ..., fa knot acq n]
+        self.pulsetrain_param_vector = torch.tensor(
+            [self.fa_prep, *self.pulsetrain_knots],
+            dtype=torch.float32, device=self.device
+        )
+
     def step(self, action):
         """Run a single step of the RL loop
 
@@ -1839,19 +1913,23 @@ class KspaceEnv(object):
             (self.action_space.low <= action_np).all()
             and (action_np <= self.action_space.high).all()
         ):
-            # Adjust flip angle
-            deltas = action * self.theta / 2
-            self.theta += deltas
+            # Calculate deltas [-1, 1] -> [3/4, 6/4]
+            deltas = (((action + 1.) / 2.) * 0.8 + 0.6)
+            # Adjust prep pulses
+            self.fa_prep *= deltas[0]
+            self.theta_prep *= deltas[0]
+            # Adjust acq pulses
+            self.pulsetrain_knots *= deltas[1:]
+
+            # Adjust theta
+            self.set_pulsetrain_parametrization(self.pulsetrain_knots)
+            self.get_pulsetrain_parametrization()
         else:
             raise RuntimeError(
                 "Action not in action space. Expected something "
                 f"in range {self.action_space.ranges} but got "
                 f"{action_np}"
             )
-
-        # Correct for flip angle out of bounds
-        self.theta[torch.abs(self.theta) > 180.] = 180.
-        self.theta[torch.abs(self.theta) < 0.] = 0.
 
         # Run EPG
         self.run_simulation_and_update()
@@ -1863,7 +1941,7 @@ class KspaceEnv(object):
         self.old_state = self.state
         self.state = [
             self.recent_img,
-            self.theta
+            self.pulsetrain_param_vector_norm
         ]
 
         # Store in history
@@ -1909,15 +1987,26 @@ class KspaceEnv(object):
         # If fa is passed, overwrite it
         if fa: self.fa_init = fa
 
-        # Setup pulse train
-        self.theta = torch.tensor(
+        # Set pulse train parameters
+        self.pulsetrain_knots = torch.tensor(
             [
-                self.fa_init  # + (random.random() * 4.) - 2
-                for _ in range(self.n_pulses)
-            ],
-            dtype=torch.complex64,
-            device=self.device
+                self.fa_init * (1. + (random.random() - .5) * .2)
+                for _ in range(self.parametrization_n_knots)
+            ], dtype=torch.float32, device=self.device
         )
+
+        # Set preparation pulses
+        self.fa_prep = self.fa_init * (1. + (random.random() - .5) * .2)
+        self.theta_prep = torch.tensor(
+            [self.fa_init] * self.n_prep_pulses,
+            dtype=torch.float32, device=self.device
+        )
+
+        # Set parametrization of pulse train
+        self.set_pulsetrain_parametrization(self.pulsetrain_knots)
+
+        # Setup pulse train
+        self.get_pulsetrain_parametrization()
 
         # Normalize parameters
         self.norm_parameters()
@@ -1926,7 +2015,6 @@ class KspaceEnv(object):
         self.select_subject_dir()
 
         # Define the simulator class we'll use
-        # TODO: Still have to implement subject dir selection
         self.simulator = kspace_sim.SimulatorObject(
             self.current_dir, device=self.device
         )
@@ -1944,10 +2032,10 @@ class KspaceEnv(object):
         # Normalize parameters
         self.norm_parameters()
 
-        # Set state ([tensor(2D image), tensor(1D FA vector)])
+        # Set state ([tensor(2D image), tensor(1D FA knots vector)])
         self.state = [
             self.recent_img,
-            self.theta
+            self.pulsetrain_param_vector_norm
         ]
 
         # Store in history

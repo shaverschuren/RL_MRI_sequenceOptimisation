@@ -743,7 +743,7 @@ class RDPG(object):
         else: n_actions = env.n_actions + 1 if model_done else env.n_actions
         # Determine n_states
         if single_fa: n_states = 2
-        else: n_states = [env.img_shape, env.n_pulses]
+        else: n_states = [env.img_shape, env.n_state_vector]
 
         # Setup agent
         self.agent = agents.RDPGAgent(
@@ -751,13 +751,13 @@ class RDPG(object):
             n_actions=n_actions,
             n_states=n_states,
             single_fa=single_fa,
-            epsilon_decay=1. - (10. / float(self.n_episodes))
+            epsilon_decay=1. - (5. / float(self.n_episodes))
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
 
         # Setup memory
         self.memory = training.EpisodicMemory(
-            self.n_episodes // 4 if self.n_episodes < 40000 else 10000,
+            self.n_episodes // 2 if self.n_episodes < 20000 else 10000,
             ('state', 'action', 'reward', 'next_state') if self.single_fa
             else (
                 'state_img', 'state_fa', 'action',
@@ -793,7 +793,10 @@ class RDPG(object):
             "n_scans", "reward", "performance"
         ]
         if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
-        else: self.logs_fields.extend(["theta", "theta_norm"])
+        else: self.logs_fields.extend([
+            "theta", "theta_norm",
+            *[f"theta_param{i}" for i in range(self.env.n_state_vector)]
+        ])
 
         # Setup logger object
         self.logger = loggers.TensorBoardLogger(
@@ -851,6 +854,18 @@ class RDPG(object):
                     value=float(self.env.fa_norm),
                     step=-1
                 )
+            else:
+                for i in range(self.env.n_state_vector):
+                    self.logger.log_scalar(
+                        field=f"theta_param{i}",
+                        tag=(
+                            f"{self.logs_tag}_{run_type}_theta_params_"
+                            f"episode_{self.episode + 1}"
+                        ),
+                        value=float(self.env.pulsetrain_param_vector[i]),
+                        step=-1
+                    )
+
             self.logger.log_scalar(
                 field=self.metric,
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
@@ -889,9 +904,18 @@ class RDPG(object):
         reward_color = "\033[92m" if reward > 0. else "\033[91m"
         end_str = "\033[0m"
 
+        # Assemble action string and print step summary
+        theta_str = "["
+        for i in range(len(action)):
+            action_part = action[i]
+            theta_part = self.env.pulsetrain_param_vector[i]
+            theta_color = "\033[92m↑" if action_part > 0. else "\033[91m↓"
+            theta_str += f"{theta_color}{float(theta_part):6.2f}{end_str}, "
+        theta_str = theta_str[:-2] + "]"
+
         print(
             f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-            # f"Action: {float(action[0]):5.2f} - "
+            f"Theta knots [deg]: {theta_str} - "
             # f"FA: {float(self.env.fa):5.1f} - "
             f"{self.metric.upper()}: "
             f"{float(getattr(self.env, self.metric)):5.2f} -"
@@ -933,21 +957,34 @@ class RDPG(object):
             if (
                 isinstance(self.env, environments.KspaceEnv)
                 and hasattr(self.env, "theta")
-                and (self.tick == self.n_ticks - 1 or done)
             ):
-                # Loop over flip angles in the pulse train
-                for i in range(len(self.env.theta)):
-                    step = -self.env.n_prep_pulses + i
-
+                # Log theta parametrization values
+                for i in range(self.env.n_state_vector):
                     self.logger.log_scalar(
-                        field="theta",
+                        field=f"theta_param{i}",
                         tag=(
-                            f"{self.logs_tag}_{run_type}_"
-                            f"theta_episode_{self.episode + 1}"
+                            f"{self.logs_tag}_{run_type}_theta_params_"
+                            f"episode_{self.episode + 1}"
                         ),
-                        value=float(self.env.theta[i]),
-                        step=step
+                        value=float(self.env.pulsetrain_param_vector[i]),
+                        step=self.tick
                     )
+
+                # if final stp, log theta
+                if (self.tick == self.n_ticks - 1 or done):
+                    # Loop over flip angles in the pulse train
+                    for i in range(len(self.env.theta)):
+                        step = -self.env.n_prep_pulses + i
+
+                        self.logger.log_scalar(
+                            field="theta",
+                            tag=(
+                                f"{self.logs_tag}_{run_type}_"
+                                f"theta_episode_{self.episode + 1}"
+                            ),
+                            value=float(self.env.theta[i]),
+                            step=step
+                        )
 
             # Scalars (current state -> state1)
             # self.logger.log_scalar(
@@ -1261,7 +1298,7 @@ class RDPG(object):
                     ),
                     torch.zeros(
                         (1, self.env.n_actions), device=self.device,
-                        dtype=torch.complex64
+                        dtype=torch.float
                     )
                 ]
                 next_states = [
@@ -1271,7 +1308,7 @@ class RDPG(object):
                     ),
                     torch.zeros(
                         (1, self.env.n_actions), device=self.device,
-                        dtype=torch.complex64
+                        dtype=torch.float
                     )
                 ]
 
@@ -1365,7 +1402,7 @@ class RDPG(object):
                 critic_loss = 0.
                 n_updates = 0
                 for _ in range(
-                    10 if len(self.memory) >= 10 else len(self.memory)
+                    50 if len(self.memory) >= 50 else len(self.memory)
                 ):
                     # Generate batch
                     batch = self.memory.sample(self.batch_size)
