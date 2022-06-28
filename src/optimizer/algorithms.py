@@ -743,7 +743,7 @@ class RDPG(object):
         else: n_actions = env.n_actions + 1 if model_done else env.n_actions
         # Determine n_states
         if single_fa: n_states = 2
-        else: n_states = [env.img_shape, env.n_state_vector]
+        else: n_states = [env.img_shape, env.img_shape[0], env.n_state_vector]
 
         # Setup agent
         self.agent = agents.RDPGAgent(
