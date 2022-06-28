@@ -342,9 +342,96 @@ class RecurrentModel_LSTM(nn.Module):
         self.cx = Variable(torch.zeros(2, batch_size, self.hidden_size))
 
 
+class CNR_Predictor_CNN(nn.Module):
+    """Model used for processing a 2D brain image for predicting WM-GM CNR
+
+    It is comprised of a convolution and fully connected part. It
+    predicts CNR between white matter and grey matter on a GRE MRI
+    sequence with some random pulse train.
+    """
+
+    def __init__(
+            self,
+            input_img_size: tuple[int, int],
+            architecture: list = [0],
+            device: Union[None, torch.device] = None
+    ):
+        super(CNR_Predictor_CNN, self).__init__()
+
+        # Build attributes
+        self.input_img_size = input_img_size
+        self.architecture = architecture
+        self.device = device
+
+        # Build architecture dict
+        self.build_architecture_dict()
+
+        # Build stacks
+        if self.device:
+            self.stack = nn.Sequential(
+                self.architecture_dict                          # type: ignore
+            ).to(device)
+        else:
+            self.stack = nn.Sequential(self.architecture_dict)  # type: ignore
+
+    def build_architecture_dict(self):
+        """Build model layer stack
+
+        By default, we take a certain number of linear layers,
+        then an LSTM block and finally the output layer.
+        """
+
+        # Create CNN architecture dict
+        self.architecture_dict = OrderedDict([
+            ("conv1", nn.Conv2d(1, 4, 5, padding=2)),
+            (("relu1", nn.ReLU())),
+            ("pool1", nn.MaxPool2d(kernel_size=2)),
+            ("conv2", nn.Conv2d(4, 16, 5, padding=2)),
+            (("relu2", nn.ReLU())),
+            ("pool2", nn.MaxPool2d(kernel_size=2)),
+            ("conv3", nn.Conv2d(16, 32, 5, padding=2)),
+            (("relu3", nn.ReLU())),
+            ("pool3", nn.MaxPool2d(kernel_size=2)),
+            ("conv4", nn.Conv2d(32, 32, 5, padding=2)),
+            (("relu4", nn.ReLU())),
+            ("pool4", nn.MaxPool2d(kernel_size=2)),
+            ("flatten", nn.Flatten(1)),
+            ("fc1", nn.Linear(
+                (self.input_img_size[0] * self.input_img_size[1]) // 8,
+                64
+            )),
+            (("relu5", nn.ReLU())),
+            ("fc2", nn.Linear(64, 32)),
+            (("relu6", nn.ReLU())),
+            ("fc3", nn.Linear(32, 8)),
+            (("relu6", nn.ReLU())),
+            ("output", nn.Linear(8, 1))
+        ])
+
+    def forward(self, img):
+        """Implement forward pass
+
+        Here, we run the image (img) through the convolutional stack
+        and predict a CNR value
+
+        Parameters
+        ----------
+            img : torch.Tensor
+                2D tensor representing an image
+
+        Returns
+        ------
+            output : torch.Tensor
+                The 0D CNR output of this model
+        """
+
+        # Pass image through cnn stack
+        return self.stack(img)
+
+
 class RecurrentModel_ConvConcatFC(nn.Module):
     """Model used for processing a 2D image along with an 1D vector.
-    
+
     It is comprised of a convolution part (for the image) and a fully
     connected part, after which the two are combined via concatenation
     and processed in the recurrent part of the model.
