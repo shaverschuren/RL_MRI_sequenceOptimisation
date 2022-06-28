@@ -760,8 +760,9 @@ class RDPG(object):
             self.n_episodes // 2 if self.n_episodes < 20000 else 10000,
             ('state', 'action', 'reward', 'next_state') if self.single_fa
             else (
-                'state_img', 'state_fa', 'action',
-                'reward', 'next_state_img', 'next_state_fa'
+                'state_img', 'state_kspace', 'state_fa', 'action',
+                'reward', 'next_state_img', 'next_state_kspace',
+                'next_state_fa'
             )
         )
         # Setup logger
@@ -1292,20 +1293,34 @@ class RDPG(object):
                 )
             else:
                 states = [
+                    # Image
                     torch.zeros(
                         (1, *self.env.img_shape), device=self.device,
                         dtype=torch.float
                     ),
+                    # Mean signal-per-line kspace vector
+                    torch.zeros(
+                        (1, self.env.img_shape[0]), device=self.device,
+                        dtype=torch.float
+                    ),
+                    # Theta knots
                     torch.zeros(
                         (1, self.env.n_actions), device=self.device,
                         dtype=torch.float
                     )
                 ]
                 next_states = [
+                    # Image
                     torch.zeros(
                         (1, *self.env.img_shape), device=self.device,
                         dtype=torch.float
                     ),
+                    # Mean signal-per-line kspace vector
+                    torch.zeros(
+                        (1, self.env.img_shape[0]), device=self.device,
+                        dtype=torch.float
+                    ),
+                    # Theta knots
                     torch.zeros(
                         (1, self.env.n_actions), device=self.device,
                         dtype=torch.float
@@ -1344,18 +1359,15 @@ class RDPG(object):
                         )
                     )
                 else:
-                    states[0] = torch.cat(
-                        (states[0], torch.unsqueeze(state[0], 0))
-                    )
-                    states[1] = torch.cat(
-                        (states[1], torch.unsqueeze(state[1], 0))
-                    )
-                    next_states[0] = torch.cat(
-                        (next_states[0], torch.unsqueeze(next_state[0], 0))
-                    )
-                    next_states[1] = torch.cat(
-                        (next_states[1], torch.unsqueeze(next_state[1], 0))
-                    )
+                    # Three tensors per state (img, kspace vector, theta knots)
+                    for i in range(3):
+                        states[i] = torch.cat(
+                            (states[i], torch.unsqueeze(state[i], 0))
+                        )
+                        next_states[i] = torch.cat(
+                            (next_states[i], torch.unsqueeze(next_state[i], 0))
+                        )
+
                 # Add action/reward to history
                 actions = torch.cat((actions, torch.unsqueeze(action, 0)))
                 rewards = torch.cat((rewards, reward))
@@ -1386,9 +1398,9 @@ class RDPG(object):
                 )
             else:
                 self.memory.push(
-                    states[0][1:], states[1][1:],
+                    states[0][1:], states[1][1:], states[2][1:],
                     actions[1:], rewards[1:],
-                    next_states[0][1:], next_states[1][1:]
+                    next_states[0][1:], next_states[1][1:], next_states[2][1:]
                 )
 
             # If training, update model

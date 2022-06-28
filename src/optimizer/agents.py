@@ -617,7 +617,7 @@ class RDPGAgent(object):
         Optimizer: Adam with lr alpha
         """
 
-        if self.single_fa:
+        if self.single_fa and type(self.n_states) is int:
             # Define model for single_fa case
 
             # Define hidden size
@@ -665,25 +665,28 @@ class RDPGAgent(object):
                 output_activation="none",
                 device=self.device
             )
-        else:
+        elif (not self.single_fa) and type(self.n_states) is list:
+            raise NotImplementedError("Still have to rework the model")
             # Define model for the multi-pulse optimization case
             self.actor = models.RecurrentModel_ConvConcatFC(
-                self.n_states[0], self.n_states[1], "tanh",
+                self.n_states[0], self.n_states[1], self.n_states[2], "tanh",
                 self.n_actions, hidden_size=64,
                 device=self.device
             )
             self.critic = models.RecurrentModel_ConvConcatFC(
-                self.n_states[0], self.n_states[1] + self.n_actions, "tanh",
+                self.n_states[0], self.n_states[1],
+                self.n_states[2] + self.n_actions, "tanh",
                 self.n_actions, hidden_size=64,
                 device=self.device
             )
             self.actor_target = models.RecurrentModel_ConvConcatFC(
-                self.n_states[0], self.n_states[1], "tanh",
+                self.n_states[0], self.n_states[1], self.n_states[2], "tanh",
                 self.n_actions, hidden_size=64,
                 device=self.device
             )
             self.critic_target = models.RecurrentModel_ConvConcatFC(
-                self.n_states[0], self.n_states[1] + self.n_actions, "tanh",
+                self.n_states[0], self.n_states[1],
+                self.n_states[2] + self.n_actions, "tanh",
                 self.n_actions, hidden_size=64,
                 device=self.device
             )
@@ -723,7 +726,8 @@ class RDPGAgent(object):
             else:
                 pure_action, _ = self.actor(
                     torch.unsqueeze(torch.unsqueeze(state[0], 0), 0),
-                    torch.unsqueeze(state[1], 0)
+                    torch.unsqueeze(state[1], 0),
+                    torch.unsqueeze(state[2], 0)
                 )
         pure_action = torch.squeeze(pure_action, 0).cpu().detach().numpy()
         # # Add noise (if training) We'll use 1D Perlin noise for this for some
@@ -786,6 +790,8 @@ class RDPGAgent(object):
         TODO: source
         TODO: Explanation of k1, k2 etc.
         """
+
+        if not self.single_fa: raise NotImplementedError()
 
         # Check for validity of tbptt parameters
         if self.tbptt_k1 > len(batch) or self.tbptt_k2 > len(batch):
