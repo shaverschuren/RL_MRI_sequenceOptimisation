@@ -438,7 +438,9 @@ class RecurrentModel_ConvConcatFC(nn.Module):
     """
     def __init__(
             self,
-            input_img_size: tuple[int, int], input_vector_size: int,
+            input_img_size: tuple[int, int],
+            input_kspace_vector_size: int,
+            input_theta_vector_size: int,
             output_activation: str,
             output_size: int,
             hidden_size: int,
@@ -451,7 +453,8 @@ class RecurrentModel_ConvConcatFC(nn.Module):
 
         # Build attributes
         self.input_img_size = input_img_size
-        self.input_vector_size = input_vector_size
+        self.input_kspace_vector_size = input_kspace_vector_size
+        self.input_theta_vector_size = input_theta_vector_size
         self.output_size = output_size
         self.hidden_size = hidden_size
         self.output_activation = output_activation
@@ -465,12 +468,20 @@ class RecurrentModel_ConvConcatFC(nn.Module):
 
         # Build stacks
         if self.device:
-            self.stack_cnn = nn.Sequential(self.dict_cnn).to(device)
-            self.stack_fc = nn.Sequential(self.dict_fc).to(device)
+            # CNR predictor model
+            self.cnr_predictor = CNR_Predictor_CNN(
+                input_img_size, device=device
+            )
+            # Kspace encoder, theta encoder and RNN stacks
+            self.stack_kspace = nn.Sequential(self.dict_kspace).to(device)
+            self.stack_theta = nn.Sequential(self.dict_theta).to(device)
             self.stack_rnn = nn.Sequential(self.dict_rnn).to(device)
         else:
-            self.stack_cnn = nn.Sequential(self.dict_cnn)
-            self.stack_fc = nn.Sequential(self.dict_fc)
+            # CNR predictor model
+            self.cnr_predictor = CNR_Predictor_CNN(input_img_size)
+            # Kspace encoder, theta encoder and RNN stacks
+            self.stack_kspace = nn.Sequential(self.dict_kspace)
+            self.stack_theta = nn.Sequential(self.dict_theta)
             self.stack_rnn = nn.Sequential(self.dict_rnn)
 
     def build_architecture_dicts(self):
@@ -482,42 +493,39 @@ class RecurrentModel_ConvConcatFC(nn.Module):
 
         # Define some parameters here for now. Might move to
         # __init__
-        cnn_output_size = 64
-        fc_output_size = 32
-        rnn_input_size = cnn_output_size + fc_output_size
+        kspace_output_size = 16
+        theta_output_size = 16
+        rnn_input_size = kspace_output_size + theta_output_size
 
-        # Create CNN architecture list
-        cnn_list = [
-            ("conv1", nn.Conv2d(1, 4, 5, padding=2)),
+        # Create k-space encoder architecture list
+        kspace_list = [
+            ("conv1", nn.Conv1d(1, 4, 5, padding=2)),
             (("relu1", nn.ReLU())),
-            ("pool1", nn.MaxPool2d(kernel_size=2)),
-            ("conv2", nn.Conv2d(4, 16, 5, padding=2)),
+            ("pool1", nn.MaxPool1d(kernel_size=2)),
+            ("conv2", nn.Conv1d(4, 8, 5, padding=2)),
             (("relu2", nn.ReLU())),
-            ("pool2", nn.MaxPool2d(kernel_size=2)),
-            ("conv3", nn.Conv2d(16, 32, 5, padding=2)),
-            (("relu3", nn.ReLU())),
-            ("pool3", nn.MaxPool2d(kernel_size=2)),
-            ("conv4", nn.Conv2d(32, 32, 5, padding=2)),
-            (("relu4", nn.ReLU())),
-            ("pool4", nn.MaxPool2d(kernel_size=2)),
+            ("pool2", nn.MaxPool1d(kernel_size=2)),
             ("flatten", nn.Flatten(1)),
-            ("fc1", nn.Linear(
-                (self.input_img_size[0] * self.input_img_size[1]) // 8,
-                cnn_output_size
-            )),
+            ("fc1", nn.Linear(self.input_kspace_vector_size * 2, 128)),
+            (("relu3", nn.ReLU())),
+            ("fc2", nn.Linear(128, 64)),
+            (("relu4", nn.ReLU())),
+            ("fc3", nn.Linear(64, 32)),
             (("relu5", nn.ReLU())),
-            ("fc2", nn.Linear(cnn_output_size, cnn_output_size)),
-            (("relu6", nn.ReLU()))
+            ("fc4", nn.Linear(32, 16)),
+            (("relu6", nn.ReLU())),
+            ("fc5", nn.Linear(16, kspace_output_size)),
+            (("relu7", nn.ReLU())),
         ]
 
-        # Create FC architecture list
-        fc_list = [
-            ("fc1", nn.Linear(self.input_vector_size, 32)),
+        # Create theta knot encoder architecture list
+        theta_list = [
+            ("f1", nn.Linear(self.input_theta_vector_size, 16)),
             (("relu1", nn.ReLU())),
-            ("fc2", nn.Linear(32, 64)),
+            ("f2", nn.Linear(16, 32)),
             (("relu2", nn.ReLU())),
-            ("fc3", nn.Linear(64, fc_output_size)),
-            (("relu3", nn.ReLU())),
+            ("f3", nn.Linear(32, theta_output_size)),
+            (("relu3", nn.ReLU()))
         ]
 
         # Create RNN architecture list
@@ -568,8 +576,8 @@ class RecurrentModel_ConvConcatFC(nn.Module):
             raise RuntimeError()
 
         # Fill ordered dicts
-        self.dict_cnn = OrderedDict(cnn_list)
-        self.dict_fc = OrderedDict(fc_list)
+        self.dict_kspace = OrderedDict(kspace_list)
+        self.dict_theta = OrderedDict(theta_list)
         self.dict_rnn = OrderedDict(rnn_list)
 
     def forward(self, img, vector, hidden=None):
