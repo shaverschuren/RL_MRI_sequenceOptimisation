@@ -791,8 +791,6 @@ class RDPGAgent(object):
         TODO: Explanation of k1, k2 etc.
         """
 
-        if not self.single_fa: raise NotImplementedError()
-
         # Check for validity of tbptt parameters
         if self.tbptt_k1 > len(batch) or self.tbptt_k2 > len(batch):
             # Warn about bad k1/k2
@@ -861,9 +859,13 @@ class RDPGAgent(object):
             else:
                 # Extract states & next_states
                 states_img = [transition.state_img for transition in batch[t]]
+                states_theta = [transition.state_theta for transition in batch[t]]
                 states_fa = [transition.state_fa for transition in batch[t]]
                 next_states_img = [
                     transition.next_state_img for transition in batch[t]
+                ]
+                next_states_theta = [
+                    transition.next_state_theta for transition in batch[t]
                 ]
                 next_states_fa = [
                     transition.next_state_fa for transition in batch[t]
@@ -873,12 +875,19 @@ class RDPGAgent(object):
                     state_img.view(1, 1, *state_img.shape)
                     for state_img in states_img
                 ]).to(self.device)
+                states_theta = torch.cat(
+                    [state_theta.unsqueeze(0) for state_theta in states_theta]
+                ).to(self.device)
                 states_fa = torch.cat(
                     [state_fa.unsqueeze(0) for state_fa in states_fa]
                 ).to(self.device)
                 next_states_img = torch.cat([
                     next_state_img.view(1, 1, *next_state_img.shape)
                     for next_state_img in next_states_img
+                ]).to(self.device)
+                next_states_theta = torch.cat([
+                    next_state_theta.unsqueeze(0)
+                    for next_state_theta in next_states_theta
                 ]).to(self.device)
                 next_states_fa = torch.cat([
                     next_state_fa.unsqueeze(0)
@@ -895,6 +904,8 @@ class RDPGAgent(object):
             rewards = torch.unsqueeze(torch.cat(
                 [reward.unsqueeze(0) for reward in rewards]
             ).to(self.device), 1)
+
+            if not self.single_fa: raise NotImplementedError()
 
             # Determine target value (Q-prime)
             with torch.no_grad():
