@@ -1668,6 +1668,12 @@ class KspaceEnv(object):
                 (self.pulsetrain_param_vector - 0.)
                 / (90. - 0.)
             )
+        # k-space --> 1D normalized signal-per-pulse vector
+        if hasattr(self, "recent_kspace"):
+            self.kspace_vector = torch.abs(torch.mean(
+                self.recent_kspace, 1
+            ))
+
         # snr / cnr
         if hasattr(self, self.metric):
             setattr(
@@ -1711,7 +1717,7 @@ class KspaceEnv(object):
             )
 
         # Perform simulation
-        self.recent_img, _ = self.simulator.forward(
+        self.recent_img, self.recent_kspace, _ = self.simulator.forward(
             theta, tr=0.050, n_prep=self.n_prep_pulses
         )
 
@@ -1941,6 +1947,7 @@ class KspaceEnv(object):
         self.old_state = self.state
         self.state = [
             self.recent_img,
+            self.kspace_vector,
             self.pulsetrain_param_vector_norm
         ]
 
@@ -2035,6 +2042,7 @@ class KspaceEnv(object):
         # Set state ([tensor(2D image), tensor(1D FA knots vector)])
         self.state = [
             self.recent_img,
+            self.kspace_vector,
             self.pulsetrain_param_vector_norm
         ]
 
