@@ -831,13 +831,23 @@ class RDPG(object):
                 )
                 and hasattr(self.env, 'recent_img')
             ):
+                # Get image in proper format
+                if type(self.env.recent_img) == torch.Tensor:
+                    image = np.array(
+                        self.env.recent_img.cpu()  # type: ignore
+                    ) / 5.
+                elif type(self.env.recent_img) == np.ndarray:
+                    image = self.env.recent_img / 5.
+                else: raise TypeError()
+
+                # Log image
                 self.logger.log_image(
                     field="img",
                     tag=(
                         f"{self.logs_tag}_{run_type}_"
                         f"episode_{self.episode + 1}"
                     ),
-                    image=np.array(self.env.recent_img.cpu()) / 5.,
+                    image=image,
                     step=-1
                 )
 
@@ -845,25 +855,27 @@ class RDPG(object):
             if self.single_fa:
                 self.logger.log_scalar(
                     field="fa",
-                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                    value=float(self.env.fa),
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",   # noqa: E501
+                    value=float(self.env.fa),                    # type: ignore
                     step=-1
                 )
                 self.logger.log_scalar(
                     field="fa_norm",
-                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                    value=float(self.env.fa_norm),
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",   # noqa: E501
+                    value=float(self.env.fa_norm),               # type: ignore
                     step=-1
                 )
             else:
-                for i in range(self.env.n_state_vector):
+                for i in range(self.env.n_state_vector):         # type: ignore
                     self.logger.log_scalar(
                         field=f"theta_param{i}",
                         tag=(
                             f"{self.logs_tag}_{run_type}_theta_params_"
                             f"episode_{self.episode + 1}"
                         ),
-                        value=float(self.env.pulsetrain_param_vector[i]),
+                        value=float(
+                            self.env.pulsetrain_param_vector[i]  # type: ignore
+                        ),
                         step=-1
                     )
 
@@ -942,16 +954,27 @@ class RDPG(object):
                 (
                     isinstance(self.env, environments.ScannerEnv)
                     or isinstance(self.env, environments.KspaceEnv)
-                ) and hasattr(self.env, 'recent_img')
+                )
+                and hasattr(self.env, 'recent_img')
             ):
+                # Get image in proper format
+                if type(self.env.recent_img) == torch.Tensor:
+                    image = np.array(
+                        self.env.recent_img.cpu()  # type: ignore
+                    ) / 5.
+                elif type(self.env.recent_img) == np.ndarray:
+                    image = self.env.recent_img / 5.
+                else: raise TypeError()
+
+                # Log image
                 self.logger.log_image(
                     field="img",
                     tag=(
                         f"{self.logs_tag}_{run_type}_"
                         f"episode_{self.episode + 1}"
                     ),
-                    image=np.array(self.env.recent_img.cpu()) / 5.,
-                    step=self.tick + 1
+                    image=image,
+                    step=-1
                 )
 
             # Log theta (if applicable)
