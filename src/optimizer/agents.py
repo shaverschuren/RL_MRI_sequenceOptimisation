@@ -729,24 +729,36 @@ class RDPGAgent(object):
             target_param.data.copy_(param.data)
 
         # Setup optimizers
-        self.cnr_optimizer = optim.Adam(
-            self.cnr_predictor.parameters(),
-            lr=self.alpha_cnr_predictor, weight_decay=1e-2
-        )
-        self.actor_optimizer = optim.Adam(
-            [
-                *self.actor.stack_kspace.parameters(),   # type: ignore
-                *self.actor.stack_theta.parameters(),    # type: ignore
-                *self.actor.stack_rnn.parameters()       # type: ignore
-            ], lr=self.alpha_actor, weight_decay=1e-2
-        )
-        self.critic_optimizer = optim.Adam(
-            [
-                *self.critic.stack_kspace.parameters(),  # type: ignore
-                *self.critic.stack_theta.parameters(),   # type: ignore
-                *self.critic.stack_rnn.parameters()      # type: ignore
-            ], lr=self.alpha_critic, weight_decay=1e-2
-        )
+        if self.single_fa:
+            # For single fa case, only actor/critic optimizers
+            self.actor_optimizer = optim.Adam(
+                self.actor.parameters(),
+                lr=self.alpha_actor, weight_decay=1e-2
+            )
+            self.critic_optimizer = optim.Adam(
+                self.critic.parameters(),
+                lr=self.alpha_critic, weight_decay=1e-2
+            )
+        else:
+            # For full pulse train case, also add cnr predictor optimizer
+            self.cnr_optimizer = optim.Adam(
+                self.cnr_predictor.parameters(),
+                lr=self.alpha_cnr_predictor, weight_decay=1e-2
+            )
+            self.actor_optimizer = optim.Adam(
+                [
+                    *self.actor.stack_kspace.parameters(),   # type: ignore
+                    *self.actor.stack_theta.parameters(),    # type: ignore
+                    *self.actor.stack_rnn.parameters()       # type: ignore
+                ], lr=self.alpha_actor, weight_decay=1e-2
+            )
+            self.critic_optimizer = optim.Adam(
+                [
+                    *self.critic.stack_kspace.parameters(),  # type: ignore
+                    *self.critic.stack_theta.parameters(),   # type: ignore
+                    *self.critic.stack_rnn.parameters()      # type: ignore
+                ], lr=self.alpha_critic, weight_decay=1e-2
+            )
 
         # Setup criterions
         self.cnr_predictor_criterion = torch.nn.L1Loss()
