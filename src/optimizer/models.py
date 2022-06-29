@@ -497,7 +497,7 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         # __init__
         kspace_output_size = 16
         theta_output_size = 16
-        rnn_input_size = kspace_output_size + theta_output_size
+        rnn_input_size = kspace_output_size + theta_output_size + 1
 
         # Create k-space encoder architecture list
         kspace_list = [

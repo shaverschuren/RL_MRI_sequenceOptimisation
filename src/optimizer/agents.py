@@ -767,7 +767,7 @@ class RDPGAgent(object):
             else:
                 pure_action, _ = self.actor(
                     torch.unsqueeze(torch.unsqueeze(state[0], 0), 0),
-                    torch.unsqueeze(state[1], 0),
+                    torch.unsqueeze(torch.unsqueeze(state[1], 0), 0),
                     torch.unsqueeze(state[2], 0)
                 )
         pure_action = torch.squeeze(pure_action, 0).cpu().detach().numpy()
