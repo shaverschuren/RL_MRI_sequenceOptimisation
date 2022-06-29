@@ -689,28 +689,28 @@ class RDPGAgent(object):
                 self.n_states[0]        # type: ignore
             )
             # Actor, critic and target networks
-            self.actor = models.RecurrentModel_ConvConcatFC(
+            self.actor = models.CombinedModel_PulsetrainOptimizer(
                 self.n_states[0], self.n_states[1],     # type: ignore
                 self.n_states[2], "tanh",               # type: ignore
                 self.n_actions, hidden_size=64,
                 cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
-            self.critic = models.RecurrentModel_ConvConcatFC(
+            self.critic = models.CombinedModel_PulsetrainOptimizer(
                 self.n_states[0], self.n_states[1],     # type: ignore
                 self.n_states[2] + self.n_actions,      # type: ignore
                 "tanh", self.n_actions, hidden_size=64,
                 cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
-            self.actor_target = models.RecurrentModel_ConvConcatFC(
+            self.actor_target = models.CombinedModel_PulsetrainOptimizer(
                 self.n_states[0], self.n_states[1],     # type: ignore
                 self.n_states[2], "tanh",               # type: ignore
                 self.n_actions, hidden_size=64,
                 cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
-            self.critic_target = models.RecurrentModel_ConvConcatFC(
+            self.critic_target = models.CombinedModel_PulsetrainOptimizer(
                 self.n_states[0], self.n_states[1],     # type: ignore
                 self.n_states[2] + self.n_actions,      # type: ignore
                 "tanh", self.n_actions, hidden_size=64,

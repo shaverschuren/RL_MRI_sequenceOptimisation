@@ -429,16 +429,18 @@ class CNR_Predictor_CNN(nn.Module):
         return self.stack(img)
 
 
-class RecurrentModel_ConvConcatFC(nn.Module):
-    """Model used for processing a 2D image along with an 1D vector.
+class CombinedModel_PulsetrainOptimizer(nn.Module):
+    """Model used for processing a 2D image and two 1D vectors with recurrence
 
-    It is comprised of a convolution part (for the image) and a fully
-    connected part, after which the two are combined via concatenation
-    and processed in the recurrent part of the model.
+    It is comprised of a 2D convolution part (for the image), a 1D convolution
+    part for an 1D vector and a fully connected part for the other 1D vector.
+    The three parts are then combined via concatenation and processed in the
+    recurrent part of the model.
 
     For a full schematic of the model and its workings, please refer to
     docs/pulseTrain_optimizer_schematic.png
     """
+
     def __init__(
             self,
             input_img_size: tuple[int, int],
@@ -453,7 +455,7 @@ class RecurrentModel_ConvConcatFC(nn.Module):
             rnn_architecture: list = [0],
             device: Union[None, torch.device] = None
     ):
-        super(RecurrentModel_ConvConcatFC, self).__init__()
+        super(CombinedModel_PulsetrainOptimizer, self).__init__()
 
         # Build attributes
         self.input_img_size = input_img_size
