@@ -974,7 +974,7 @@ class RDPG(object):
                         f"episode_{self.episode + 1}"
                     ),
                     image=image,
-                    step=-1
+                    step=self.tick
                 )
 
             # Log theta (if applicable)
