@@ -778,41 +778,6 @@ class RDPGAgent(object):
             np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
             if train else 0.
         )
-        # if self.single_fa:
-        #     # Generate random incoherent noise from normal distribution
-        #     noise = (
-        #         np.random.normal(0., 1.0 * self.epsilon, np.shape(pure_action))
-        #         if train else 0.
-        #     )
-        # else:
-        #     if train:
-        #         # Create perlin noise generator
-        #         start_idx = random.randint(1, 100)
-        #         octaves = 0.5 + random.random() * 2.5
-        #         seed = random.randint(0, 10000)
-        #         perlin_noise = PerlinNoise(octaves=octaves, seed=seed)
-
-        #         # Generate the Perlin noise
-        #         start_idx = random.randint(1, 100)
-        #         noise = np.array([
-        #             perlin_noise(idx / len(pure_action))
-        #             for idx in range(start_idx, len(pure_action) + start_idx)
-        #         ])
-
-        #         # Scale it with epsilon
-        #         noise *= self.epsilon / np.percentile(np.abs(noise), 95.)
-
-        #         # For the preparation pulses, just use random noise
-        #         prep_pulse_neurons = [
-        #             neuron['neuron']
-        #             for neuron in self.action_space._info
-        #             if 'prep pulse' in neuron['name']
-        #         ]
-        #         for prep_pulse_neuron in prep_pulse_neurons:
-        #             noise[prep_pulse_neuron] = \
-        #                 np.random.normal(0., 1.0 * self.epsilon)
-
-        #     else: noise = 0.
 
         # Clip the noisy action to the appropriate range
         noisy_action = np.clip(
@@ -832,9 +797,6 @@ class RDPGAgent(object):
         TODO: source
         TODO: Explanation of k1, k2 etc.
         """
-
-        # TODO: Remove. Just for debugging
-        torch.autograd.set_detect_anomaly(True)
 
         # Check for validity of tbptt parameters
         if self.tbptt_k1 > len(batch) or self.tbptt_k2 > len(batch):
@@ -888,13 +850,13 @@ class RDPGAgent(object):
         # Process all trajectories in parallel, however
         for t in range(len(batch)):
 
-            # Extract states & next_states. Here, differentiate between
-            # the single fa and pulse train optimizations since we store
-            # the states a bit differently.
+            # Updating for case where single_fa is True, so we're
+            # only optimizing a single flip angle
             if self.single_fa:
+
                 # Extract states & next_states
                 states = [transition.state for transition in batch[t]]
-                next_states = [transition.next_state for transition in batch[t]]
+                next_states = [transition.next_state for transition in batch[t]]  # noqa: E501
                 # Cast to tensors
                 states = torch.cat(
                     [state.unsqueeze(0) for state in states]
@@ -902,11 +864,69 @@ class RDPGAgent(object):
                 next_states = torch.cat(
                     [next_state.unsqueeze(0) for next_state in next_states]
                 ).to(self.device)
-            else:
+
+                # Extract actions & rewards
+                actions = [transition.action for transition in batch[t]]
+                rewards = [transition.reward for transition in batch[t]]
+                # Cast to tensors
+                actions = torch.cat(
+                    [action.unsqueeze(0) for action in actions]
+                ).to(self.device)
+                rewards = torch.unsqueeze(torch.cat(
+                    [reward.unsqueeze(0) for reward in rewards]
+                ).to(self.device), 1)
+
+                # Determine target value (Q-prime)
+                with torch.no_grad():
+                    # Compute next_Q and update target hidden states
+                    next_actions, hidden_actor_target_1 = self.actor_target(
+                        next_states, hidden_actor_target[t]
+                    )
+                    next_Q, hidden_critic_target_1 = self.critic_target(
+                        torch.cat([next_states, next_actions], 1),
+                        hidden_critic_target[t]
+                    )
+
+                    # Compute Q_target (R + discount * Qnext)
+                    Q_target = rewards + self.gamma * next_Q
+
+                # Compute actual Q-values and policy for this timestep
+                Q, hidden_critic_1 = self.critic(
+                    torch.cat([states, actions], 1),
+                    hidden_critic[t]
+                )
+                policy, hidden_actor_1 = self.actor(states, hidden_actor[t])
+
+                # Compute critic loss
+                critic_loss = self.critic_criterion(Q, Q_target)
+
+                # Compute actor loss
+                policy_loss = -torch.mean(
+                    self.critic(
+                        torch.cat([states, policy], 1),
+                        hidden_critic[t]
+                    )[0]
+                )
+
+                # Store losses
+                policy_loss_sums[update_count] += policy_loss
+                critic_loss_sums[update_count] += critic_loss
+
+                # Update hidden states
+                hidden_critic.append(hidden_critic_1)
+                hidden_actor.append(hidden_actor_1)
+                hidden_critic_target.append(hidden_critic_target_1)
+                hidden_actor_target.append(hidden_actor_target_1)
+
+            # Updating for case where single_fa is False, so we're
+            # optimizing the entire flip angle train based on the
+            # images.
+            elif not self.single_fa:
+
                 # Extract states & next_states + cnrs
                 states_img = [transition.state_img for transition in batch[t]]
-                states_kspace = [transition.state_kspace for transition in batch[t]]
-                states_theta = [transition.state_theta for transition in batch[t]]
+                states_kspace = [transition.state_kspace for transition in batch[t]]    # noqa: E501
+                states_theta = [transition.state_theta for transition in batch[t]]      # noqa: E501
                 next_states_img = [
                     transition.next_state_img for transition in batch[t]
                 ]
@@ -945,36 +965,27 @@ class RDPGAgent(object):
                     [cnr.unsqueeze(0) for cnr in cnrs]
                 ).to(self.device), 1)
 
-            # Extract actions & rewards
-            actions = [transition.action for transition in batch[t]]
-            rewards = [transition.reward for transition in batch[t]]
-            # Cast to tensors
-            actions = torch.cat(
-                [action.unsqueeze(0) for action in actions]
-            ).to(self.device)
-            rewards = torch.unsqueeze(torch.cat(
-                [reward.unsqueeze(0) for reward in rewards]
-            ).to(self.device), 1)
+                # Extract actions & rewards
+                actions = [transition.action for transition in batch[t]]
+                rewards = [transition.reward for transition in batch[t]]
+                # Cast to tensors
+                actions = torch.cat(
+                    [action.unsqueeze(0) for action in actions]
+                ).to(self.device)
+                rewards = torch.unsqueeze(torch.cat(
+                    [reward.unsqueeze(0) for reward in rewards]
+                ).to(self.device), 1)
 
-            # Determine CNR predictor loss
-            if not self.single_fa:
+                # Get loss for the CNR predictor model
                 # Get CNR predictions
                 cnr_predictions = self.cnr_predictor(states_img)
                 # Compare with actual CNR values and compute loss
-                cnr_predictor_loss = self.cnr_predictor_criterion(cnr_predictions, cnrs)
+                cnr_predictor_loss = \
+                    self.cnr_predictor_criterion(cnr_predictions, cnrs)
 
-            # Determine target value (Q-prime)
-            with torch.no_grad():
-                # Compute next_Q and update target hidden states
-                if self.single_fa:
-                    next_actions, hidden_actor_target_1 = self.actor_target(
-                        next_states, hidden_actor_target[t]
-                    )
-                    next_Q, hidden_critic_target_1 = self.critic_target(
-                        torch.cat([next_states, next_actions], 1),
-                        hidden_critic_target[t]
-                    )
-                else:
+                # Determine target value (Q-prime)
+                with torch.no_grad():
+                    # Compute next_Q and update target hidden states
                     next_actions, hidden_actor_target_1 = self.actor_target(
                         next_states_img, next_states_kspace, next_states_theta,
                         hidden_actor_target[t]
@@ -984,17 +995,11 @@ class RDPGAgent(object):
                         torch.cat([next_states_theta, next_actions], 1),
                         hidden_critic_target[t]
                     )
-                # Compute Q_target (R + discount * Qnext)
-                Q_target = rewards + self.gamma * next_Q
 
-            # Compute actual Q-values and policy for this timestep
-            if self.single_fa:
-                Q, hidden_critic_1 = self.critic(
-                    torch.cat([states, actions], 1),
-                    hidden_critic[t]
-                )
-                policy, hidden_actor_1 = self.actor(states, hidden_actor[t])
-            else:
+                    # Compute Q_target (R + discount * Qnext)
+                    Q_target = rewards + self.gamma * next_Q
+
+                # Compute actual Q-values and policy for this timestep
                 Q, hidden_critic_1 = self.critic(
                     states_img, states_kspace,
                     torch.cat([states_theta, actions], 1),
@@ -1005,18 +1010,10 @@ class RDPGAgent(object):
                     hidden_actor[t]
                 )
 
-            # Compute critic loss
-            critic_loss = self.critic_criterion(Q, Q_target)
+                # Compute critic loss
+                critic_loss = self.critic_criterion(Q, Q_target)
 
-            # Compute actor loss
-            if self.single_fa:
-                policy_loss = -torch.mean(
-                    self.critic(
-                        torch.cat([states, policy], 1),
-                        hidden_critic[t]
-                    )[0]
-                )
-            else:
+                # Compute actor loss
                 policy_loss = -torch.mean(
                     self.critic(
                         states_img, states_kspace,
@@ -1025,25 +1022,22 @@ class RDPGAgent(object):
                     )[0]
                 )
 
-            # Store losses
-            policy_loss_sums[update_count] += policy_loss
-            critic_loss_sums[update_count] += critic_loss
+                # Store losses
+                policy_loss_sums[update_count] += policy_loss
+                critic_loss_sums[update_count] += critic_loss
 
-            # Update hidden states
-            hidden_critic.append(hidden_critic_1)
-            hidden_actor.append(hidden_actor_1)
-            hidden_critic_target.append(hidden_critic_target_1)
-            hidden_actor_target.append(hidden_actor_target_1)
+                # Update hidden states
+                hidden_critic.append(hidden_critic_1)
+                hidden_actor.append(hidden_actor_1)
+                hidden_critic_target.append(hidden_critic_target_1)
+                hidden_actor_target.append(hidden_actor_target_1)
 
-            # Update the CNR predictor at every timestep
-            if not self.single_fa:
-                # Run backward pass and perform optimizer step
+                # Run backward pass and perform optimizer step for CNR
+                # predictor model at every possible timestep, since we
+                # aren't bound by a recurrent module
                 self.cnr_optimizer.zero_grad()
                 cnr_predictor_loss.backward()
                 self.cnr_optimizer.step()
-                # # Detach CNR predictor for actor/critic update
-                # for parameter in self.cnr_predictor.parameters():
-                #     parameter.detach()
                 # Update total CNR predictor loss
                 cnr_predictor_loss_total += float(cnr_predictor_loss)
 
