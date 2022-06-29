@@ -795,7 +795,7 @@ class RDPG(object):
         ]
         if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
         else: self.logs_fields.extend([
-            "cnr_loss", "theta", "theta_norm",
+            "cnr_loss", "cnr_pred", "theta", "theta_norm",
             *[f"theta_param{i}" for i in range(self.env.n_state_vector)]
         ])
 
@@ -1012,6 +1012,17 @@ class RDPG(object):
                             value=float(self.env.theta[i]),
                             step=step
                         )
+
+            # Log cnr prediction (if applicable)
+            if hasattr(self.agent.actor, "recent_cnr_pred"):
+                self.logger.log_scalar(
+                    field="cnr_pred",
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",  # noqa: E501
+                    value=float(
+                        self.agent.actor.recent_cnr_pred  # type: ignore
+                    ),
+                    step=self.tick
+                )
 
             # Scalars (current state -> state1)
             # self.logger.log_scalar(

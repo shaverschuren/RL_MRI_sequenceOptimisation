@@ -612,8 +612,10 @@ class RecurrentModel_ConvConcatFC(nn.Module):
                 The hidden states after the forward pass
         """
 
-        # Pass image through cnn stack
+        # Pass image through cnn stack and store result for later
+        # reference and logging
         cnr_out = self.cnr_predictor(img).detach()
+        self.recent_cnr_pred = cnr_out
 
         # Pass kspace vector through appropriate stack
         # For now, we remove the phase and only optimize the amplitude
