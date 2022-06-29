@@ -760,9 +760,9 @@ class RDPG(object):
             self.n_episodes // 2 if self.n_episodes < 20000 else 10000,
             ('state', 'action', 'reward', 'next_state') if self.single_fa
             else (
-                'state_img', 'state_kspace', 'state_fa', 'action',
+                'state_img', 'state_kspace', 'state_theta', 'action',
                 'reward', 'next_state_img', 'next_state_kspace',
-                'next_state_fa'
+                'next_state_theta'
             )
         )
         # Setup logger

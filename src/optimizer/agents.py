@@ -901,15 +901,15 @@ class RDPGAgent(object):
                 # Extract states & next_states
                 states_img = [transition.state_img for transition in batch[t]]
                 states_kspace = [transition.state_kspace for transition in batch[t]]
-                states_fa = [transition.state_fa for transition in batch[t]]
+                states_theta = [transition.state_theta for transition in batch[t]]
                 next_states_img = [
                     transition.next_state_img for transition in batch[t]
                 ]
                 next_states_kspace = [
                     transition.next_state_kspace for transition in batch[t]
                 ]
-                next_states_fa = [
-                    transition.next_state_fa for transition in batch[t]
+                next_states_theta = [
+                    transition.next_state_theta for transition in batch[t]
                 ]
                 # Cast to tensors
                 states_img = torch.cat([
@@ -920,8 +920,8 @@ class RDPGAgent(object):
                     state_kspace.unsqueeze(0)
                     for state_kspace in states_kspace
                 ]).to(self.device)
-                states_fa = torch.cat(
-                    [state_fa.unsqueeze(0) for state_fa in states_fa]
+                states_theta = torch.cat(
+                    [state_theta.unsqueeze(0) for state_theta in states_theta]
                 ).to(self.device)
                 next_states_img = torch.cat([
                     next_state_img.view(1, 1, *next_state_img.shape)
@@ -931,9 +931,9 @@ class RDPGAgent(object):
                     next_state_kspace.unsqueeze(0)
                     for next_state_kspace in next_states_kspace
                 ]).to(self.device)
-                next_states_fa = torch.cat([
-                    next_state_fa.unsqueeze(0)
-                    for next_state_fa in next_states_fa
+                next_states_theta = torch.cat([
+                    next_state_theta.unsqueeze(0)
+                    for next_state_theta in next_states_theta
                 ]).to(self.device)
 
             # Extract actions & rewards
@@ -962,12 +962,12 @@ class RDPGAgent(object):
                     )
                 else:
                     next_actions, hidden_actor_target_1 = self.actor_target(
-                        next_states_img, next_states_kspace, next_states_fa,
+                        next_states_img, next_states_kspace, next_states_theta,
                         hidden_actor_target[t]
                     )
                     next_Q, hidden_critic_target_1 = self.critic_target(
                         next_states_img, next_states_kspace,
-                        torch.cat([next_states_fa, next_actions], 1),
+                        torch.cat([next_states_theta, next_actions], 1),
                         hidden_critic_target[t]
                     )
                 # Compute Q_target (R + discount * Qnext)
@@ -983,11 +983,11 @@ class RDPGAgent(object):
             else:
                 Q, hidden_critic_1 = self.critic(
                     states_img, states_kspace,
-                    torch.cat([states_fa, actions], 1),
+                    torch.cat([states_theta, actions], 1),
                     hidden_critic[t]
                 )
                 policy, hidden_actor_1 = self.actor(
-                    states_img, states_kspace, states_fa,
+                    states_img, states_kspace, states_theta,
                     hidden_actor[t]
                 )
 
@@ -1006,7 +1006,7 @@ class RDPGAgent(object):
                 policy_loss = -torch.mean(
                     self.critic(
                         states_img, states_kspace,
-                        torch.cat([states_fa, policy], 1),
+                        torch.cat([states_theta, policy], 1),
                         hidden_critic[t]
                     )[0]
                 )
