@@ -342,65 +342,47 @@ class RecurrentModel_LSTM(nn.Module):
         self.cx = Variable(torch.zeros(2, batch_size, self.hidden_size))
 
 
-class RecurrentModel_ConvConcatFC(nn.Module):
-    """Model used for processing a 2D image along with an 1D vector.
-    
-    It is comprised of a convolution part (for the image) and a fully
-    connected part, after which the two are combined via concatenation
-    and processed in the recurrent part of the model.
+class CNR_Predictor_CNN(nn.Module):
+    """Model used for processing a 2D brain image for predicting WM-GM CNR
+
+    It is comprised of a convolution and fully connected part. It
+    predicts CNR between white matter and grey matter on a GRE MRI
+    sequence with some random pulse train.
     """
+
     def __init__(
             self,
-            input_img_size: tuple[int, int], input_vector_size: int,
-            output_activation: str,
-            output_size: int,
-            hidden_size: int,
-            conv_architecture: list = [0],
-            fc_architecture: list = [0],
-            rnn_architecture: list = [0],
+            input_img_size: tuple[int, int],
+            architecture: list = [0],
             device: Union[None, torch.device] = None
     ):
-        super(RecurrentModel_ConvConcatFC, self).__init__()
+        super(CNR_Predictor_CNN, self).__init__()
 
         # Build attributes
         self.input_img_size = input_img_size
-        self.input_vector_size = input_vector_size
-        self.output_size = output_size
-        self.hidden_size = hidden_size
-        self.output_activation = output_activation
-        self.conv_architecture = conv_architecture
-        self.fc_architecture = fc_architecture
-        self.rnn_architecture = rnn_architecture
+        self.architecture = architecture
         self.device = device
 
         # Build architecture dict
-        self.build_architecture_dicts()
+        self.build_architecture_dict()
 
         # Build stacks
         if self.device:
-            self.stack_cnn = nn.Sequential(self.dict_cnn).to(device)
-            self.stack_fc = nn.Sequential(self.dict_fc).to(device)
-            self.stack_rnn = nn.Sequential(self.dict_rnn).to(device)
+            self.stack = nn.Sequential(
+                self.architecture_dict                          # type: ignore
+            ).to(device)
         else:
-            self.stack_cnn = nn.Sequential(self.dict_cnn)
-            self.stack_fc = nn.Sequential(self.dict_fc)
-            self.stack_rnn = nn.Sequential(self.dict_rnn)
+            self.stack = nn.Sequential(self.architecture_dict)  # type: ignore
 
-    def build_architecture_dicts(self):
+    def build_architecture_dict(self):
         """Build model layer stack
 
         By default, we take a certain number of linear layers,
         then an LSTM block and finally the output layer.
         """
 
-        # Define some parameters here for now. Might move to
-        # __init__
-        cnn_output_size = 64
-        fc_output_size = 32
-        rnn_input_size = cnn_output_size + fc_output_size
-
-        # Create CNN architecture list
-        cnn_list = [
+        # Create CNN architecture dict
+        self.architecture_dict = OrderedDict([
             ("conv1", nn.Conv2d(1, 4, 5, padding=2)),
             (("relu1", nn.ReLU())),
             ("pool1", nn.MaxPool2d(kernel_size=2)),
@@ -416,21 +398,136 @@ class RecurrentModel_ConvConcatFC(nn.Module):
             ("flatten", nn.Flatten(1)),
             ("fc1", nn.Linear(
                 (self.input_img_size[0] * self.input_img_size[1]) // 8,
-                cnn_output_size
+                64
             )),
             (("relu5", nn.ReLU())),
-            ("fc2", nn.Linear(cnn_output_size, cnn_output_size)),
-            (("relu6", nn.ReLU()))
+            ("fc2", nn.Linear(64, 32)),
+            (("relu6", nn.ReLU())),
+            ("fc3", nn.Linear(32, 8)),
+            (("relu6", nn.ReLU())),
+            ("output", nn.Linear(8, 1))
+        ])
+
+    def forward(self, img):
+        """Implement forward pass
+
+        Here, we run the image (img) through the convolutional stack
+        and predict a CNR value
+
+        Parameters
+        ----------
+            img : torch.Tensor
+                2D tensor representing an image
+
+        Returns
+        ------
+            output : torch.Tensor
+                The 0D CNR output of this model
+        """
+
+        # Pass image through cnn stack
+        return self.stack(img)
+
+
+class RecurrentModel_ConvConcatFC(nn.Module):
+    """Model used for processing a 2D image along with an 1D vector.
+
+    It is comprised of a convolution part (for the image) and a fully
+    connected part, after which the two are combined via concatenation
+    and processed in the recurrent part of the model.
+
+    For a full schematic of the model and its workings, please refer to
+    docs/pulseTrain_optimizer_schematic.png
+    """
+    def __init__(
+            self,
+            input_img_size: tuple[int, int],
+            input_kspace_vector_size: int,
+            input_theta_vector_size: int,
+            output_activation: str,
+            output_size: int,
+            hidden_size: int,
+            cnr_predictor: CNR_Predictor_CNN,
+            conv_architecture: list = [0],
+            fc_architecture: list = [0],
+            rnn_architecture: list = [0],
+            device: Union[None, torch.device] = None
+    ):
+        super(RecurrentModel_ConvConcatFC, self).__init__()
+
+        # Build attributes
+        self.input_img_size = input_img_size
+        self.input_kspace_vector_size = input_kspace_vector_size
+        self.input_theta_vector_size = input_theta_vector_size
+        self.output_size = output_size
+        self.hidden_size = hidden_size
+        self.output_activation = output_activation
+        self.conv_architecture = conv_architecture
+        self.fc_architecture = fc_architecture
+        self.rnn_architecture = rnn_architecture
+        self.device = device
+
+        # Build architecture dict
+        self.build_architecture_dicts()
+
+        # Build stacks
+        if self.device:
+            # CNR predictor model
+            self.cnr_predictor = cnr_predictor.to(device)
+            # Kspace encoder, theta encoder and RNN stacks
+            self.stack_kspace = nn.Sequential(self.dict_kspace).to(device)
+            self.stack_theta = nn.Sequential(self.dict_theta).to(device)
+            self.stack_rnn = nn.Sequential(self.dict_rnn).to(device)
+        else:
+            # CNR predictor model
+            self.cnr_predictor = cnr_predictor
+            # Kspace encoder, theta encoder and RNN stacks
+            self.stack_kspace = nn.Sequential(self.dict_kspace)
+            self.stack_theta = nn.Sequential(self.dict_theta)
+            self.stack_rnn = nn.Sequential(self.dict_rnn)
+
+    def build_architecture_dicts(self):
+        """Build model layer stack
+
+        By default, we take a certain number of linear layers,
+        then an LSTM block and finally the output layer.
+        """
+
+        # Define some parameters here for now. Might move to
+        # __init__
+        kspace_output_size = 16
+        theta_output_size = 16
+        rnn_input_size = kspace_output_size + theta_output_size + 1
+
+        # Create k-space encoder architecture list
+        kspace_list = [
+            ("conv1", nn.Conv1d(1, 4, 5, padding=2)),
+            (("relu1", nn.ReLU())),
+            ("pool1", nn.MaxPool1d(kernel_size=2)),
+            ("conv2", nn.Conv1d(4, 8, 5, padding=2)),
+            (("relu2", nn.ReLU())),
+            ("pool2", nn.MaxPool1d(kernel_size=2)),
+            ("flatten", nn.Flatten(1)),
+            ("fc1", nn.Linear(self.input_kspace_vector_size * 2, 128)),
+            (("relu3", nn.ReLU())),
+            ("fc2", nn.Linear(128, 64)),
+            (("relu4", nn.ReLU())),
+            ("fc3", nn.Linear(64, 32)),
+            (("relu5", nn.ReLU())),
+            ("fc4", nn.Linear(32, 16)),
+            (("relu6", nn.ReLU())),
+            ("fc5", nn.Linear(16, kspace_output_size)),
+            (("relu7", nn.ReLU())),
         ]
 
-        # Create FC architecture list
-        fc_list = [
-            ("fc1", nn.Linear(self.input_vector_size, 32)),
+        # Create theta knot encoder architecture list
+        theta_list = [
+            ("f1", nn.Linear(self.input_theta_vector_size, 16)),
             (("relu1", nn.ReLU())),
-            ("fc2", nn.Linear(32, 64)),
+            ("f2", nn.Linear(16, 32)),
             (("relu2", nn.ReLU())),
-            ("fc3", nn.Linear(64, fc_output_size)),
-            (("relu3", nn.ReLU())),
+            ("f3", nn.Linear(32, theta_output_size)),
+            (("relu3", nn.ReLU()))
         ]
 
         # Create RNN architecture list
@@ -481,16 +578,16 @@ class RecurrentModel_ConvConcatFC(nn.Module):
             raise RuntimeError()
 
         # Fill ordered dicts
-        self.dict_cnn = OrderedDict(cnn_list)
-        self.dict_fc = OrderedDict(fc_list)
+        self.dict_kspace = OrderedDict(kspace_list)
+        self.dict_theta = OrderedDict(theta_list)
         self.dict_rnn = OrderedDict(rnn_list)
 
-    def forward(self, img, vector, hidden=None):
+    def forward(self, img, kspace_vector, theta_vector, hidden=None):
         """Implement forward pass
 
-        Here, we run the image (img) through the convolutional stack
-        and the vector through the fully connected stack.
-        Then, we concatenate the resulting 1D feature vectors and run
+        Here, we run the image (img) through the 2D convolutional neural net
+        and the kspace + theta knot vectors through their own branches as well.
+        Then, we concatenate the resulting CNR + 1D feature vectors and run
         this through the RNN (recurrent) stack to finally obtain the 1D
         vector output.
 
@@ -498,7 +595,9 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         ----------
             img : torch.Tensor
                 2D tensor representing an image
-            vector : torch.Tensor
+            kspace_vector : torch.Tensor
+                1D tensor representing a vector of mean signal per k-space line
+            theta_vector : torch.Tensor
                 1D tensor representing a vector (of flip angles)
             hidden : tuple | None
                 If given, this provides hx and cx for the LSTM modules.
@@ -514,15 +613,18 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         """
 
         # Pass image through cnn stack
-        cnn_out = self.stack_cnn(img)
+        cnr_out = self.cnr_predictor(img).detach()
 
-        # Pass vector through fc stack
+        # Pass kspace vector through appropriate stack
         # For now, we remove the phase and only optimize the amplitude
-        fc_out = self.stack_fc(torch.abs(vector))
+        kspace_out = self.stack_kspace(torch.abs(kspace_vector))
+        # Pass theta vector through appropriate stack
+        # For now, we remove the phase and only optimize the amplitude
+        theta_out = self.stack_theta(torch.abs(theta_vector))
 
         # Concatenate cnn_out and fc_out
         rnn_in = self.stack_rnn[:self.lstm_idx](
-            torch.concat([cnn_out, fc_out], 1)
+            torch.concat([cnr_out, kspace_out, theta_out], 1)
         )
 
         # Pass through the LSTM module and extract x, hidden states

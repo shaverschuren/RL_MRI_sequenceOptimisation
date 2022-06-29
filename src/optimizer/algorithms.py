@@ -743,7 +743,7 @@ class RDPG(object):
         else: n_actions = env.n_actions + 1 if model_done else env.n_actions
         # Determine n_states
         if single_fa: n_states = 2
-        else: n_states = [env.img_shape, env.n_state_vector]
+        else: n_states = [env.img_shape, env.img_shape[0], env.n_state_vector]
 
         # Setup agent
         self.agent = agents.RDPGAgent(
@@ -760,8 +760,9 @@ class RDPG(object):
             self.n_episodes // 2 if self.n_episodes < 20000 else 10000,
             ('state', 'action', 'reward', 'next_state') if self.single_fa
             else (
-                'state_img', 'state_fa', 'action',
-                'reward', 'next_state_img', 'next_state_fa'
+                'state_img', 'state_kspace', 'state_theta', 'action',
+                'reward', 'next_state_img', 'next_state_kspace',
+                'next_state_theta', 'cnr'
             )
         )
         # Setup logger
@@ -794,7 +795,7 @@ class RDPG(object):
         ]
         if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
         else: self.logs_fields.extend([
-            "theta", "theta_norm",
+            "cnr_loss", "theta", "theta_norm",
             *[f"theta_param{i}" for i in range(self.env.n_state_vector)]
         ])
 
@@ -830,13 +831,23 @@ class RDPG(object):
                 )
                 and hasattr(self.env, 'recent_img')
             ):
+                # Get image in proper format
+                if type(self.env.recent_img) == torch.Tensor:
+                    image = np.array(
+                        self.env.recent_img.cpu()  # type: ignore
+                    ) / 5.
+                elif type(self.env.recent_img) == np.ndarray:
+                    image = self.env.recent_img / 5.
+                else: raise TypeError()
+
+                # Log image
                 self.logger.log_image(
                     field="img",
                     tag=(
                         f"{self.logs_tag}_{run_type}_"
                         f"episode_{self.episode + 1}"
                     ),
-                    image=np.array(self.env.recent_img.cpu()) / 5.,
+                    image=image,
                     step=-1
                 )
 
@@ -844,25 +855,27 @@ class RDPG(object):
             if self.single_fa:
                 self.logger.log_scalar(
                     field="fa",
-                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                    value=float(self.env.fa),
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",   # noqa: E501
+                    value=float(self.env.fa),                    # type: ignore
                     step=-1
                 )
                 self.logger.log_scalar(
                     field="fa_norm",
-                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-                    value=float(self.env.fa_norm),
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",   # noqa: E501
+                    value=float(self.env.fa_norm),               # type: ignore
                     step=-1
                 )
             else:
-                for i in range(self.env.n_state_vector):
+                for i in range(self.env.n_state_vector):         # type: ignore
                     self.logger.log_scalar(
                         field=f"theta_param{i}",
                         tag=(
                             f"{self.logs_tag}_{run_type}_theta_params_"
                             f"episode_{self.episode + 1}"
                         ),
-                        value=float(self.env.pulsetrain_param_vector[i]),
+                        value=float(
+                            self.env.pulsetrain_param_vector[i]  # type: ignore
+                        ),
                         step=-1
                     )
 
@@ -904,23 +917,26 @@ class RDPG(object):
         reward_color = "\033[92m" if reward > 0. else "\033[91m"
         end_str = "\033[0m"
 
-        # Assemble action string and print step summary
-        theta_str = "["
-        for i in range(len(action)):
-            action_part = action[i]
-            theta_part = self.env.pulsetrain_param_vector[i]
-            theta_color = "\033[92m↑" if action_part > 0. else "\033[91m↓"
-            theta_str += f"{theta_color}{float(theta_part):6.2f}{end_str}, "
-        theta_str = theta_str[:-2] + "]"
+        # Assemble theta/fa string and print step summary
+        if self.single_fa:
+            theta_str = f"FA: {float(self.env.fa):5.1f} - "
+        else:
+            theta_str = "Theta knots: ["
+            for i in range(len(action)):
+                action_part = action[i]
+                theta_part = self.env.pulsetrain_param_vector[i]
+                theta_color = "\033[92m↑" if action_part > 0. else "\033[91m↓"
+                theta_str += f"{theta_color}{float(theta_part):5.1f}{end_str}, "
+            theta_str = theta_str[:-2] + "] - "
 
+        # Print step summary
         print(
-            f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-            f"Theta knots [deg]: {theta_str} - "
-            # f"FA: {float(self.env.fa):5.1f} - "
+            f"Step {self.tick + 1:2d}/{self.n_ticks:2d} - "
+            + theta_str +
             f"{self.metric.upper()}: "
             f"{float(getattr(self.env, self.metric)):5.2f} -"
             " Reward: "
-            "" + reward_color + f"{float(reward):6.3f}" + end_str
+            "" + reward_color + f"{float(reward):5.1f}" + end_str
         )
 
         # Log this step to tensorboard
@@ -941,16 +957,27 @@ class RDPG(object):
                 (
                     isinstance(self.env, environments.ScannerEnv)
                     or isinstance(self.env, environments.KspaceEnv)
-                ) and hasattr(self.env, 'recent_img')
+                )
+                and hasattr(self.env, 'recent_img')
             ):
+                # Get image in proper format
+                if type(self.env.recent_img) == torch.Tensor:
+                    image = np.array(
+                        self.env.recent_img.cpu()  # type: ignore
+                    ) / 5.
+                elif type(self.env.recent_img) == np.ndarray:
+                    image = self.env.recent_img / 5.
+                else: raise TypeError()
+
+                # Log image
                 self.logger.log_image(
                     field="img",
                     tag=(
                         f"{self.logs_tag}_{run_type}_"
                         f"episode_{self.episode + 1}"
                     ),
-                    image=np.array(self.env.recent_img.cpu()) / 5.,
-                    step=self.tick + 1
+                    image=image,
+                    step=self.tick
                 )
 
             # Log theta (if applicable)
@@ -1080,6 +1107,7 @@ class RDPG(object):
             self.train
             and hasattr(self, "policy_loss")
             and hasattr(self, "critic_loss")
+            and hasattr(self, "cnr_loss")
         ):
             # Log losses in tensorboard
             self.logger.log_scalar(
@@ -1094,11 +1122,18 @@ class RDPG(object):
                 value=self.critic_loss,
                 step=self.episode
             )
+            self.logger.log_scalar(
+                field="cnr_loss",
+                tag=f"{self.logs_tag}_train_episodes",
+                value=self.cnr_loss,
+                step=self.episode
+            )
             # Log losses internally
             self.loss_history.append({
                 "episode": self.episode,
                 "policy_loss": float(self.policy_loss),
-                "critic_loss": float(self.critic_loss)
+                "critic_loss": float(self.critic_loss),
+                "cnr_loss": float(self.cnr_loss)
             })
             # Check whether we're currently on the "best" episode yet
             if len(self.loss_history) < 5:
@@ -1292,30 +1327,45 @@ class RDPG(object):
                 )
             else:
                 states = [
+                    # Image
                     torch.zeros(
                         (1, *self.env.img_shape), device=self.device,
                         dtype=torch.float
                     ),
+                    # Mean signal-per-line kspace vector
+                    torch.zeros(
+                        (1, self.env.img_shape[0]), device=self.device,
+                        dtype=torch.float
+                    ),
+                    # Theta knots
                     torch.zeros(
                         (1, self.env.n_actions), device=self.device,
                         dtype=torch.float
                     )
                 ]
                 next_states = [
+                    # Image
                     torch.zeros(
                         (1, *self.env.img_shape), device=self.device,
                         dtype=torch.float
                     ),
+                    # Mean signal-per-line kspace vector
+                    torch.zeros(
+                        (1, self.env.img_shape[0]), device=self.device,
+                        dtype=torch.float
+                    ),
+                    # Theta knots
                     torch.zeros(
                         (1, self.env.n_actions), device=self.device,
                         dtype=torch.float
                     )
                 ]
 
-            # Define actions/rewards tensors
+            # Define actions/rewards tensors + cnr storage tensor
             actions = torch.zeros(
                 (1, self.env.n_actions), device=self.device)
             rewards = torch.zeros((1), device=self.device)
+            cnrs = torch.zeros((1), device=self.device)
 
             # Print some info
             self.verbose_episode()
@@ -1344,18 +1394,18 @@ class RDPG(object):
                         )
                     )
                 else:
-                    states[0] = torch.cat(
-                        (states[0], torch.unsqueeze(state[0], 0))
-                    )
-                    states[1] = torch.cat(
-                        (states[1], torch.unsqueeze(state[1], 0))
-                    )
-                    next_states[0] = torch.cat(
-                        (next_states[0], torch.unsqueeze(next_state[0], 0))
-                    )
-                    next_states[1] = torch.cat(
-                        (next_states[1], torch.unsqueeze(next_state[1], 0))
-                    )
+                    # Three tensors per state (img, kspace vector, theta knots)
+                    for i in range(3):
+                        states[i] = torch.cat(
+                            (states[i], torch.unsqueeze(state[i], 0))
+                        )
+                        next_states[i] = torch.cat(
+                            (next_states[i], torch.unsqueeze(next_state[i], 0))
+                        )
+                    # Also store cnr
+                    cnr = torch.tensor(self.env.cnr, device=self.device)
+                    cnrs = torch.cat((cnrs, cnr.unsqueeze(0)))
+
                 # Add action/reward to history
                 actions = torch.cat((actions, torch.unsqueeze(action, 0)))
                 rewards = torch.cat((rewards, reward))
@@ -1386,9 +1436,10 @@ class RDPG(object):
                 )
             else:
                 self.memory.push(
-                    states[0][1:], states[1][1:],
+                    states[0][1:], states[1][1:], states[2][1:],
                     actions[1:], rewards[1:],
-                    next_states[0][1:], next_states[1][1:]
+                    next_states[0][1:], next_states[1][1:], next_states[2][1:],
+                    cnrs[1:]
                 )
 
             # If training, update model
@@ -1400,23 +1451,30 @@ class RDPG(object):
                 # Loop 10 (or less) times to update model
                 policy_loss = 0.
                 critic_loss = 0.
+                cnr_loss = 0.
                 n_updates = 0
                 for _ in range(
-                    50 if len(self.memory) >= 50 else len(self.memory)
+                    20 if len(self.memory) >= 20 else len(self.memory)
                 ):
                     # Generate batch
                     batch = self.memory.sample(self.batch_size)
                     # Run training
-                    current_policy_loss, current_critic_loss = \
-                        self.agent.update(batch)
+                    (
+                        current_policy_loss,
+                        current_critic_loss,
+                        current_cnr_loss
+                    ) = self.agent.update(batch)
                     # Update losses
                     policy_loss += current_policy_loss
                     critic_loss += current_critic_loss
+                    cnr_loss += current_cnr_loss
                     n_updates += 1
 
                 # Store losses
                 self.policy_loss = policy_loss / float(n_updates)
                 self.critic_loss = critic_loss / float(n_updates)
+                if not self.single_fa:
+                    self.cnr_loss = cnr_loss / float(n_updates)
 
                 # Print done
                 print("Done")

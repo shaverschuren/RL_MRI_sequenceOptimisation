@@ -190,7 +190,7 @@ class SimulatorObject():
         image = image[:, self.img_shape[1] // 2:(self.img_shape[1] * 3) // 2]
 
         # Return image
-        return torch.abs(image), signals
+        return torch.abs(image), k_space, signals
 
 
 if __name__ == "__main__":
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     print(f"Initialization done!    Took {initialization_time:.4f} seconds")
 
     # Run a tryout simulation
-    image, _ = simulator.forward(theta=torch.ones((65)) * .25 * torch.pi)
+    image, _, _ = simulator.forward(theta=torch.ones((65)) * .25 * torch.pi)
     simulation_time = time.time() - initialization_time - start_time
     print(f"Simulation done!        Took {simulation_time:.4f} seconds")
 
