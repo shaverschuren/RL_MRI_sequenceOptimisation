@@ -748,7 +748,8 @@ class RDPGAgent(object):
             ], lr=self.alpha_critic, weight_decay=1e-2
         )
 
-        # Setup criterion
+        # Setup criterions
+        self.cnr_predictor_criterion = torch.nn.L1Loss()
         self.critic_criterion = torch.nn.L1Loss()
 
     def select_action(self, state, train=True):
@@ -832,6 +833,9 @@ class RDPGAgent(object):
         TODO: Explanation of k1, k2 etc.
         """
 
+        # TODO: Remove. Just for debugging
+        torch.autograd.set_detect_anomaly(True)
+
         # Check for validity of tbptt parameters
         if self.tbptt_k1 > len(batch) or self.tbptt_k2 > len(batch):
             # Warn about bad k1/k2
@@ -868,13 +872,14 @@ class RDPGAgent(object):
         hidden_critic_target = [(self.critic_target.hx, self.critic_target.cx)]
         hidden_actor_target = [(self.actor_target.hx, self.actor_target.cx)]
 
-        # Create lists for policy and critic loss
+        # Create lists for policy and critic loss and a single scalar for cnr
         policy_loss_sums = [
             torch.tensor(0., dtype=torch.float32, device=self.device)
         ]
         critic_loss_sums = [
             torch.tensor(0., dtype=torch.float32, device=self.device)
         ]
+        cnr_predictor_loss_total = 0.
 
         # Define initial update count
         update_count = 0
@@ -898,7 +903,7 @@ class RDPGAgent(object):
                     [next_state.unsqueeze(0) for next_state in next_states]
                 ).to(self.device)
             else:
-                # Extract states & next_states
+                # Extract states & next_states + cnrs
                 states_img = [transition.state_img for transition in batch[t]]
                 states_kspace = [transition.state_kspace for transition in batch[t]]
                 states_theta = [transition.state_theta for transition in batch[t]]
@@ -911,13 +916,14 @@ class RDPGAgent(object):
                 next_states_theta = [
                     transition.next_state_theta for transition in batch[t]
                 ]
+                cnrs = [transition.cnr for transition in batch[t]]
                 # Cast to tensors
                 states_img = torch.cat([
                     state_img.view(1, 1, *state_img.shape)
                     for state_img in states_img
                 ]).to(self.device)
                 states_kspace = torch.cat([
-                    state_kspace.unsqueeze(0)
+                    state_kspace.unsqueeze(0).unsqueeze(0)
                     for state_kspace in states_kspace
                 ]).to(self.device)
                 states_theta = torch.cat(
@@ -928,13 +934,16 @@ class RDPGAgent(object):
                     for next_state_img in next_states_img
                 ]).to(self.device)
                 next_states_kspace = torch.cat([
-                    next_state_kspace.unsqueeze(0)
+                    next_state_kspace.unsqueeze(0).unsqueeze(0)
                     for next_state_kspace in next_states_kspace
                 ]).to(self.device)
                 next_states_theta = torch.cat([
                     next_state_theta.unsqueeze(0)
                     for next_state_theta in next_states_theta
                 ]).to(self.device)
+                cnrs = torch.unsqueeze(torch.cat(
+                    [cnr.unsqueeze(0) for cnr in cnrs]
+                ).to(self.device), 1)
 
             # Extract actions & rewards
             actions = [transition.action for transition in batch[t]]
@@ -947,7 +956,12 @@ class RDPGAgent(object):
                 [reward.unsqueeze(0) for reward in rewards]
             ).to(self.device), 1)
 
-            if not self.single_fa: raise NotImplementedError()
+            # Determine CNR predictor loss
+            if not self.single_fa:
+                # Get CNR predictions
+                cnr_predictions = self.cnr_predictor(states_img)
+                # Compare with actual CNR values and compute loss
+                cnr_predictor_loss = self.cnr_predictor_criterion(cnr_predictions, cnrs)
 
             # Determine target value (Q-prime)
             with torch.no_grad():
@@ -1021,7 +1035,19 @@ class RDPGAgent(object):
             hidden_critic_target.append(hidden_critic_target_1)
             hidden_actor_target.append(hidden_actor_target_1)
 
-            # Update the network periodically
+            # Update the CNR predictor at every timestep
+            if not self.single_fa:
+                # Run backward pass and perform optimizer step
+                self.cnr_optimizer.zero_grad()
+                cnr_predictor_loss.backward()
+                self.cnr_optimizer.step()
+                # # Detach CNR predictor for actor/critic update
+                # for parameter in self.cnr_predictor.parameters():
+                #     parameter.detach()
+                # Update total CNR predictor loss
+                cnr_predictor_loss_total += float(cnr_predictor_loss)
+
+            # Update the actor/critic networks periodically
             if (t + 1) % k1 == 0:
 
                 # Normalize losses
@@ -1097,7 +1123,8 @@ class RDPGAgent(object):
         if update_count > 0:
             return (
                 float(sum(policy_loss_sums) / float(update_count)),
-                float(sum(critic_loss_sums) / float(update_count))
+                float(sum(critic_loss_sums) / float(update_count)),
+                float(cnr_predictor_loss_total) / float(len(batch) + 1)
             )
         else:
             raise UserWarning("Updating failed")

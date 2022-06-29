@@ -762,7 +762,7 @@ class RDPG(object):
             else (
                 'state_img', 'state_kspace', 'state_theta', 'action',
                 'reward', 'next_state_img', 'next_state_kspace',
-                'next_state_theta'
+                'next_state_theta', 'cnr'
             )
         )
         # Setup logger
@@ -795,7 +795,7 @@ class RDPG(object):
         ]
         if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
         else: self.logs_fields.extend([
-            "theta", "theta_norm",
+            "cnr_loss", "theta", "theta_norm",
             *[f"theta_param{i}" for i in range(self.env.n_state_vector)]
         ])
 
@@ -1081,6 +1081,7 @@ class RDPG(object):
             self.train
             and hasattr(self, "policy_loss")
             and hasattr(self, "critic_loss")
+            and hasattr(self, "cnr_loss")
         ):
             # Log losses in tensorboard
             self.logger.log_scalar(
@@ -1095,11 +1096,18 @@ class RDPG(object):
                 value=self.critic_loss,
                 step=self.episode
             )
+            self.logger.log_scalar(
+                field="cnr_loss",
+                tag=f"{self.logs_tag}_train_episodes",
+                value=self.cnr_loss,
+                step=self.episode
+            )
             # Log losses internally
             self.loss_history.append({
                 "episode": self.episode,
                 "policy_loss": float(self.policy_loss),
-                "critic_loss": float(self.critic_loss)
+                "critic_loss": float(self.critic_loss),
+                "cnr_loss": float(self.cnr_loss)
             })
             # Check whether we're currently on the "best" episode yet
             if len(self.loss_history) < 5:
@@ -1327,10 +1335,11 @@ class RDPG(object):
                     )
                 ]
 
-            # Define actions/rewards tensors
+            # Define actions/rewards tensors + cnr storage tensor
             actions = torch.zeros(
                 (1, self.env.n_actions), device=self.device)
             rewards = torch.zeros((1), device=self.device)
+            cnrs = torch.zeros((1), device=self.device)
 
             # Print some info
             self.verbose_episode()
@@ -1367,6 +1376,9 @@ class RDPG(object):
                         next_states[i] = torch.cat(
                             (next_states[i], torch.unsqueeze(next_state[i], 0))
                         )
+                    # Also store cnr
+                    cnr = torch.tensor(self.env.cnr, device=self.device)
+                    cnrs = torch.cat((cnrs, cnr.unsqueeze(0)))
 
                 # Add action/reward to history
                 actions = torch.cat((actions, torch.unsqueeze(action, 0)))
@@ -1400,7 +1412,8 @@ class RDPG(object):
                 self.memory.push(
                     states[0][1:], states[1][1:], states[2][1:],
                     actions[1:], rewards[1:],
-                    next_states[0][1:], next_states[1][1:], next_states[2][1:]
+                    next_states[0][1:], next_states[1][1:], next_states[2][1:],
+                    cnrs[1:]
                 )
 
             # If training, update model
@@ -1412,6 +1425,7 @@ class RDPG(object):
                 # Loop 10 (or less) times to update model
                 policy_loss = 0.
                 critic_loss = 0.
+                cnr_loss = 0.
                 n_updates = 0
                 for _ in range(
                     50 if len(self.memory) >= 50 else len(self.memory)
@@ -1419,16 +1433,21 @@ class RDPG(object):
                     # Generate batch
                     batch = self.memory.sample(self.batch_size)
                     # Run training
-                    current_policy_loss, current_critic_loss = \
-                        self.agent.update(batch)
+                    (
+                        current_policy_loss,
+                        current_critic_loss,
+                        current_cnr_loss
+                    ) = self.agent.update(batch)
                     # Update losses
                     policy_loss += current_policy_loss
                     critic_loss += current_critic_loss
+                    cnr_loss += current_cnr_loss
                     n_updates += 1
 
                 # Store losses
                 self.policy_loss = policy_loss / float(n_updates)
                 self.critic_loss = critic_loss / float(n_updates)
+                self.cnr_loss = cnr_loss / float(n_updates)
 
                 # Print done
                 print("Done")

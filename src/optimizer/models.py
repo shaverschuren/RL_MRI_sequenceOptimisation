@@ -613,7 +613,7 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         """
 
         # Pass image through cnn stack
-        cnr_out = self.cnr_predictor(img)
+        cnr_out = self.cnr_predictor(img).detach()
 
         # Pass kspace vector through appropriate stack
         # For now, we remove the phase and only optimize the amplitude
