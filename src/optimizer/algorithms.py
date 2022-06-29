@@ -926,7 +926,7 @@ class RDPG(object):
                 action_part = action[i]
                 theta_part = self.env.pulsetrain_param_vector[i]
                 theta_color = "\033[92m↑" if action_part > 0. else "\033[91m↓"
-                theta_str += f"{theta_color}{float(theta_part):5.1f}{end_str}, "
+                theta_str += f"{theta_color}{float(theta_part):5.1f}{end_str}, "  # noqa: E501
             theta_str = theta_str[:-2] + "] - "
 
         # Print step summary
@@ -942,8 +942,6 @@ class RDPG(object):
         # Log this step to tensorboard
         # (but only for 100 training episodes because of speed issues)
         run_type = "train" if self.train else "test"
-
-        # TODO: Implement proper logging for theta
 
         if (
             run_type == "test"
@@ -1025,18 +1023,19 @@ class RDPG(object):
                 )
 
             # Scalars (current state -> state1)
-            # self.logger.log_scalar(
-            #     field="fa",
-            #     tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            #     value=float(self.env.fa),
-            #     step=self.tick
-            # )
-            # self.logger.log_scalar(
-            #     field="fa_norm",
-            #     tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
-            #     value=float(self.env.fa_norm),
-            #     step=self.tick
-            # )
+            if self.single_fa:
+                self.logger.log_scalar(
+                    field="fa",
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",  # noqa: E501
+                    value=float(self.env.fa),  # type: ignore
+                    step=self.tick
+                )
+                self.logger.log_scalar(
+                    field="fa_norm",
+                    tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",  # noqa: E501
+                    value=float(self.env.fa_norm),  # type: ignore
+                    step=self.tick
+                )
             self.logger.log_scalar(
                 field=self.metric,
                 tag=f"{self.logs_tag}_{run_type}_episode_{self.episode + 1}",
