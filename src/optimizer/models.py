@@ -435,6 +435,9 @@ class RecurrentModel_ConvConcatFC(nn.Module):
     It is comprised of a convolution part (for the image) and a fully
     connected part, after which the two are combined via concatenation
     and processed in the recurrent part of the model.
+
+    For a full schematic of the model and its workings, please refer to
+    docs/pulseTrain_optimizer_schematic.png
     """
     def __init__(
             self,
@@ -580,12 +583,12 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         self.dict_theta = OrderedDict(theta_list)
         self.dict_rnn = OrderedDict(rnn_list)
 
-    def forward(self, img, vector, hidden=None):
+    def forward(self, img, kspace_vector, theta_vector, hidden=None):
         """Implement forward pass
 
-        Here, we run the image (img) through the convolutional stack
-        and the vector through the fully connected stack.
-        Then, we concatenate the resulting 1D feature vectors and run
+        Here, we run the image (img) through the 2D convolutional neural net
+        and the kspace + theta knot vectors through their own branches as well.
+        Then, we concatenate the resulting CNR + 1D feature vectors and run
         this through the RNN (recurrent) stack to finally obtain the 1D
         vector output.
 
@@ -593,7 +596,9 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         ----------
             img : torch.Tensor
                 2D tensor representing an image
-            vector : torch.Tensor
+            kspace_vector : torch.Tensor
+                1D tensor representing a vector of mean signal per k-space line
+            theta_vector : torch.Tensor
                 1D tensor representing a vector (of flip angles)
             hidden : tuple | None
                 If given, this provides hx and cx for the LSTM modules.
@@ -609,15 +614,18 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         """
 
         # Pass image through cnn stack
-        cnn_out = self.stack_cnn(img)
+        cnr_out = self.cnr_predictor(img)
 
-        # Pass vector through fc stack
+        # Pass kspace vector through appropriate stack
         # For now, we remove the phase and only optimize the amplitude
-        fc_out = self.stack_fc(torch.abs(vector))
+        kspace_out = self.stack_kspace(torch.abs(kspace_vector))
+        # Pass theta vector through appropriate stack
+        # For now, we remove the phase and only optimize the amplitude
+        theta_out = self.stack_theta(torch.abs(theta_vector))
 
         # Concatenate cnn_out and fc_out
         rnn_in = self.stack_rnn[:self.lstm_idx](
-            torch.concat([cnn_out, fc_out], 1)
+            torch.concat([cnr_out, kspace_out, theta_out], 1)
         )
 
         # Pass through the LSTM module and extract x, hidden states
