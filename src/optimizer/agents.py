@@ -990,7 +990,7 @@ class RDPGAgent(object):
 
                 # Get loss for the CNR predictor model
                 # Get CNR predictions
-                cnr_predictions = self.cnr_predictor(states_img)
+                cnr_predictions = self.cnr_predictor(next_states_img)
                 # Compare with actual CNR values and compute loss
                 cnr_predictor_loss = \
                     self.cnr_predictor_criterion(cnr_predictions, cnrs)
