@@ -518,7 +518,7 @@ class RDPGAgent(object):
             self,
             action_space: environments.ActionSpace,
             single_fa: bool = False,
-            n_states: Union[list[tuple[int]], int] = 2,
+            n_states: Union[list[Union[tuple[int, int], int]], int] = 2,
             n_actions: int = 2,
             gamma: float = 0.2,  # TODO: 0.99
             epsilon: float = 1.,
@@ -528,6 +528,7 @@ class RDPGAgent(object):
             tbptt_k2: int = 5,
             alpha_actor: float = 1e-4,
             alpha_critic: float = 1e-3,
+            alpha_cnr_predictor: float = 1e-3,
             tau: float = 1e-2,
             device: Union[torch.device, None] = None):
         """Initializes and builds attributes for this class
@@ -562,9 +563,11 @@ class RDPGAgent(object):
             tbptt_k2 : int
                 Amount of steps over which to perform backpropagation
             alpha_actor : float
-                Learning rate for Adam optimizer  for actor model
+                Learning rate for Adam optimizer for actor model
             alpha_critic : float
-                Learning rate for Adam optimizer  for critic model
+                Learning rate for Adam optimizer for critic model
+            alpha_cnr_predictor : float
+                Learning rate for Adam optimizer for CNR predictor model
             tau : float
                 Measure of "lag" between policy and target models
             device : torch.device | None
@@ -584,6 +587,7 @@ class RDPGAgent(object):
         self.tbptt_k2 = tbptt_k2
         self.alpha_actor = alpha_actor
         self.alpha_critic = alpha_critic
+        self.alpha_cnr_predictor = alpha_cnr_predictor
         self.tau = tau
 
         # Setup device
@@ -665,31 +669,56 @@ class RDPGAgent(object):
                 output_activation="none",
                 device=self.device
             )
+
         elif (not self.single_fa) and type(self.n_states) is list:
-            raise NotImplementedError("Still have to rework the model")
-            # Define model for the multi-pulse optimization case
+            # Define models for the multi-pulse optimization case
+
+            # Check for appropriate n_states datatypes
+            if not (
+                type(self.n_states[0] == tuple[int, int])
+                and type(self.n_states[1]) == int
+                and type(self.n_states[2]) == int
+            ):
+                raise TypeError(
+                    "If not single_fa, n_states should be "
+                    "list(tuple(int, int), int, int)"
+                )
+
+            # CNR predictor
+            self.cnr_predictor = models.CNR_Predictor_CNN(
+                self.n_states[0]        # type: ignore
+            )
+            # Actor, critic and target networks
             self.actor = models.RecurrentModel_ConvConcatFC(
-                self.n_states[0], self.n_states[1], self.n_states[2], "tanh",
+                self.n_states[0], self.n_states[1],     # type: ignore
+                self.n_states[2], "tanh",               # type: ignore
                 self.n_actions, hidden_size=64,
+                cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
             self.critic = models.RecurrentModel_ConvConcatFC(
-                self.n_states[0], self.n_states[1],
-                self.n_states[2] + self.n_actions, "tanh",
-                self.n_actions, hidden_size=64,
+                self.n_states[0], self.n_states[1],     # type: ignore
+                self.n_states[2] + self.n_actions,      # type: ignore
+                "tanh", self.n_actions, hidden_size=64,
+                cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
             self.actor_target = models.RecurrentModel_ConvConcatFC(
-                self.n_states[0], self.n_states[1], self.n_states[2], "tanh",
+                self.n_states[0], self.n_states[1],     # type: ignore
+                self.n_states[2], "tanh",               # type: ignore
                 self.n_actions, hidden_size=64,
+                cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
             self.critic_target = models.RecurrentModel_ConvConcatFC(
-                self.n_states[0], self.n_states[1],
-                self.n_states[2] + self.n_actions, "tanh",
-                self.n_actions, hidden_size=64,
+                self.n_states[0], self.n_states[1],     # type: ignore
+                self.n_states[2] + self.n_actions,      # type: ignore
+                "tanh", self.n_actions, hidden_size=64,
+                cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
+        else:
+            raise RuntimeError()
 
         # We initialize the target networks as copies of the original networks
         for target_param, param in zip(
@@ -700,6 +729,10 @@ class RDPGAgent(object):
             target_param.data.copy_(param.data)
 
         # Setup optimizers
+        self.cnr_optimizer = optim.Adam(
+            self.cnr_predictor.parameters(),
+            lr=self.alpha_cnr_predictor, weight_decay=1e-2
+        )
         self.actor_optimizer = optim.Adam(
             self.actor.parameters(), lr=self.alpha_actor, weight_decay=1e-2
         )

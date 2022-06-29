@@ -447,6 +447,7 @@ class RecurrentModel_ConvConcatFC(nn.Module):
             output_activation: str,
             output_size: int,
             hidden_size: int,
+            cnr_predictor: CNR_Predictor_CNN,
             conv_architecture: list = [0],
             fc_architecture: list = [0],
             rnn_architecture: list = [0],
@@ -472,16 +473,14 @@ class RecurrentModel_ConvConcatFC(nn.Module):
         # Build stacks
         if self.device:
             # CNR predictor model
-            self.cnr_predictor = CNR_Predictor_CNN(
-                input_img_size, device=device
-            )
+            self.cnr_predictor = cnr_predictor.to(device)
             # Kspace encoder, theta encoder and RNN stacks
             self.stack_kspace = nn.Sequential(self.dict_kspace).to(device)
             self.stack_theta = nn.Sequential(self.dict_theta).to(device)
             self.stack_rnn = nn.Sequential(self.dict_rnn).to(device)
         else:
             # CNR predictor model
-            self.cnr_predictor = CNR_Predictor_CNN(input_img_size)
+            self.cnr_predictor = cnr_predictor
             # Kspace encoder, theta encoder and RNN stacks
             self.stack_kspace = nn.Sequential(self.dict_kspace)
             self.stack_theta = nn.Sequential(self.dict_theta)
