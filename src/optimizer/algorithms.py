@@ -917,23 +917,26 @@ class RDPG(object):
         reward_color = "\033[92m" if reward > 0. else "\033[91m"
         end_str = "\033[0m"
 
-        # Assemble action string and print step summary
-        theta_str = "["
-        for i in range(len(action)):
-            action_part = action[i]
-            theta_part = self.env.pulsetrain_param_vector[i]
-            theta_color = "\033[92m↑" if action_part > 0. else "\033[91m↓"
-            theta_str += f"{theta_color}{float(theta_part):6.2f}{end_str}, "
-        theta_str = theta_str[:-2] + "]"
+        # Assemble theta/fa string and print step summary
+        if self.single_fa:
+            theta_str = f"FA: {float(self.env.fa):5.1f} - "
+        else:
+            theta_str = "Theta knots: ["
+            for i in range(len(action)):
+                action_part = action[i]
+                theta_part = self.env.pulsetrain_param_vector[i]
+                theta_color = "\033[92m↑" if action_part > 0. else "\033[91m↓"
+                theta_str += f"{theta_color}{float(theta_part):5.1f}{end_str}, "
+            theta_str = theta_str[:-2] + "] - "
 
+        # Print step summary
         print(
-            f"Step {self.tick + 1:3d}/{self.n_ticks:3d} - "
-            f"Theta knots [deg]: {theta_str} - "
-            # f"FA: {float(self.env.fa):5.1f} - "
+            f"Step {self.tick + 1:2d}/{self.n_ticks:2d} - "
+            + theta_str +
             f"{self.metric.upper()}: "
             f"{float(getattr(self.env, self.metric)):5.2f} -"
             " Reward: "
-            "" + reward_color + f"{float(reward):6.3f}" + end_str
+            "" + reward_color + f"{float(reward):5.1f}" + end_str
         )
 
         # Log this step to tensorboard
@@ -1470,7 +1473,8 @@ class RDPG(object):
                 # Store losses
                 self.policy_loss = policy_loss / float(n_updates)
                 self.critic_loss = critic_loss / float(n_updates)
-                self.cnr_loss = cnr_loss / float(n_updates)
+                if not self.single_fa:
+                    self.cnr_loss = cnr_loss / float(n_updates)
 
                 # Print done
                 print("Done")
