@@ -1451,7 +1451,7 @@ class RDPG(object):
                 cnr_loss = 0.
                 n_updates = 0
                 for _ in range(
-                    50 if len(self.memory) >= 50 else len(self.memory)
+                    20 if len(self.memory) >= 20 else len(self.memory)
                 ):
                     # Generate batch
                     batch = self.memory.sample(self.batch_size)
