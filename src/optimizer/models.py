@@ -523,13 +523,19 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
         ]
 
         # Create theta knot encoder architecture list
+        # Layer size is dependant on theta input size (i.e. actor or critic)
+        # and is rounded up to the nearest power of 2
+        theta_layer_size = \
+            2**(self.input_theta_vector_size * 2 - 1).bit_length()
         theta_list = [
-            ("f1", nn.Linear(self.input_theta_vector_size, 16)),
+            ("f1", nn.Linear(self.input_theta_vector_size, theta_layer_size)),
             (("relu1", nn.ReLU())),
-            ("f2", nn.Linear(16, 32)),
+            ("f2", nn.Linear(theta_layer_size, theta_layer_size * 2)),
             (("relu2", nn.ReLU())),
-            ("f3", nn.Linear(32, theta_output_size)),
-            (("relu3", nn.ReLU()))
+            ("f3", nn.Linear(theta_layer_size * 2, theta_layer_size)),
+            (("relu3", nn.ReLU())),
+            ("f4", nn.Linear(theta_layer_size, theta_output_size)),
+            (("relu4", nn.ReLU()))
         ]
 
         # Create RNN architecture list
