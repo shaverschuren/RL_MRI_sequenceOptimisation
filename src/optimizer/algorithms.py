@@ -1019,7 +1019,7 @@ class RDPG(object):
                     value=float(
                         self.agent.actor.recent_cnr_pred  # type: ignore
                     ),
-                    step=self.tick
+                    step=self.tick - 1
                 )
 
             # Scalars (current state -> state1)
