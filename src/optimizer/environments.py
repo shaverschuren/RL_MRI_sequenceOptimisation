@@ -1782,24 +1782,24 @@ class KspaceEnv(object):
 
         # Scale reward with signal difference
         if float(cnr_old) < 1e-2:
-            # If old_state signal is too small, set reward gain to 20
-            reward_gain = 20.
+            # If old_state signal is too small, set reward gain to 2
+            reward_gain = 2.
         else:
             # Calculate relative signal difference and derive reward gain
             cnr_diff = (
                 abs(cnr_new - cnr_old)
                 / cnr_old
             )
-            reward_gain = cnr_diff * 100.
+            reward_gain = cnr_diff * 10.
 
             # If reward is lower than 0.01, penalise
             # the system for taking steps that are too small.
             if reward_gain < 0.01:
                 reward_float = -1.0
-                reward_gain = 0.05
-            # If reward gain is higher than 20, use 20
+                reward_gain = 0.005
+            # If reward gain is higher than 2, use 2
             # We do this to prevent blowing up rewards near the edges
-            if reward_gain > 20.: reward_gain = 20.
+            if reward_gain > 2.: reward_gain = 2.
 
         # If reward is negative, increase gain
         if reward_float < 0.:
