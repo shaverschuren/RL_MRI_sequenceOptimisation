@@ -1930,11 +1930,15 @@ class KspaceEnv(object):
         ):
             # Calculate deltas [-1, 1] -> [3/4, 6/4]
             deltas = (((action + 1.) / 2.) * 0.8 + 0.6)
-            # Adjust prep pulses
-            self.fa_prep *= deltas[0]
-            self.theta_prep *= deltas[0]
-            # Adjust acq pulses
-            self.pulsetrain_knots *= deltas[1:]
+            # Adjust prep pulses + clip values
+            self.fa_prep = max(min(self.fa_prep + deltas[0], 180.), 0.)
+            self.theta_prep = torch.clip(
+                self.theta_prep * deltas[0], 0., 180.
+            )
+            # Adjust acq pulses + clip values
+            self.pulsetrain_knots = torch.clip(
+                self.pulsetrain_knots * deltas[1:], 0., 180.
+            )
 
             # Adjust theta
             self.set_pulsetrain_parametrization(self.pulsetrain_knots)
