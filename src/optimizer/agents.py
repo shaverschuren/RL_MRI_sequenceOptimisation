@@ -1187,15 +1187,35 @@ class RDPGAgent(object):
         self.critic_optimizer.load_state_dict(
             pretrained_dict["critic_optimizer"]
         )
+        # If applicable, also set cnr predictor + optimizer state
+        if not self.single_fa:
+            self.cnr_predictor.load_state_dict(
+                pretrained_dict["cnr_predictor"]
+            )
+            self.cnr_optimizer.load_state_dict(
+                pretrained_dict["cnr_predictor_optimizer"]
+            )
 
     def save(self, path):
         """Saves models to a file"""
 
-        torch.save({
-            'actor': self.actor.state_dict(),
-            'critic': self.critic.state_dict(),
-            'actor_target': self.actor_target.state_dict(),
-            'critic_target': self.critic_target.state_dict(),
-            'actor_optimizer': self.actor_optimizer.state_dict(),
-            'critic_optimizer': self.critic_optimizer.state_dict()
-        }, path)
+        if self.single_fa:
+            torch.save({
+                'actor': self.actor.state_dict(),
+                'critic': self.critic.state_dict(),
+                'actor_target': self.actor_target.state_dict(),
+                'critic_target': self.critic_target.state_dict(),
+                'actor_optimizer': self.actor_optimizer.state_dict(),
+                'critic_optimizer': self.critic_optimizer.state_dict()
+            }, path)
+        else:
+            torch.save({
+                'cnr_predictor': self.cnr_predictor.state_dict(),
+                'actor': self.actor.state_dict(),
+                'critic': self.critic.state_dict(),
+                'actor_target': self.actor_target.state_dict(),
+                'critic_target': self.critic_target.state_dict(),
+                'cnr_predictor_optimizer': self.cnr_optimizer.state_dict(),
+                'actor_optimizer': self.actor_optimizer.state_dict(),
+                'critic_optimizer': self.critic_optimizer.state_dict()
+            }, path)
