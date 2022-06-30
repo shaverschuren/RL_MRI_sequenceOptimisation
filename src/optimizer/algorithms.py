@@ -923,9 +923,14 @@ class RDPG(object):
         else:
             theta_str = "Theta knots: ["
             for i in range(len(action)):
+                # Get action and theta for this idx
                 action_part = action[i]
                 theta_part = self.env.pulsetrain_param_vector[i]
-                theta_color = "\033[92m↑" if action_part > 0. else "\033[91m↓"
+                # Determine color
+                if action_part > 0.: theta_color = "\033[92m↑"
+                elif action_part < 0.: theta_color = "\033[91m↓"
+                else: theta_color = "\033[93m-"
+                # Parse string
                 theta_str += f"{theta_color}{float(theta_part):5.1f}{end_str}, "  # noqa: E501
             theta_str = theta_str[:-2] + "] - "
 
