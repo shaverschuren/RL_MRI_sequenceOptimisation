@@ -535,43 +535,21 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
         # Create RNN architecture list
         rnn_list = []
         self.lstm_idx = 2
-        rnn_list.append(
+        rnn_list = [
+            ("fc1", nn.Linear(rnn_input_size, self.hidden_size)),
+            ("relu1", nn.ReLU()),
             (
-                "fc1",
-                nn.Linear(rnn_input_size, self.hidden_size)
-            )
-        )
-        rnn_list.append(("relu1", nn.ReLU()))
-        rnn_list.append(
-            (
-                "lstm",
-                nn.LSTM(
+                "lstm", nn.LSTM(
                     input_size=self.hidden_size,
                     hidden_size=self.hidden_size,
-                    num_layers=2
-                )
-            )
-        )
-        rnn_list.append(
-            (
-                "fc2",
-                nn.Linear(self.hidden_size, 2 * self.output_size)
-            )
-        )
-        rnn_list.append(("relu2", nn.ReLU()))
-        rnn_list.append(
-            (
-                "fc3",
-                nn.Linear(2 * self.output_size, self.output_size)
-            )
-        )
-        rnn_list.append(("relu3", nn.ReLU()))
-        rnn_list.append(
-            (
-                "output",
-                nn.Linear(self.output_size, self.output_size)
-            )
-        )
+                    num_layers=2)
+            ),
+            ("fc2", nn.Linear(self.hidden_size, 2 * self.output_size)),
+            ("relu2", nn.ReLU()),
+            ("fc3", nn.Linear(2 * self.output_size, self.output_size)),
+            ("relu3", nn.ReLU()),
+            ("output", nn.Linear(self.output_size, self.output_size))
+        ]
         if self.output_activation.lower() == "tanh":
             rnn_list.append(("tanh", nn.Tanh()))
         elif self.output_activation.lower() == "none":
