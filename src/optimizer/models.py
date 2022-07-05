@@ -504,22 +504,28 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
         # Create k-space encoder architecture list
         kspace_list = [
             ("conv1", nn.Conv1d(1, 4, 5, padding=2)),
-            (("relu1", nn.ReLU())),
+            ("relu1", nn.ReLU()),
             ("pool1", nn.MaxPool1d(kernel_size=2)),
             ("conv2", nn.Conv1d(4, 8, 5, padding=2)),
-            (("relu2", nn.ReLU())),
+            ("relu2", nn.ReLU()),
             ("pool2", nn.MaxPool1d(kernel_size=2)),
+            ("conv3", nn.Conv1d(8, 8, 5, padding=2)),
+            ("relu3", nn.ReLU()),
+            ("pool3", nn.MaxPool1d(kernel_size=2)),
+            ("conv4", nn.Conv1d(8, 8, 5, padding=2)),
+            ("relu4", nn.ReLU()),
+            ("pool4", nn.MaxPool1d(kernel_size=2)),
             ("flatten", nn.Flatten(1)),
-            ("fc1", nn.Linear(self.input_kspace_vector_size * 2, 128)),
-            (("relu3", nn.ReLU())),
+            ("fc1", nn.Linear(self.input_kspace_vector_size // 2, 128)),
+            ("relu5", nn.ReLU()),
             ("fc2", nn.Linear(128, 64)),
-            (("relu4", nn.ReLU())),
+            ("relu6", nn.ReLU()),
             ("fc3", nn.Linear(64, 32)),
-            (("relu5", nn.ReLU())),
+            ("relu7", nn.ReLU()),
             ("fc4", nn.Linear(32, 16)),
-            (("relu6", nn.ReLU())),
+            ("relu8", nn.ReLU()),
             ("fc5", nn.Linear(16, kspace_output_size)),
-            (("relu7", nn.ReLU())),
+            ("relu9", nn.ReLU()),
         ]
 
         # Create theta knot encoder architecture list
@@ -528,14 +534,14 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
         theta_layer_size = \
             2**(self.input_theta_vector_size * 2 - 1).bit_length()
         theta_list = [
-            ("f1", nn.Linear(self.input_theta_vector_size, theta_layer_size)),
-            (("relu1", nn.ReLU())),
-            ("f2", nn.Linear(theta_layer_size, theta_layer_size * 2)),
-            (("relu2", nn.ReLU())),
-            ("f3", nn.Linear(theta_layer_size * 2, theta_layer_size)),
-            (("relu3", nn.ReLU())),
-            ("f4", nn.Linear(theta_layer_size, theta_output_size)),
-            (("relu4", nn.ReLU()))
+            ("fc1", nn.Linear(self.input_theta_vector_size, theta_layer_size)),
+            ("relu1", nn.ReLU()),
+            ("fc2", nn.Linear(theta_layer_size, theta_layer_size * 2)),
+            ("relu2", nn.ReLU()),
+            ("fc3", nn.Linear(theta_layer_size * 2, theta_layer_size)),
+            ("relu3", nn.ReLU()),
+            ("fc4", nn.Linear(theta_layer_size, theta_output_size)),
+            ("relu4", nn.ReLU())
         ]
 
         # Create RNN architecture list

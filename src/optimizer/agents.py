@@ -692,28 +692,28 @@ class RDPGAgent(object):
             self.actor = models.CombinedModel_PulsetrainOptimizer(
                 self.n_states[0], self.n_states[1],     # type: ignore
                 self.n_states[2], "tanh",               # type: ignore
-                self.n_actions, hidden_size=64,
+                self.n_actions, hidden_size=128,
                 cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
             self.critic = models.CombinedModel_PulsetrainOptimizer(
                 self.n_states[0], self.n_states[1],     # type: ignore
                 self.n_states[2] + self.n_actions,      # type: ignore
-                "tanh", self.n_actions, hidden_size=64,
+                "tanh", self.n_actions, hidden_size=128,
                 cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
             self.actor_target = models.CombinedModel_PulsetrainOptimizer(
                 self.n_states[0], self.n_states[1],     # type: ignore
                 self.n_states[2], "tanh",               # type: ignore
-                self.n_actions, hidden_size=64,
+                self.n_actions, hidden_size=128,
                 cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
             self.critic_target = models.CombinedModel_PulsetrainOptimizer(
                 self.n_states[0], self.n_states[1],     # type: ignore
                 self.n_states[2] + self.n_actions,      # type: ignore
-                "tanh", self.n_actions, hidden_size=64,
+                "tanh", self.n_actions, hidden_size=128,
                 cnr_predictor=self.cnr_predictor,
                 device=self.device
             )
