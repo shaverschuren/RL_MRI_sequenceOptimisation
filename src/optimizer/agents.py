@@ -1049,6 +1049,7 @@ class RDPGAgent(object):
                 # aren't bound by a recurrent module
                 self.cnr_optimizer.zero_grad()
                 cnr_predictor_loss.backward()
+                make_dot(cnr_predictor_loss).render(f"logs/flow/cnr_predictor_{t}", format="pdf")
                 self.cnr_optimizer.step()
                 # Update total CNR predictor loss
                 cnr_predictor_loss_total += float(cnr_predictor_loss)
@@ -1078,11 +1079,13 @@ class RDPGAgent(object):
                 # the critic backpropagation.
                 self.actor_optimizer.zero_grad()
                 policy_loss_sums[update_count].backward(retain_graph=True)
+                make_dot(policy_loss_sums[update_count]).render(f"logs/flow/actor_{t}", format="pdf")
                 self.actor_optimizer.step()
 
                 # Update critic
                 self.critic_optimizer.zero_grad()
                 critic_loss_sums[update_count].backward()
+                make_dot(critic_loss_sums[update_count]).render(f"logs/flow/critic_{t}", format="pdf")
                 self.critic_optimizer.step()
 
                 # Detach all "used" hidden states
