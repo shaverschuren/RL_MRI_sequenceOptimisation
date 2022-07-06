@@ -548,7 +548,7 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
 
         # Create RNN architecture list
         rnn_list = []
-        self.lstm_idx = 2
+        self.lstm_idx = 6
         rnn_list = [
             ("fc1", nn.Linear(rnn_input_size, self.hidden_size)),
             ("relu1", nn.ReLU()),
@@ -650,8 +650,8 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
         """Reset hidden state of the lstm module"""
 
         self.hx = Variable(
-            torch.zeros(2, batch_size, self.hidden_size)
+            torch.zeros(3, batch_size, self.hidden_size)
         ).to(self.device)
         self.cx = Variable(
-            torch.zeros(2, batch_size, self.hidden_size)
+            torch.zeros(3, batch_size, self.hidden_size)
         ).to(self.device)
