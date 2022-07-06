@@ -538,10 +538,12 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
             ("relu1", nn.ReLU()),
             ("fc2", nn.Linear(theta_layer_size, theta_layer_size * 2)),
             ("relu2", nn.ReLU()),
-            ("fc3", nn.Linear(theta_layer_size * 2, theta_layer_size)),
+            ("fc3", nn.Linear(theta_layer_size * 2, theta_layer_size * 2)),
             ("relu3", nn.ReLU()),
-            ("fc4", nn.Linear(theta_layer_size, theta_output_size)),
-            ("relu4", nn.ReLU())
+            ("fc4", nn.Linear(theta_layer_size * 2, theta_layer_size)),
+            ("relu4", nn.ReLU()),
+            ("fc5", nn.Linear(theta_layer_size, theta_output_size)),
+            ("relu5", nn.ReLU())
         ]
 
         # Create RNN architecture list
@@ -550,17 +552,23 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
         rnn_list = [
             ("fc1", nn.Linear(rnn_input_size, self.hidden_size)),
             ("relu1", nn.ReLU()),
+            ("fc2", nn.Linear(self.hidden_size, self.hidden_size * 2)),
+            ("relu2", nn.ReLU()),
+            ("fc3", nn.Linear(self.hidden_size * 2, self.hidden_size)),
+            ("relu3", nn.ReLU()),
             (
                 "lstm", nn.LSTM(
                     input_size=self.hidden_size,
                     hidden_size=self.hidden_size,
-                    num_layers=2)
+                    num_layers=3)
             ),
-            ("fc2", nn.Linear(self.hidden_size, 2 * self.output_size)),
-            ("relu2", nn.ReLU()),
-            ("fc3", nn.Linear(2 * self.output_size, self.output_size)),
-            ("relu3", nn.ReLU()),
-            ("output", nn.Linear(self.output_size, self.output_size))
+            ("fc4", nn.Linear(self.hidden_size, self.hidden_size)),
+            ("relu4", nn.ReLU()),
+            ("fc5", nn.Linear(self.hidden_size, self.hidden_size // 2)),
+            ("relu5", nn.ReLU()),
+            ("fc6", nn.Linear(self.hidden_size // 2, self.output_size * 2)),
+            ("relu6", nn.ReLU()),
+            ("output", nn.Linear(self.output_size * 2, self.output_size))
         ]
         if self.output_activation.lower() == "tanh":
             rnn_list.append(("tanh", nn.Tanh()))
