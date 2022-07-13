@@ -751,7 +751,7 @@ class RDPG(object):
             n_actions=n_actions,
             n_states=n_states,
             single_fa=single_fa,
-            epsilon_decay=1. - (5. / float(self.n_episodes))
+            epsilon_decay=1. - (10. / float(self.n_episodes))
         )
         if self.pretrained_path: self.agent.load(pretrained_path)
 
