@@ -1432,7 +1432,7 @@ class KspaceEnv(object):
             model_done: bool = False,
             homogeneous_initialization: bool = True,
             n_episodes: Union[int, None] = None,
-            n_prep_pulses: int = 3,
+            n_prep_pulses: int = 5,
             parametrization_n_knots: int = 5,
             fa_range: list[float] = [5., 45.],
             validation_mode: bool = False,
