@@ -1579,8 +1579,9 @@ class KspaceEnv(object):
     def init_actionspace(self):
         """Initialize action space
 
-        For continuous mode, use 1 output (fa)
-        For discrete mode, use 4 outputs (fa up down, small big)
+        Action 0: Prep pulse theta
+        Action 1: Base acquisition pulse theta
+        Action 2-n: Parametrisation knots for acquisition deltas
 
         If model_done, add the "done" command to the action space
         """
@@ -1589,15 +1590,15 @@ class KspaceEnv(object):
             # Set action space type to continuous
             _type = "continuous"
 
-            # Add FA actions for prep pulses
+            # Add FA actions for prep pulses and base acquisition pulses
             action_names = [
-                f"Change FA (prep pulses)"
+                "Change FA (prep pulses)", f"Change base FA (acq pulses)"
             ]
-            action_ranges = np.array([[-1., 1.]])
+            action_ranges = np.array([[-1., 1.], [-1., 1.]])
             action_deltas = None
             # Add FA actions for acquisition pulses
             action_names.extend([
-                f"Change FA node #{node_i} (acq pulses)"
+                f"Change FA delta node #{node_i} (acq pulses)"
                 for node_i in range(self.parametrization_n_knots)
             ])
             action_ranges = np.concatenate(
@@ -1933,17 +1934,24 @@ class KspaceEnv(object):
             (self.action_space.low <= action_np).all()
             and (action_np <= self.action_space.high).all()
         ):
-            # Calculate deltas [-1, 1] -> [3/4, 6/4]
-            deltas = (((action + 1.) / 2.) * 0.8 + 0.6)
+            # Calculate deltas for:
+            # prep pulse + acquisition base FA: [-1, 1] -> [1/2, 2]
+            # acquisition delta FA: [-1, 1] -> [3/4, 6/4]
+            delta_prep = (((action[0] + 1.) / 2.) * 1.5 + 0.5)
+            delta_acq = (((action[1] + 1.) / 2.) * 1.5 + 0.5)
+            deltas_nodes = action[2:]
             # Adjust prep pulses + clip values
-            self.fa_prep = max(min(self.fa_prep + deltas[0], 180.), 0.)
+            self.fa_prep = max(min(self.fa_prep * delta_prep, 180.), 0.)
             self.theta_prep = torch.clip(
-                self.theta_prep * deltas[0], 0., 180.
+                self.theta_prep * delta_prep, 0., 180.
             )
             # Adjust acq pulses + clip values
-            self.pulsetrain_knots = torch.clip(
-                self.pulsetrain_knots * deltas[1:], 0., 180.
-            )
+            self.acq_base_fa = max(min(self.acq_base_fa * delta_acq, 180.), 0.)
+            self.acq_delta_nodes += deltas_nodes
+            self.pulsetrain_knots = torch.clip(torch.tensor([
+                self.acq_base_fa + self.acq_delta_nodes[i]
+                for i in range(self.parametrization_n_knots)
+            ], dtype=torch.float32, device=self.device), 0., 180.)
 
             # Adjust theta
             self.set_pulsetrain_parametrization(self.pulsetrain_knots)
@@ -2013,12 +2021,15 @@ class KspaceEnv(object):
         if fa: self.fa_init = fa
 
         # Set pulse train parameters
-        self.pulsetrain_knots = torch.tensor(
-            [
-                self.fa_init * (1. + (random.random() - .5) * .2)
-                for _ in range(self.parametrization_n_knots)
-            ], dtype=torch.float32, device=self.device
-        )
+        self.acq_base_fa = self.fa_init * (1. + (random.random() - .5) * .2)
+        self.acq_delta_nodes = torch.tensor([
+            (random.random() - .5) * .2
+            for _ in range(self.parametrization_n_knots)
+        ], dtype=torch.float32, device=self.device)
+        self.pulsetrain_knots = torch.tensor([
+            self.acq_base_fa + self.acq_delta_nodes[i]
+            for i in range(self.parametrization_n_knots)
+        ], dtype=torch.float32, device=self.device)
 
         # Set preparation pulses
         self.fa_prep = self.fa_init * (1. + (random.random() - .5) * .2)

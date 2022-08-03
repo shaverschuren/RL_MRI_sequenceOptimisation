@@ -922,11 +922,18 @@ class RDPG(object):
         if self.single_fa:
             theta_str = f"FA: {float(self.env.fa):5.1f} - "
         else:
-            theta_str = "Theta knots: ["
+            theta_str = "Pulsetrain params: ["
             for i in range(len(action)):
                 # Get action and theta for this idx
                 action_part = action[i]
-                theta_part = self.env.pulsetrain_param_vector[i]
+
+                if i == 0:
+                    theta_part = self.env.fa_prep
+                elif i == 1:
+                    theta_part = self.env.acq_base_fa
+                else:
+                    theta_part = self.env.acq_delta_nodes[i - 2]
+
                 # Determine color
                 if action_part > 0.: theta_color = "\033[92m↑"
                 elif action_part < 0.: theta_color = "\033[91m↓"
@@ -1365,8 +1372,8 @@ class RDPG(object):
                     ),
                     # Theta knots
                     torch.zeros(
-                        (1, self.env.n_actions), device=self.device,
-                        dtype=torch.float
+                        (1, self.env.parametrization_n_knots + 1),
+                        device=self.device, dtype=torch.float
                     )
                 ]
                 next_states = [
@@ -1382,8 +1389,8 @@ class RDPG(object):
                     ),
                     # Theta knots
                     torch.zeros(
-                        (1, self.env.n_actions), device=self.device,
-                        dtype=torch.float
+                        (1, self.env.parametrization_n_knots + 1),
+                        device=self.device, dtype=torch.float
                     )
                 ]
 
