@@ -795,7 +795,7 @@ class RDPG(object):
         ]
         if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
         else: self.logs_fields.extend([
-            "cnr_loss", "cnr_pred", "theta", "theta_norm",
+            "cnr_loss", "cnr_pred", "theta", "theta_norm", "Mz",
             *[f"theta_param{i}" for i in range(self.env.n_state_vector)]
         ])
 
@@ -866,6 +866,7 @@ class RDPG(object):
                     step=-1
                 )
             else:
+                # Log theta parameters
                 for i in range(self.env.n_state_vector):         # type: ignore
                     self.logger.log_scalar(
                         field=f"theta_param{i}",
@@ -1000,7 +1001,7 @@ class RDPG(object):
                         step=self.tick
                     )
 
-                # if final stp, log theta
+                # if final stp, log theta and longitudinal magnetisation
                 if (self.tick == self.n_ticks - 1 or done):
                     # Loop over flip angles in the pulse train
                     for i in range(len(self.env.theta)):
@@ -1013,6 +1014,16 @@ class RDPG(object):
                                 f"theta_episode_{self.episode + 1}"
                             ),
                             value=float(self.env.theta[i]),
+                            step=step
+                        )
+
+                        self.logger.log_scalar(
+                            field="Mz",
+                            tag=(
+                                f"{self.logs_tag}_{run_type}_"
+                                f"Mz_episode_{self.episode + 1}"
+                            ),
+                            value=float(self.env.recent_Mz[i]),
                             step=step
                         )
 
