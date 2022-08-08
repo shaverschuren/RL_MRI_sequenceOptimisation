@@ -95,7 +95,8 @@ class EPG(torch.nn.Module):
         theta: torch.Tensor,
         T1: torch.Tensor,
         T2: torch.Tensor,
-        TR: torch.Tensor
+        TR: torch.Tensor,
+        spoil: bool = True
     ):
         """Method for GPU-accelerated single-compartment Gradient Echo EPG
 
@@ -122,6 +123,9 @@ class EPG(torch.nn.Module):
             TR : torch.Tensor(dtype=float32)
                 Tensor containing a single scalar value, being the repetition
                 time of the sequence
+            spoil : bool
+                Boolean, whether to use spoiling between repetitions.
+                Default = True
 
         Returns
         -------
@@ -193,6 +197,15 @@ class EPG(torch.nn.Module):
         FF = torch.zeros((im_dim, N, 1), dtype=torch.complex64, device=device)
         FF[:, 2] = 1.  # initial state
 
+        # Calculate indexes of transverse states in F
+        idx = (
+            list(range(4, F.shape[1], 3))[::-1]
+            + [0]
+            + list(range(3, F.shape[1], 3))
+        )
+        idx.pop(0)
+        idx.pop(0)
+
         # Main body: loop over the pulse train
         for jj in range(np2):
             # Get the RF rotation matrix
@@ -232,18 +245,15 @@ class EPG(torch.nn.Module):
             # Deal with complex conjugate after shift
             FF[:, 0] = torch.conj(FF[:, 0])
 
-        idx = (
-            list(range(4, F.shape[1], 3))[::-1]
-            + [0]
-            + list(range(3, F.shape[1], 3))
-        )
-        idx.pop(0)
-        idx.pop(0)
+            # Apply spoiling
+            if spoil: FF[idx] = 0.
 
+        # Extract F0, Fn and Zn
+        F0 = F[:, 0, :]
         Fn = F[:, idx, :]
         Zn = F[:, 2::3, :]
 
-        return F[:, 0, :], Fn, Zn
+        return F0, Fn, Zn
 
     def forward(
         self,
