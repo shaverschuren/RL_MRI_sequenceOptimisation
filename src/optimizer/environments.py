@@ -1731,10 +1731,10 @@ class KspaceEnv(object):
             theta, tr=0.050, n_prep=self.n_prep_pulses
         )
 
-        # Log longitudinal magnetisation in 0th state
-        self.recent_Mz = torch.mean(torch.abs(
-            self.simulator.epg.Zn[:, 0, :]
-        ), dim=0)
+        # Log Mz (sum all longitudinal states and average all pixels)
+        self.recent_Mz = torch.mean(torch.sum(torch.abs(
+            self.simulator.epg.Zn
+        ), dim=1), dim=0)
 
         # # Cast to np array
         # self.recent_img = self.recent_img.detach().numpy()
