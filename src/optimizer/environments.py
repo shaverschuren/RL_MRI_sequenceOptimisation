@@ -1961,11 +1961,21 @@ class KspaceEnv(object):
             self.set_pulsetrain_parametrization(self.pulsetrain_knots)
             self.get_pulsetrain_parametrization()
         else:
-            raise RuntimeError(
-                "Action not in action space. Expected something "
-                f"in range {self.action_space.ranges} but got "
-                f"{action_np}"
-            )
+            # Slight bugfix for error that sometimes occurs when writing
+            # action from GPU to CPU
+            if (np.isnan(action_np)).any():
+                warnings.warn("Got NaN action array, moving on")
+                self.tick -= 1
+                if (torch.isnan(action)).any():
+                    self.step(torch.zeros(action.size(), device=self.device))
+                else:
+                    self.step(action)
+            else:
+                raise RuntimeError(
+                    "Action not in action space. Expected something "
+                    f"in range {self.action_space.ranges} but got "
+                    f"{action_np}"
+                )
 
         # Run EPG
         self.run_simulation_and_update()
