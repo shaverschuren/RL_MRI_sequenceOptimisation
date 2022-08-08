@@ -1937,8 +1937,8 @@ class KspaceEnv(object):
             # Calculate deltas for:
             # prep pulse + acquisition base FA: [-1, 1] -> [1/2, 2]
             # acquisition delta FA: [-1, 1] -> [3/4, 6/4]
-            delta_prep = (((action[0] + 1.) / 2.) * 1.5 + 0.5)
-            delta_acq = (((action[1] + 1.) / 2.) * 1.5 + 0.5)
+            delta_prep = (action[0] / 2.) + 1. if action[0] < 0. else action[0] + 1.  # noqa: E501
+            delta_acq = (action[1] / 2.) + 1. if action[1] < 0. else action[1] + 1.   # noqa: E501
             deltas_nodes = action[2:]
             # Adjust prep pulses + clip values
             self.fa_prep = max(min(self.fa_prep * delta_prep, 180.), 0.)
@@ -1946,12 +1946,12 @@ class KspaceEnv(object):
                 self.theta_prep * delta_prep, 0., 180.
             )
             # Adjust acq pulses + clip values
-            self.acq_base_fa = max(min(self.acq_base_fa * delta_acq, 180.), 0.)
+            self.acq_base_fa = max(min(self.acq_base_fa * delta_acq, 90.), 0.)
             self.acq_delta_nodes += deltas_nodes
             self.pulsetrain_knots = torch.clip(torch.tensor([
                 self.acq_base_fa + self.acq_delta_nodes[i]
                 for i in range(self.parametrization_n_knots)
-            ], dtype=torch.float32, device=self.device), 0., 180.)
+            ], dtype=torch.float32, device=self.device), 0., 90.)
 
             # Adjust theta
             self.set_pulsetrain_parametrization(self.pulsetrain_knots)
