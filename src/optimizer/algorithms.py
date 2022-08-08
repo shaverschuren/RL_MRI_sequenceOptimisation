@@ -795,7 +795,7 @@ class RDPG(object):
         ]
         if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
         else: self.logs_fields.extend([
-            "cnr_loss", "cnr_pred", "theta", "theta_norm", "Mz",
+            "cnr_loss", "cnr_pred", "theta", "theta_norm", "Mz", "F0",
             *[f"theta_param{i}" for i in range(self.env.n_state_vector)]
         ])
 
@@ -1014,6 +1014,7 @@ class RDPG(object):
                     for i in range(len(self.env.theta)):
                         step = -self.env.n_prep_pulses + i
 
+                        # Theta
                         self.logger.log_scalar(
                             field="theta",
                             tag=(
@@ -1023,7 +1024,7 @@ class RDPG(object):
                             value=float(self.env.theta[i]),
                             step=step
                         )
-
+                        # Mz
                         self.logger.log_scalar(
                             field="Mz",
                             tag=(
@@ -1031,6 +1032,16 @@ class RDPG(object):
                                 f"Mz_episode_{self.episode + 1}"
                             ),
                             value=float(self.env.recent_Mz[i]),
+                            step=step
+                        )
+                        # F0
+                        self.logger.log_scalar(
+                            field="F0",
+                            tag=(
+                                f"{self.logs_tag}_{run_type}_"
+                                f"F0_episode_{self.episode + 1}"
+                            ),
+                            value=float(self.env.recent_F0[i]),
                             step=step
                         )
 

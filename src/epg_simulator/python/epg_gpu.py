@@ -292,9 +292,9 @@ class EPG(torch.nn.Module):
             theta = torch.tensor(theta, dtype=torch.complex64, device=device)
 
         # Run GRE simulation
-        s, self.Fn, self.Zn = self.EPG_GRE(device, theta, T1, T2, TR)
+        self.F0, self.Fn, self.Zn = self.EPG_GRE(device, theta, T1, T2, TR)
 
-        return torch.abs(s) * PD
+        return torch.abs(self.F0) * PD
 
 
 if __name__ == "__main__":
