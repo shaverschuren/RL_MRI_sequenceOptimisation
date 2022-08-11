@@ -22,8 +22,8 @@ def tflog2pandas(path: str) -> pd.DataFrame:
     """
     DEFAULT_SIZE_GUIDANCE = {
         "compressedHistograms": 1,
-        "images": 1,
-        "scalars": 0,  # 0 means load all
+        "images": 0,    # 0: load all
+        "scalars": 0,
         "tensors": 0,
         "histograms": 1,
     }
@@ -130,7 +130,7 @@ def store_logs(
             pass
             # TODO: Retrieve images
 
-        print(" " * (15 - len(field)) + "Done")
+        print(" " * (14 - len(field)) + "Done")
 
     # Store compound dataframe
     df.to_csv(os.path.join(to_dir, "logs.csv"), index=False)
@@ -139,7 +139,7 @@ def store_logs(
     # each time series
     print("Sorting dataframes...", end="", flush=True)
     dfs_sort, series_names = sort_dataframe(df)
-    print("Done")
+    print("\t\t\tDone")
 
     # Store dataframes
     for i in range(len(series_names)):
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     if root not in sys.path: sys.path.append(root)
 
     # Setup log directory we wish to extract
-    log_dir = "logs/epg_snr_validation/2022-01-19_21-47-54"  # "logs/final_snr_rdpg_scan"
+    log_dir = "logs/final_snr_rdpg_scan"
     to_dir = "tmp/tryout_logs"
 
     # Extract logs from tb
