@@ -24,6 +24,7 @@ def tflog2pandas(path: str) -> pd.DataFrame:
         "compressedHistograms": 1,
         "images": 1,
         "scalars": 0,  # 0 means load all
+        "tensors": 0,
         "histograms": 1,
     }
     runlog_data = pd.DataFrame({"tag": [], "metric": [], "value": [], "step": []})
@@ -155,7 +156,7 @@ if __name__ == '__main__':
     if root not in sys.path: sys.path.append(root)
 
     # Setup log directory we wish to extract
-    log_dir = "logs/final_snr_rdpg_scan"
+    log_dir = "logs/epg_snr_validation/2022-01-19_21-47-54"  # "logs/final_snr_rdpg_scan"
     to_dir = "tmp/tryout_logs"
 
     # Extract logs from tb
