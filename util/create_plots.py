@@ -12,7 +12,24 @@ import tb2csv
 def generate_plots(dirs: dict[str, str]):
     """Generate plots"""
 
-    pass
+    # Training curve A - SNR
+    df_a_snr_train = pd.read_csv(
+        os.path.join(dirs["to_dir"], "a_snr_train", "train_episodes.csv")
+    )
+
+    # Training curve A - CNR
+    df_a_cnr_train = pd.read_csv(
+        os.path.join(dirs["to_dir"], "a_cnr_train", "train_episodes.csv")
+    )
+
+    # Training curve B
+    df_b_train = pd.read_csv(
+        os.path.join(dirs["to_dir"], "b_train", "train_episodes.csv")
+    )
+
+    # Test curves A - SNR
+
+    # Test curves A - CNR
 
 
 def extract_tb_logs(dirs: dict[str, str]):

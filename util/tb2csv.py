@@ -5,6 +5,7 @@ import traceback
 from glob import glob
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 import tensorflow as tf
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
@@ -60,19 +61,16 @@ def sort_dataframe(df: pd.DataFrame):
 
     # Loop over tags and construct time series
     dfs_sort = []
-    for tag in unique_tags:
+    for tag in tqdm(unique_tags):
         # Retrieve part of dataframe from this time-series
         df_part = df.loc[df["tag"] == tag]
 
         # Retrieve all possible metrics and sort them in order
-        metrics = df["metric"].unique()
+        metrics = df_part["metric"].unique()
         metrics.sort()
         # Retrieve all possible steps and sort them in order
-        steps = df["step"].unique()
+        steps = df_part["step"].unique()
         steps.sort()
-
-        # Construct new dataframe
-        # df_sort = pd.DataFrame(columns=["step"] + list(metrics))
 
         # Loop over steps
         rows = []
@@ -85,9 +83,6 @@ def sort_dataframe(df: pd.DataFrame):
                     value = df_step.loc[df_step["metric"] == metric]["value"]
                     if type(value) == float: values.append(value)
                     else: values.append(value.array[0])
-                    # values.append(
-                    #     df_step.loc[df_step["metric"] == metric]["value"]
-                    # )
                 except Exception as e:
                     values.append(np.nan)
 
@@ -137,9 +132,8 @@ def store_logs(
 
     # Sort through dataframe to create separate dataframes for
     # each time series
-    print("Sorting dataframes...", end="", flush=True)
+    print("Sorting dataframes...")
     dfs_sort, series_names = sort_dataframe(df)
-    print("\t\t\tDone")
 
     # Store dataframes
     for i in range(len(series_names)):
