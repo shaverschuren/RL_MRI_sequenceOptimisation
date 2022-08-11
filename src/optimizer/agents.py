@@ -526,8 +526,8 @@ class RDPGAgent(object):
             epsilon_decay: float = 1. - 2e-3,
             tbptt_k1: int = 5,
             tbptt_k2: int = 5,
-            alpha_actor: float = 1e-3,
-            alpha_critic: float = 1e-2,
+            alpha_actor: float = 5e-4,
+            alpha_critic: float = 1e-3,
             alpha_cnr_predictor: float = 1e-3,
             tau: float = 1e-2,
             device: Union[torch.device, None] = None):
