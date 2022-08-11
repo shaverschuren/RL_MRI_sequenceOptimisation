@@ -538,24 +538,16 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
                 "lstm", nn.LSTM(
                     input_size=self.hidden_size,
                     hidden_size=self.hidden_size,
-                    num_layers=3)
+                    num_layers=1)
             ),
             ("fc2", nn.Linear(self.hidden_size, self.hidden_size * 2)),
             ("relu2", nn.ReLU()),
-            ("fc3", nn.Linear(self.hidden_size * 2, self.hidden_size * 4)),
+            ("fc3", nn.Linear(self.hidden_size * 2, self.hidden_size)),
             ("relu3", nn.ReLU()),
-            ("fc4", nn.Linear(self.hidden_size * 4, self.hidden_size * 4)),
+            ("fc4", nn.Linear(self.hidden_size, self.hidden_size // 2)),
             ("relu4", nn.ReLU()),
-            ("fc5", nn.Linear(self.hidden_size * 4, self.hidden_size * 4)),
+            ("fc5", nn.Linear(self.hidden_size // 2, self.output_size * 2)),
             ("relu5", nn.ReLU()),
-            ("fc6", nn.Linear(self.hidden_size * 4, self.hidden_size * 4)),
-            ("relu6", nn.ReLU()),
-            ("fc7", nn.Linear(self.hidden_size * 4, self.hidden_size)),
-            ("relu7", nn.ReLU()),
-            ("fc8", nn.Linear(self.hidden_size, self.hidden_size // 2)),
-            ("relu8", nn.ReLU()),
-            ("fc9", nn.Linear(self.hidden_size // 2, self.output_size * 2)),
-            ("relu9", nn.ReLU()),
             ("output", nn.Linear(self.output_size * 2, self.output_size))
         ]
         if self.output_activation.lower() == "tanh":

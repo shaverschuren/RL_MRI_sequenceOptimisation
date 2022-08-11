@@ -526,8 +526,8 @@ class RDPGAgent(object):
             epsilon_decay: float = 1. - 2e-3,
             tbptt_k1: int = 5,
             tbptt_k2: int = 5,
-            alpha_actor: float = 1e-4,
-            alpha_critic: float = 1e-3,
+            alpha_actor: float = 1e-3,
+            alpha_critic: float = 1e-2,
             alpha_cnr_predictor: float = 1e-3,
             tau: float = 1e-2,
             device: Union[torch.device, None] = None):
@@ -750,14 +750,14 @@ class RDPGAgent(object):
                     *self.actor.stack_kspace.parameters(),   # type: ignore
                     *self.actor.stack_theta.parameters(),    # type: ignore
                     *self.actor.stack_rnn.parameters()       # type: ignore
-                ], lr=self.alpha_actor, weight_decay=1e-4
+                ], lr=self.alpha_actor, weight_decay=1e-5
             )
             self.critic_optimizer = optim.Adam(
                 [
                     *self.critic.stack_kspace.parameters(),  # type: ignore
                     *self.critic.stack_theta.parameters(),   # type: ignore
                     *self.critic.stack_rnn.parameters()      # type: ignore
-                ], lr=self.alpha_critic, weight_decay=1e-4
+                ], lr=self.alpha_critic, weight_decay=1e-5
             )
 
         # Setup criterions
