@@ -4,6 +4,7 @@ from typing import Union
 import traceback
 from glob import glob
 import pandas as pd
+import numpy as np
 import tensorflow as tf
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
@@ -49,6 +50,56 @@ def tflog2pandas(path: str) -> pd.DataFrame:
     return runlog_data
 
 
+def sort_dataframe(df: pd.DataFrame):
+    """Sort compound dataframe to create separate time-series"""
+
+    # Retrieve unique tags and construct series names
+    unique_tags = df["tag"].unique()
+    series_names = [tag[20:] for tag in unique_tags]
+
+    # Loop over tags and construct time series
+    dfs_sort = []
+    for tag in unique_tags:
+        # Retrieve part of dataframe from this time-series
+        df_part = df.loc[df["tag"] == tag]
+
+        # Retrieve all possible metrics and sort them in order
+        metrics = df["metric"].unique()
+        metrics.sort()
+        # Retrieve all possible steps and sort them in order
+        steps = df["step"].unique()
+        steps.sort()
+
+        # Construct new dataframe
+        # df_sort = pd.DataFrame(columns=["step"] + list(metrics))
+
+        # Loop over steps
+        rows = []
+        for step in steps:
+            df_step = df_part.loc[df_part["step"] == step]
+            values = [step]
+            # Loop over metrics
+            for metric in metrics:
+                try:
+                    value = df_step.loc[df_step["metric"] == metric]["value"]
+                    if type(value) == float: values.append(value)
+                    else: values.append(value.array[0])
+                    # values.append(
+                    #     df_step.loc[df_step["metric"] == metric]["value"]
+                    # )
+                except Exception as e:
+                    values.append(np.nan)
+
+            # Append current row to rows
+            rows.append(values)
+
+        df_sort = pd.DataFrame(rows, columns=["step"] + list(metrics))
+
+        dfs_sort.append(df_sort)
+
+    return dfs_sort, series_names
+
+
 def store_logs(
     from_dir: Union[str, os.PathLike],
     to_dir: Union[str, os.PathLike]
@@ -80,8 +131,21 @@ def store_logs(
 
         print(" " * (15 - len(field)) + "Done")
 
-    # Store dataframe
+    # Store compound dataframe
     df.to_csv(os.path.join(to_dir, "logs.csv"), index=False)
+
+    # Sort through dataframe to create separate dataframes for
+    # each time series
+    print("Sorting dataframes...", end="", flush=True)
+    dfs_sort, series_names = sort_dataframe(df)
+    print("Done")
+
+    # Store dataframes
+    for i in range(len(series_names)):
+        df_sort = dfs_sort[i]
+        series_name = series_names[i]
+
+        df_sort.to_csv(os.path.join(to_dir, series_name + ".csv"), index=False)
 
 
 if __name__ == '__main__':
