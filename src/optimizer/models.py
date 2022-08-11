@@ -544,10 +544,12 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
             ("relu2", nn.ReLU()),
             ("fc3", nn.Linear(self.hidden_size * 2, self.hidden_size)),
             ("relu3", nn.ReLU()),
-            ("fc4", nn.Linear(self.hidden_size, self.hidden_size // 2)),
+            ("fc4", nn.Linear(self.hidden_size, self.hidden_size)),
             ("relu4", nn.ReLU()),
-            ("fc5", nn.Linear(self.hidden_size // 2, self.output_size * 2)),
+            ("fc5", nn.Linear(self.hidden_size, self.hidden_size // 2)),
             ("relu5", nn.ReLU()),
+            ("fc6", nn.Linear(self.hidden_size // 2, self.output_size * 2)),
+            ("relu6", nn.ReLU()),
             ("output", nn.Linear(self.output_size * 2, self.output_size))
         ]
         if self.output_activation.lower() == "tanh":
