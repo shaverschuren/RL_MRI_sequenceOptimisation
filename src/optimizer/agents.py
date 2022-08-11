@@ -750,14 +750,14 @@ class RDPGAgent(object):
                     *self.actor.stack_kspace.parameters(),   # type: ignore
                     *self.actor.stack_theta.parameters(),    # type: ignore
                     *self.actor.stack_rnn.parameters()       # type: ignore
-                ], lr=self.alpha_actor, weight_decay=1e-5
+                ], lr=self.alpha_actor
             )
             self.critic_optimizer = optim.Adam(
                 [
                     *self.critic.stack_kspace.parameters(),  # type: ignore
                     *self.critic.stack_theta.parameters(),   # type: ignore
                     *self.critic.stack_rnn.parameters()      # type: ignore
-                ], lr=self.alpha_critic, weight_decay=1e-5
+                ], lr=self.alpha_critic
             )
 
         # Setup criterions
