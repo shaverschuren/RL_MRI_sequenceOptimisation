@@ -149,6 +149,23 @@ def store_logs(
         df_sort.to_csv(os.path.join(to_dir, series_name + ".csv"), index=False)
 
 
+def main(log_dirs, to_dirs):
+    """Main extractor function"""
+
+    for i in range(len(log_dirs)):
+        # Select directories
+        log_dir = log_dirs[i]
+        to_dir = to_dirs[i]
+
+        # Verbose
+        print("-----------------------------------")
+        print(f"Extracting {log_dir}")
+        print("-----------------------------------")
+
+        # Extract logs from tb
+        store_logs(log_dir, to_dir)
+
+
 if __name__ == '__main__':
 
     # Add root to path
@@ -156,8 +173,7 @@ if __name__ == '__main__':
     if root not in sys.path: sys.path.append(root)
 
     # Setup log directory we wish to extract
-    log_dir = "logs/final_snr_rdpg_scan"
-    to_dir = "tmp/tryout_logs"
+    log_dirs = ["logs/final_snr_rdpg_scan"]
+    to_dirs = ["tmp/tryout_logs"]
 
-    # Extract logs from tb
-    store_logs(log_dir, to_dir)
+    main(log_dirs, to_dirs)
