@@ -538,7 +538,7 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
                 "lstm", nn.LSTM(
                     input_size=self.hidden_size,
                     hidden_size=self.hidden_size,
-                    num_layers=1)
+                    num_layers=2)
             ),
             ("fc2", nn.Linear(self.hidden_size, self.hidden_size * 2)),
             ("relu2", nn.ReLU()),
@@ -630,8 +630,8 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
         """Reset hidden state of the lstm module"""
 
         self.hx = Variable(
-            torch.zeros(1, batch_size, self.hidden_size)
+            torch.zeros(2, batch_size, self.hidden_size)
         ).to(self.device)
         self.cx = Variable(
-            torch.zeros(1, batch_size, self.hidden_size)
+            torch.zeros(2, batch_size, self.hidden_size)
         ).to(self.device)
