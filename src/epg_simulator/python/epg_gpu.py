@@ -277,9 +277,9 @@ class EPG(torch.nn.Module):
             T2 = torch.ones((256, 1), dtype=torch.float32, device=device) * 40
         else:
             if quantitative_maps is not None:
-                PD = quantitative_maps[0, :, :]
-                T1 = quantitative_maps[1, :, :]
-                T2 = quantitative_maps[2, :, :]
+                T1 = quantitative_maps[0, :, :]
+                T2 = quantitative_maps[1, :, :]
+                PD = quantitative_maps[2, :, :]
             else:
                 raise ValueError(
                     "If not in test mode, quantitative_maps must be passed"
