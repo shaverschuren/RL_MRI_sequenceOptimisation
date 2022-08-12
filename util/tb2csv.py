@@ -1,3 +1,5 @@
+"""Module for extracting TensorBoard logs to .csv files"""
+
 import os
 import sys
 from typing import Union
