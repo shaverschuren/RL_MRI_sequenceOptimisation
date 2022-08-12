@@ -6,6 +6,7 @@ from typing import Union
 import traceback
 from glob import glob
 import pandas as pd
+import pickle
 import numpy as np
 from tqdm import tqdm
 import tensorflow as tf
@@ -52,6 +53,47 @@ def tflog2pandas(path: str) -> pd.DataFrame:
         print("Event file possibly corrupt: {}".format(path))
         traceback.print_exc()
     return runlog_data
+
+
+def tf_img2np(path: str) -> Union[dict[str, list], None]:
+    """Converts single tensorflow log file into array of images"""
+
+    DEFAULT_SIZE_GUIDANCE = {
+        "compressedHistograms": 1,
+        "images": 0,    # 0: load all
+        "scalars": 0,
+        "tensors": 0,
+        "histograms": 1,
+    }
+
+    # Initialize dict
+    imgs = []
+    steps = []
+
+    try:
+        event_acc = EventAccumulator(path, DEFAULT_SIZE_GUIDANCE)
+        event_acc.Reload()
+        tags = event_acc.Tags()["tensors"]
+        for tag in tags:
+            event_list = event_acc.Tensors(tag)
+            imgs_ = list(map(
+                lambda x: np.reshape(tf.image.decode_image(tf.make_ndarray(x.tensor_proto)[2]).numpy(), (288, 288)),
+            event_list))
+            steps_ = list(map(lambda x: x.step, event_list))
+
+            imgs.append(imgs_)
+            steps.append(steps_)
+
+    # Dirty catch of DataLossError
+    except Exception:
+        print("Event file possibly corrupt: {}".format(path))
+        traceback.print_exc()
+
+        return
+
+    return dict(
+        zip(tags, [[*zip(imgs[i], steps[i])] for i in range(len(tags))])
+    )
 
 
 def sort_dataframe(df: pd.DataFrame):
@@ -121,11 +163,15 @@ def store_logs(
 
         # Extract data from event file
         if "/img/" not in event_file:
+            # Retrieve scalar data
             df_file = tflog2pandas(event_file)
             df = pd.concat([df, df_file])
         else:
-            pass
-            # TODO: Retrieve images
+            # Retrieve images
+            imgs = tf_img2np(event_file)
+            # Store images in .pickle file for later
+            with open(os.path.join(to_dir, "img.pickle"), 'wb') as f:
+                pickle.dump(imgs, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         print(" " * (14 - len(field)) + "Done")
 
@@ -169,7 +215,7 @@ if __name__ == '__main__':
     if root not in sys.path: sys.path.append(root)
 
     # Setup log directory we wish to extract
-    log_dirs = ["logs/final_snr_rdpg_scan"]
+    log_dirs = ["logs/final_a_snr_rdpg_scan"]
     to_dirs = ["tmp/tryout_logs"]
 
     main(log_dirs, to_dirs)
