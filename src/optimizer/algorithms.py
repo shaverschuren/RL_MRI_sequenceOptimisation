@@ -975,9 +975,9 @@ class RDPG(object):
                 if type(self.env.recent_img) == torch.Tensor:
                     image = np.array(
                         self.env.recent_img.cpu()  # type: ignore
-                    ) / 5.
+                    )
                 elif type(self.env.recent_img) == np.ndarray:
-                    image = self.env.recent_img / 5.
+                    image = self.env.recent_img
                 else: raise TypeError()
 
                 # Log image
