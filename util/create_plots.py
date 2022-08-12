@@ -9,8 +9,8 @@ import seaborn as sns
 import tb2csv
 
 
-def plot_a_snr_train(dirs):
-    """Plot training curve A (SNR)"""
+def plot_a_snr_train_loss(dirs):
+    """Plot loss curve for experiment A (SNR)"""
 
     # Retrieve appropriate dataframe
     df_a_snr_train = pd.read_csv(
@@ -34,11 +34,11 @@ def plot_a_snr_train(dirs):
     plt.xlim(0, len(df_a_snr_train))
     plt.ylabel("Loss")
     plt.yticks([0], [0])
-    plt.xlabel("Timesteps")
+    plt.xlabel("Episodes")
     plt.xticks([0, len(df_a_snr_train)], [0, len(df_a_snr_train)])
     # a_snr_train = sns.lineplot("step", "value", hue="variable", data=pd.melt(df_a_snr_train, "step"))
-    ax1 = sns.lineplot(x="step", y="policy_loss_ave", ci=5, data=df_a_snr_train)
-    ax2 = sns.lineplot(x="step", y="critic_loss_ave", ci=5, data=df_a_snr_train)
+    ax1 = sns.lineplot(x="step", y="policy_loss_ave", data=df_a_snr_train)
+    ax2 = sns.lineplot(x="step", y="critic_loss_ave", data=df_a_snr_train)
 
     plt.fill_between(df_a_snr_train.step, policy_loss_CI_min, policy_loss_CI_max, alpha=.3)
     plt.fill_between(df_a_snr_train.step, critic_loss_CI_min, critic_loss_CI_max, alpha=.3)
@@ -50,8 +50,8 @@ def plot_a_snr_train(dirs):
     fig.savefig(os.path.join(dirs["to_dir"], "a_snr_train.png"))
 
 
-def plot_a_cnr_train(dirs):
-    """Plot training curve A (CNR)"""
+def plot_a_cnr_train_loss(dirs):
+    """Plot loss curve for experiment A (CNR)"""
 
     # Retrieve appropriate dataframe
     df_a_cnr_train = pd.read_csv(
@@ -75,11 +75,11 @@ def plot_a_cnr_train(dirs):
     plt.xlim(0, len(df_a_cnr_train))
     plt.ylabel("Loss")
     plt.yticks([0], [0])
-    plt.xlabel("Timesteps")
+    plt.xlabel("Episodes")
     plt.xticks([0, len(df_a_cnr_train)], [0, len(df_a_cnr_train)])
     # a_snr_train = sns.lineplot("step", "value", hue="variable", data=pd.melt(df_a_snr_train, "step"))
-    ax1 = sns.lineplot(x="step", y="policy_loss_ave", ci=5, data=df_a_cnr_train)
-    ax2 = sns.lineplot(x="step", y="critic_loss_ave", ci=5, data=df_a_cnr_train)
+    ax1 = sns.lineplot(x="step", y="policy_loss_ave", data=df_a_cnr_train)
+    ax2 = sns.lineplot(x="step", y="critic_loss_ave", data=df_a_cnr_train)
 
     plt.fill_between(df_a_cnr_train.step, policy_loss_CI_min, policy_loss_CI_max, alpha=.3)
     plt.fill_between(df_a_cnr_train.step, critic_loss_CI_min, critic_loss_CI_max, alpha=.3)
@@ -91,14 +91,53 @@ def plot_a_cnr_train(dirs):
     fig.savefig(os.path.join(dirs["to_dir"], "a_cnr_train.png"))
 
 
+def plot_a_metrics_test(dirs):
+    """Plot loss curve for experiment A (CNR)"""
+
+    # Retrieve appropriate dataframes
+    df_snr = pd.concat([pd.read_csv(
+        os.path.join(dirs["to_dir"], "a_snr_test", f"test_episode_{i}.csv")
+    ).assign(run=[i] * 11) for i in range(1, 11)]).reset_index()
+    df_cnr = pd.concat([pd.read_csv(
+        os.path.join(dirs["to_dir"], "a_cnr_test", f"test_episode_{i}.csv")
+    ).assign(run=[i] * 11) for i in range(1, 11)]).reset_index()
+
+    # Create new columns for plotting
+    df_snr["snr_normMax"] = df_snr["snr"] / max(df_snr["snr"])
+    df_cnr["cnr_normMax"] = df_cnr["cnr"] / max(df_cnr["cnr"])
+
+    # Create plots
+    fig, ax = plt.subplots()
+    plt.xlim(-1, 9)
+    plt.ylim(0.5, 1)
+    plt.ylabel("Percentage of maximum SNR/CNR")
+    plt.yticks([0.5, 0.75, 1], ["50%", "75%", "100%"])
+    plt.xlabel("Timesteps")
+    plt.xticks([-1, 9], [0, "T"])
+
+    ax1 = sns.lineplot(x="step", y="snr_normMax", data=df_snr, label="SNR")
+    ax2 = sns.lineplot(x="step", y="cnr_normMax", data=df_cnr, label="CNR")
+
+    plt.legend(bbox_to_anchor=(0.95, 0.2))
+
+    # plt.axhline(y=1., color='k', linestyle='--', linewidth=.5)
+
+    # Create and store figure
+    # fig = a_snr_train.get_figure()
+    fig.savefig(os.path.join(dirs["to_dir"], "a_test_metric.png"))
+
+
 def generate_plots(dirs: dict[str, str]):
     """Generate plots"""
 
-    # Training curve A - SNR
-    plot_a_snr_train(dirs)
+    # Training curves A - SNR
+    plot_a_snr_train_loss(dirs)
 
-    # Training curve A - CNR
-    plot_a_cnr_train(dirs)
+    # Training curves A - CNR
+    plot_a_cnr_train_loss(dirs)
+
+    # Test curve A
+    plot_a_metrics_test(dirs)
 
     # Training curve B
     # df_b_train = pd.read_csv(
@@ -142,7 +181,7 @@ if __name__ == '__main__':
         "a_snr_train": "logs/final_a_snr_rdpg",
         "a_snr_test": "logs/final_a_snr_rdpg_scan",
         "a_cnr_train": "logs/final_a_cnr_rdpg",
-        "a_cnr_test": "logs/final_a_snr_rdpg_scan",
+        "a_cnr_test": "logs/final_a_cnr_rdpg_scan",
         "b_train": "logs/final_b_cnr",
         "b_test": "logs/final_b_cnr",
         "to_dir": "tmp/figures_for_publication"
