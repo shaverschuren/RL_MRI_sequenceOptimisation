@@ -5,6 +5,7 @@ import sys
 import numpy as np
 import pandas as pd
 import pickle
+import imutils
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tb2csv
@@ -182,7 +183,46 @@ def plot_a_snr_images(dirs):
 
         # Yield slightly more contrast intra- and inter-phantom via windowing
         img_concat = np.array(img_concat, dtype=np.float64)
-        img_concat -= np.percentile(img_concat, 50.)
+        img_concat -= 40.  # np.percentile(img_concat, 55.)
+        img_concat *= 256. / np.percentile(img_concat, 99.)
+        img_concat = np.array(np.clip(img_concat, 0, 255), dtype=np.uint8)
+
+        # Store image row
+        plt.imshow(img_concat, cmap="gray")
+        plt.axis('off')
+        plt.savefig(os.path.join(to_img_dir, f"{name}.png"), dpi=500)
+        plt.close()
+
+
+def plot_a_cnr_images(dirs):
+    """Plot series of images for illustrative purposes (experiment A)"""
+
+    # Create new dir if applicable
+    to_img_dir = os.path.join(dirs["to_dir"], "a_cnr_test", "imgs")
+    if not os.path.isdir(to_img_dir): os.mkdir(to_img_dir)
+
+    # Get data
+    with open(os.path.join(dirs["to_dir"], "a_cnr_test", "img.pickle"), 'rb') as f:
+        imgs_dict = pickle.load(f)
+
+    # Loop over tags
+    for tag in imgs_dict.keys():
+        # Retrieve name of tag
+        name = tag[20:]
+
+        # Retrieve image series and steps
+        imgs = [row[0] for row in imgs_dict[tag]]
+        steps = [row[1] for row in imgs_dict[tag]]
+
+        # Rotate and crop images
+        imgs = [imutils.rotate(img, angle=-23.5)[95: 143, 93: 195].transpose() for img in imgs]
+
+        # Concatenate images to side-by-side
+        img_concat = np.concatenate(imgs, axis=1)
+
+        # Yield slightly more contrast intra- and inter-phantom via windowing
+        img_concat = np.array(img_concat, dtype=np.float64)
+        img_concat -= 40.  # np.percentile(img_concat, 55.)
         img_concat *= 256. / np.percentile(img_concat, 99.)
         img_concat = np.array(np.clip(img_concat, 0, 255), dtype=np.uint8)
 
@@ -255,7 +295,8 @@ def generate_plots(dirs: dict[str, str]):
     # plot_a_metrics_test(dirs)
 
     # Images experiment A - SNR & CNR
-    plot_a_snr_images(dirs)
+    # plot_a_snr_images(dirs)
+    plot_a_cnr_images(dirs)
 
     # Training curve B
     # plot_b_train_loss(dirs)
