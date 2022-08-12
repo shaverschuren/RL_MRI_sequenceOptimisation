@@ -509,59 +509,41 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
             ("conv2", nn.Conv1d(4, 8, 5, padding=2)),
             ("relu2", nn.ReLU()),
             ("pool2", nn.MaxPool1d(kernel_size=2)),
-            ("conv3", nn.Conv1d(8, 8, 5, padding=2)),
-            ("relu3", nn.ReLU()),
-            ("pool3", nn.MaxPool1d(kernel_size=2)),
-            ("conv4", nn.Conv1d(8, 8, 5, padding=2)),
-            ("relu4", nn.ReLU()),
-            ("pool4", nn.MaxPool1d(kernel_size=2)),
             ("flatten", nn.Flatten(1)),
-            ("fc1", nn.Linear(self.input_kspace_vector_size // 2, 128)),
-            ("relu5", nn.ReLU()),
-            ("fc2", nn.Linear(128, 64)),
-            ("relu6", nn.ReLU()),
-            ("fc3", nn.Linear(64, 32)),
-            ("relu7", nn.ReLU()),
-            ("fc4", nn.Linear(32, 16)),
-            ("relu8", nn.ReLU()),
-            ("fc5", nn.Linear(16, kspace_output_size)),
-            ("relu9", nn.ReLU()),
+            ("fc1", nn.Linear(self.input_kspace_vector_size * 2, 64)),
+            ("relu3", nn.ReLU()),
+            ("fc2", nn.Linear(64, kspace_output_size)),
+            ("relu4", nn.ReLU())
         ]
 
         # Create theta knot encoder architecture list
-        # Layer size is dependant on theta input size (i.e. actor or critic)
+        # Layer size is dependent on theta input size (i.e. actor or critic)
         # and is rounded up to the nearest power of 2
         theta_layer_size = \
             2**(self.input_theta_vector_size * 2 - 1).bit_length()
         theta_list = [
             ("fc1", nn.Linear(self.input_theta_vector_size, theta_layer_size)),
             ("relu1", nn.ReLU()),
-            ("fc2", nn.Linear(theta_layer_size, theta_layer_size * 2)),
-            ("relu2", nn.ReLU()),
-            ("fc3", nn.Linear(theta_layer_size * 2, theta_layer_size * 2)),
-            ("relu3", nn.ReLU()),
-            ("fc4", nn.Linear(theta_layer_size * 2, theta_layer_size)),
-            ("relu4", nn.ReLU()),
-            ("fc5", nn.Linear(theta_layer_size, theta_output_size)),
-            ("relu5", nn.ReLU())
+            ("fc2", nn.Linear(theta_layer_size, theta_output_size)),
+            ("relu2", nn.ReLU())
         ]
 
         # Create RNN architecture list
         rnn_list = []
-        self.lstm_idx = 6
+        self.lstm_idx = 2
         rnn_list = [
             ("fc1", nn.Linear(rnn_input_size, self.hidden_size)),
             ("relu1", nn.ReLU()),
-            ("fc2", nn.Linear(self.hidden_size, self.hidden_size * 2)),
-            ("relu2", nn.ReLU()),
-            ("fc3", nn.Linear(self.hidden_size * 2, self.hidden_size)),
-            ("relu3", nn.ReLU()),
             (
                 "lstm", nn.LSTM(
                     input_size=self.hidden_size,
                     hidden_size=self.hidden_size,
-                    num_layers=3)
+                    num_layers=2)
             ),
+            ("fc2", nn.Linear(self.hidden_size, self.hidden_size * 2)),
+            ("relu2", nn.ReLU()),
+            ("fc3", nn.Linear(self.hidden_size * 2, self.hidden_size)),
+            ("relu3", nn.ReLU()),
             ("fc4", nn.Linear(self.hidden_size, self.hidden_size)),
             ("relu4", nn.ReLU()),
             ("fc5", nn.Linear(self.hidden_size, self.hidden_size // 2)),
@@ -650,8 +632,8 @@ class CombinedModel_PulsetrainOptimizer(nn.Module):
         """Reset hidden state of the lstm module"""
 
         self.hx = Variable(
-            torch.zeros(3, batch_size, self.hidden_size)
+            torch.zeros(2, batch_size, self.hidden_size)
         ).to(self.device)
         self.cx = Variable(
-            torch.zeros(3, batch_size, self.hidden_size)
+            torch.zeros(2, batch_size, self.hidden_size)
         ).to(self.device)

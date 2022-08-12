@@ -1579,8 +1579,9 @@ class KspaceEnv(object):
     def init_actionspace(self):
         """Initialize action space
 
-        For continuous mode, use 1 output (fa)
-        For discrete mode, use 4 outputs (fa up down, small big)
+        Action 0: Prep pulse theta
+        Action 1: Base acquisition pulse theta
+        Action 2-n: Parametrisation knots for acquisition deltas
 
         If model_done, add the "done" command to the action space
         """
@@ -1589,15 +1590,15 @@ class KspaceEnv(object):
             # Set action space type to continuous
             _type = "continuous"
 
-            # Add FA actions for prep pulses
+            # Add FA actions for prep pulses and base acquisition pulses
             action_names = [
-                f"Change FA (prep pulses)"
+                "Change FA (prep pulses)", f"Change base FA (acq pulses)"
             ]
-            action_ranges = np.array([[-1., 1.]])
+            action_ranges = np.array([[-1., 1.], [-1., 1.]])
             action_deltas = None
             # Add FA actions for acquisition pulses
             action_names.extend([
-                f"Change FA node #{node_i} (acq pulses)"
+                f"Change FA delta node #{node_i} (acq pulses)"
                 for node_i in range(self.parametrization_n_knots)
             ])
             action_ranges = np.concatenate(
@@ -1730,9 +1731,13 @@ class KspaceEnv(object):
             theta, tr=0.050, n_prep=self.n_prep_pulses
         )
 
-        # Log longitudinal magnetisation in 0th state
-        self.recent_Mz = torch.mean(torch.abs(
-            self.simulator.epg.Zn[:, 0, :]
+        # Log Mz (sum all longitudinal states and average all pixels)
+        self.recent_Mz = torch.mean(torch.sum(torch.abs(
+            self.simulator.epg.Zn
+        ), dim=1), dim=0)
+        # Log F0 (average all pixels)
+        self.recent_F0 = torch.mean(torch.abs(
+            self.simulator.epg.F0
         ), dim=0)
 
         # # Cast to np array
@@ -1933,27 +1938,44 @@ class KspaceEnv(object):
             (self.action_space.low <= action_np).all()
             and (action_np <= self.action_space.high).all()
         ):
-            # Calculate deltas [-1, 1] -> [3/4, 6/4]
-            deltas = (((action + 1.) / 2.) * 0.8 + 0.6)
+            # Calculate deltas for:
+            # prep pulse + acquisition base FA: [-1, 1] -> [1/2, 2]
+            # acquisition delta FA: [-1, 1] -> [3/4, 6/4]
+            delta_prep = (action[0] / 2.) + 1. if action[0] < 0. else action[0] + 1.  # noqa: E501
+            delta_acq = (action[1] / 2.) + 1. if action[1] < 0. else action[1] + 1.   # noqa: E501
+            deltas_nodes = action[2:]
             # Adjust prep pulses + clip values
-            self.fa_prep = max(min(self.fa_prep + deltas[0], 180.), 0.)
+            self.fa_prep = max(min(self.fa_prep * delta_prep, 180.), 0.)
             self.theta_prep = torch.clip(
-                self.theta_prep * deltas[0], 0., 180.
+                self.theta_prep * delta_prep, 0., 180.
             )
             # Adjust acq pulses + clip values
-            self.pulsetrain_knots = torch.clip(
-                self.pulsetrain_knots * deltas[1:], 0., 180.
-            )
+            self.acq_base_fa = max(min(self.acq_base_fa * delta_acq, 90.), 0.)
+            self.acq_delta_nodes += deltas_nodes
+            self.pulsetrain_knots = torch.clip(torch.tensor([
+                self.acq_base_fa + self.acq_delta_nodes[i]
+                for i in range(self.parametrization_n_knots)
+            ], dtype=torch.float32, device=self.device), 0., 90.)
 
             # Adjust theta
             self.set_pulsetrain_parametrization(self.pulsetrain_knots)
             self.get_pulsetrain_parametrization()
         else:
-            raise RuntimeError(
-                "Action not in action space. Expected something "
-                f"in range {self.action_space.ranges} but got "
-                f"{action_np}"
-            )
+            # Slight bugfix for error that sometimes occurs when writing
+            # action from GPU to CPU
+            if (np.isnan(action_np)).any():
+                warnings.warn("Got NaN action array, moving on")
+                self.tick -= 1
+                if (torch.isnan(action)).any():
+                    self.step(torch.zeros(action.size(), device=self.device))
+                else:
+                    self.step(action)
+            else:
+                raise RuntimeError(
+                    "Action not in action space. Expected something "
+                    f"in range {self.action_space.ranges} but got "
+                    f"{action_np}"
+                )
 
         # Run EPG
         self.run_simulation_and_update()
@@ -2013,12 +2035,15 @@ class KspaceEnv(object):
         if fa: self.fa_init = fa
 
         # Set pulse train parameters
-        self.pulsetrain_knots = torch.tensor(
-            [
-                self.fa_init * (1. + (random.random() - .5) * .2)
-                for _ in range(self.parametrization_n_knots)
-            ], dtype=torch.float32, device=self.device
-        )
+        self.acq_base_fa = self.fa_init * (1. + (random.random() - .5) * .2)
+        self.acq_delta_nodes = torch.tensor([
+            (random.random() - .5) * .2
+            for _ in range(self.parametrization_n_knots)
+        ], dtype=torch.float32, device=self.device)
+        self.pulsetrain_knots = torch.tensor([
+            self.acq_base_fa + self.acq_delta_nodes[i]
+            for i in range(self.parametrization_n_knots)
+        ], dtype=torch.float32, device=self.device)
 
         # Set preparation pulses
         self.fa_prep = self.fa_init * (1. + (random.random() - .5) * .2)

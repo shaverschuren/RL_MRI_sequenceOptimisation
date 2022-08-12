@@ -795,7 +795,7 @@ class RDPG(object):
         ]
         if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
         else: self.logs_fields.extend([
-            "cnr_loss", "cnr_pred", "theta", "theta_norm", "Mz",
+            "cnr_loss", "cnr_pred", "theta", "theta_norm", "Mz", "F0",
             *[f"theta_param{i}" for i in range(self.env.n_state_vector)]
         ])
 
@@ -922,11 +922,18 @@ class RDPG(object):
         if self.single_fa:
             theta_str = f"FA: {float(self.env.fa):5.1f} - "
         else:
-            theta_str = "Theta knots: ["
+            theta_str = "Pulsetrain params: ["
             for i in range(len(action)):
                 # Get action and theta for this idx
                 action_part = action[i]
-                theta_part = self.env.pulsetrain_param_vector[i]
+
+                if i == 0:
+                    theta_part = self.env.fa_prep
+                elif i == 1:
+                    theta_part = self.env.acq_base_fa
+                else:
+                    theta_part = self.env.acq_delta_nodes[i - 2]
+
                 # Determine color
                 if action_part > 0.: theta_color = "\033[92m↑"
                 elif action_part < 0.: theta_color = "\033[91m↓"
@@ -1007,6 +1014,7 @@ class RDPG(object):
                     for i in range(len(self.env.theta)):
                         step = -self.env.n_prep_pulses + i
 
+                        # Theta
                         self.logger.log_scalar(
                             field="theta",
                             tag=(
@@ -1016,7 +1024,7 @@ class RDPG(object):
                             value=float(self.env.theta[i]),
                             step=step
                         )
-
+                        # Mz
                         self.logger.log_scalar(
                             field="Mz",
                             tag=(
@@ -1024,6 +1032,16 @@ class RDPG(object):
                                 f"Mz_episode_{self.episode + 1}"
                             ),
                             value=float(self.env.recent_Mz[i]),
+                            step=step
+                        )
+                        # F0
+                        self.logger.log_scalar(
+                            field="F0",
+                            tag=(
+                                f"{self.logs_tag}_{run_type}_"
+                                f"F0_episode_{self.episode + 1}"
+                            ),
+                            value=float(self.env.recent_F0[i]),
                             step=step
                         )
 
@@ -1365,8 +1383,8 @@ class RDPG(object):
                     ),
                     # Theta knots
                     torch.zeros(
-                        (1, self.env.n_actions), device=self.device,
-                        dtype=torch.float
+                        (1, self.env.parametrization_n_knots + 1),
+                        device=self.device, dtype=torch.float
                     )
                 ]
                 next_states = [
@@ -1382,8 +1400,8 @@ class RDPG(object):
                     ),
                     # Theta knots
                     torch.zeros(
-                        (1, self.env.n_actions), device=self.device,
-                        dtype=torch.float
+                        (1, self.env.parametrization_n_knots + 1),
+                        device=self.device, dtype=torch.float
                     )
                 ]
 
