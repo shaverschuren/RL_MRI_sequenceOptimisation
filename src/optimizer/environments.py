@@ -1862,9 +1862,6 @@ class KspaceEnv(object):
             # Define done
             self.done = torch.tensor(done, device=self.device)
 
-    # def update_theta(self, action):
-    #     """Update theta (if applicable) using pulse train parametrization"""
-
     def set_pulsetrain_parametrization(self, parameters: torch.Tensor):
         """Set parametrization of pulse train
 
