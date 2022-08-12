@@ -59,8 +59,8 @@ def plot_a_snr_train_loss(dirs):
     plt.legend(frameon=False)
 
     # Create and store figure
-    # fig = a_snr_train.get_figure()
-    fig.savefig(os.path.join(dirs["to_dir"], "a_snr_train.png"))
+    plt.savefig(os.path.join(dirs["to_dir"], "a_snr_train.png"))
+    plt.close()
 
 
 def plot_a_cnr_train_loss(dirs):
@@ -112,7 +112,8 @@ def plot_a_cnr_train_loss(dirs):
 
 
     # Create and store figure
-    fig.savefig(os.path.join(dirs["to_dir"], "a_cnr_train.png"))
+    plt.savefig(os.path.join(dirs["to_dir"], "a_cnr_train.png"))
+    plt.close()
 
 
 def plot_a_metrics_test(dirs):
@@ -134,21 +135,29 @@ def plot_a_metrics_test(dirs):
     fig, ax = plt.subplots()
     plt.xlim(-1, 9)
     plt.ylim(0.5, 1)
-    plt.ylabel("Percentage of maximum SNR/CNR")
+    plt.ylabel("Performance")  # ("Percentage of maximum SNR/CNR")
     plt.yticks([0.5, 0.75, 1], ["50%", "75%", "100%"])
     plt.xlabel("Timesteps")
     plt.xticks([-1, 9], [0, "T"])
 
-    ax1 = sns.lineplot(x="step", y="snr_normMax", data=df_snr, label="SNR")
-    ax2 = sns.lineplot(x="step", y="cnr_normMax", data=df_cnr, label="CNR")
+    ax1 = sns.lineplot(x="step", y="snr_normMax", data=df_snr, label="SNR: $\mu \pm \sigma$")
+    ax2 = plt.plot(
+        df_snr["step"].unique(), df_snr[df_snr["run"] == 4]["snr_normMax"],
+        color="tab:blue", linestyle="dashed", linewidth=.8, label="SNR: example"
+    )
+    ax3 = sns.lineplot(x="step", y="cnr_normMax", data=df_cnr, label="CNR: $\mu \pm \sigma$")
+    ax4 = plt.plot(
+        df_cnr["step"].unique(), df_cnr[df_cnr["run"] == 3]["cnr_normMax"],
+        color="tab:orange", linestyle="dashed", linewidth=.8, label="CNR: example"
+    )
 
-    plt.legend(bbox_to_anchor=(0.95, 0.2), frameon=False)
+    plt.legend(bbox_to_anchor=(1., 0.3), frameon=False)
 
     # plt.axhline(y=1., color='k', linestyle='--', linewidth=.5)
 
     # Create and store figure
-    # fig = a_snr_train.get_figure()
-    fig.savefig(os.path.join(dirs["to_dir"], "a_test_metric.png"))
+    plt.savefig(os.path.join(dirs["to_dir"], "a_test_metric.png"))
+    plt.close()
 
 
 def plot_a_snr_images(dirs):
@@ -281,21 +290,22 @@ def plot_b_train_loss(dirs):
     plt.legend(frameon=False)
 
     # Create and store figure
-    fig.savefig(os.path.join(dirs["to_dir"], "b_train.png"))
+    plt.savefig(os.path.join(dirs["to_dir"], "b_train.png"))
+    plt.close()
 
 
 def generate_plots(dirs: dict[str, str]):
     """Generate plots"""
 
     # Training curves experiment A - SNR & CNR
-    # plot_a_snr_train_loss(dirs)
-    # plot_a_cnr_train_loss(dirs)
+    plot_a_snr_train_loss(dirs)
+    plot_a_cnr_train_loss(dirs)
 
     # # Test curve experiment A
-    # plot_a_metrics_test(dirs)
+    plot_a_metrics_test(dirs)
 
     # Images experiment A - SNR & CNR
-    # plot_a_snr_images(dirs)
+    plot_a_snr_images(dirs)
     plot_a_cnr_images(dirs)
 
     # Training curve B
