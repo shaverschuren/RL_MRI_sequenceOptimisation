@@ -1728,7 +1728,7 @@ class KspaceEnv(object):
 
         # Perform simulation
         self.recent_img, self.recent_kspace, _ = self.simulator.forward(
-            theta, tr=0.050, n_prep=self.n_prep_pulses
+            theta * torch.pi / 180., tr=0.050, n_prep=self.n_prep_pulses
         )
 
         # Log Mz (sum all longitudinal states and average all pixels)
