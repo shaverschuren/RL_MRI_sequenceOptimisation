@@ -119,7 +119,7 @@ class SimulatorObject():
         self,
         theta: torch.Tensor,
         tr: float = 0.050,
-        n_prep: int = 1
+        n_prep: int = 4
     ):
         """Method implementing a forward simulation of a pulse train
 
@@ -204,12 +204,16 @@ if __name__ == "__main__":
     print(f"Initialization done!    Took {initialization_time:.4f} seconds")
 
     # Run a tryout simulation
-    image, _, _ = simulator.forward(theta=torch.ones((65)) * .25 * torch.pi)
+    image, _, signals = simulator.forward(theta=torch.ones((68)) * 0.25 * np.pi)
     simulation_time = time.time() - initialization_time - start_time
     print(f"Simulation done!        Took {simulation_time:.4f} seconds")
 
     # For debugging purposes, plot result
     # import matplotlib.pyplot as plt
-    # plt.imshow(image)
-    # plt.plot(np.array(list(range(1, len(signals) + 1))), np.abs(signals))
+    # fig, axs = plt.subplots(4, 1)
+    # idx = simulator.PD_map_torch.squeeze() > 0.
+    # axs[0].imshow(image)
+    # axs[1].plot(np.array(list(range(-4, 64))), torch.mean(torch.abs(signals), dim=(1,2)))
+    # axs[2].plot(np.array(list(range(-4, 64))), torch.mean(torch.sum(torch.abs(simulator.epg.Zn), dim=1)[idx], dim=0))
+    # axs[3].plot(np.array(list(range(-4, 64))), torch.mean(torch.sum(torch.abs(simulator.epg.Fn), dim=1)[idx], dim=0))
     # plt.show()
