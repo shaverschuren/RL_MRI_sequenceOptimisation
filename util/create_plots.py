@@ -20,6 +20,8 @@ def plot_a_snr_train_loss(dirs):
     # Calculate rolling averages + CI bars
     df_a_snr_train['policy_loss_ave'] = df_a_snr_train.policy_loss.rolling(100).mean().shift(-99)
     df_a_snr_train['critic_loss_ave'] = df_a_snr_train.critic_loss.rolling(100).mean().shift(-99)
+    df_a_snr_train["reward"] = df_a_snr_train["reward"] / 10.  # Average reward per step
+    df_a_snr_train['reward_ave'] = df_a_snr_train.reward.rolling(100).mean().shift(-99)
 
     df_a_snr_train["policy_loss_res"] = abs(df_a_snr_train["policy_loss"] - df_a_snr_train["policy_loss_ave"]).rolling(50).mean().shift(-49)
     policy_loss_CI_max = df_a_snr_train['policy_loss_ave'] + df_a_snr_train["policy_loss_res"]
@@ -29,21 +31,30 @@ def plot_a_snr_train_loss(dirs):
     critic_loss_CI_max = df_a_snr_train['critic_loss_ave'] + df_a_snr_train["critic_loss_res"]
     critic_loss_CI_min = df_a_snr_train['critic_loss_ave'] - df_a_snr_train["critic_loss_res"]
 
+    df_a_snr_train["reward_res"] = abs(df_a_snr_train["reward"] - df_a_snr_train["reward_ave"]).rolling(200).mean().shift(-199)
+    reward_CI_max = (df_a_snr_train['reward_ave'] + df_a_snr_train["reward_res"]).rolling(100).mean().shift(-99)
+    reward_CI_min = (df_a_snr_train['reward_ave'] - df_a_snr_train["reward_res"]).rolling(100).mean().shift(-99)
+
     # Create plots
     fig, ax = plt.subplots()
-    plt.xlim(0, len(df_a_snr_train))
-    plt.ylabel("Loss")
+    plt.xlim(0, len(df_a_snr_train) - 400)
+    plt.ylim(-8, 15)
+    plt.ylabel(" ")
     plt.yticks([0], [0])
     plt.xlabel("Episodes")
-    plt.xticks([0, len(df_a_snr_train)], [0, len(df_a_snr_train)])
-    # a_snr_train = sns.lineplot("step", "value", hue="variable", data=pd.melt(df_a_snr_train, "step"))
-    ax1 = sns.lineplot(x="step", y="policy_loss_ave", data=df_a_snr_train)
-    ax2 = sns.lineplot(x="step", y="critic_loss_ave", data=df_a_snr_train)
+    plt.xticks([0, len(df_a_snr_train) - 400], [0, len(df_a_snr_train)])
+
+    ax1 = sns.lineplot(x="step", y="policy_loss_ave", data=df_a_snr_train, label="Policy loss")
+    ax2 = sns.lineplot(x="step", y="critic_loss_ave", data=df_a_snr_train, label="Critic loss")
+    ax3 = sns.lineplot(x="step", y="reward_ave", data=df_a_snr_train, label="Reward")
 
     plt.fill_between(df_a_snr_train.step, policy_loss_CI_min, policy_loss_CI_max, alpha=.3)
     plt.fill_between(df_a_snr_train.step, critic_loss_CI_min, critic_loss_CI_max, alpha=.3)
+    plt.fill_between(df_a_snr_train.step, reward_CI_min, reward_CI_max, alpha=.3)
 
     plt.axhline(y=0., color='k', linestyle='--', linewidth=.5)
+
+    plt.legend(frameon=False)
 
     # Create and store figure
     # fig = a_snr_train.get_figure()
@@ -61,6 +72,8 @@ def plot_a_cnr_train_loss(dirs):
     # Calculate rolling averages + CI bars
     df_a_cnr_train['policy_loss_ave'] = df_a_cnr_train.policy_loss.rolling(100).mean().shift(-99)
     df_a_cnr_train['critic_loss_ave'] = df_a_cnr_train.critic_loss.rolling(100).mean().shift(-99)
+    df_a_cnr_train["reward"] = df_a_cnr_train["reward"] / 10.  # Average reward per step
+    df_a_cnr_train['reward_ave'] = df_a_cnr_train.reward.rolling(100).mean().shift(-99)
 
     df_a_cnr_train["policy_loss_res"] = abs(df_a_cnr_train["policy_loss"] - df_a_cnr_train["policy_loss_ave"]).rolling(50).mean().shift(-49)
     policy_loss_CI_max = df_a_cnr_train['policy_loss_ave'] + df_a_cnr_train["policy_loss_res"]
@@ -70,21 +83,31 @@ def plot_a_cnr_train_loss(dirs):
     critic_loss_CI_max = df_a_cnr_train['critic_loss_ave'] + df_a_cnr_train["critic_loss_res"]
     critic_loss_CI_min = df_a_cnr_train['critic_loss_ave'] - df_a_cnr_train["critic_loss_res"]
 
+    df_a_cnr_train["reward_res"] = abs(df_a_cnr_train["reward"] - df_a_cnr_train["reward_ave"]).rolling(200).mean().shift(-199)
+    reward_CI_max = (df_a_cnr_train['reward_ave'] + df_a_cnr_train["reward_res"]).rolling(100).mean().shift(-99)
+    reward_CI_min = (df_a_cnr_train['reward_ave'] - df_a_cnr_train["reward_res"]).rolling(100).mean().shift(-99)
+
     # Create plots
     fig, ax = plt.subplots()
-    plt.xlim(0, len(df_a_cnr_train))
-    plt.ylabel("Loss")
+    plt.xlim(0, len(df_a_cnr_train) - 400)
+    plt.ylim(-12, 22.5)
+    plt.ylabel(" ")
     plt.yticks([0], [0])
     plt.xlabel("Episodes")
-    plt.xticks([0, len(df_a_cnr_train)], [0, len(df_a_cnr_train)])
-    # a_snr_train = sns.lineplot("step", "value", hue="variable", data=pd.melt(df_a_snr_train, "step"))
-    ax1 = sns.lineplot(x="step", y="policy_loss_ave", data=df_a_cnr_train)
-    ax2 = sns.lineplot(x="step", y="critic_loss_ave", data=df_a_cnr_train)
+    plt.xticks([0, len(df_a_cnr_train) - 400], [0, len(df_a_cnr_train)])
+
+    ax1 = sns.lineplot(x="step", y="policy_loss_ave", data=df_a_cnr_train, label="Policy loss")
+    ax2 = sns.lineplot(x="step", y="critic_loss_ave", data=df_a_cnr_train, label="Critic loss")
+    ax3 = sns.lineplot(x="step", y="reward_ave", data=df_a_cnr_train, label="Reward")
 
     plt.fill_between(df_a_cnr_train.step, policy_loss_CI_min, policy_loss_CI_max, alpha=.3)
     plt.fill_between(df_a_cnr_train.step, critic_loss_CI_min, critic_loss_CI_max, alpha=.3)
+    plt.fill_between(df_a_cnr_train.step, reward_CI_min, reward_CI_max, alpha=.3)
 
     plt.axhline(y=0., color='k', linestyle='--', linewidth=.5)
+
+    plt.legend(frameon=False)
+
 
     # Create and store figure
     # fig = a_snr_train.get_figure()
@@ -118,7 +141,7 @@ def plot_a_metrics_test(dirs):
     ax1 = sns.lineplot(x="step", y="snr_normMax", data=df_snr, label="SNR")
     ax2 = sns.lineplot(x="step", y="cnr_normMax", data=df_cnr, label="CNR")
 
-    plt.legend(bbox_to_anchor=(0.95, 0.2))
+    plt.legend(bbox_to_anchor=(0.95, 0.2), frameon=False)
 
     # plt.axhline(y=1., color='k', linestyle='--', linewidth=.5)
 
