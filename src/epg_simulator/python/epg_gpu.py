@@ -246,7 +246,7 @@ class EPG(torch.nn.Module):
             FF[:, 0] = torch.conj(FF[:, 0])
 
             # Apply spoiling
-            if spoil: FF[idx] = 0.
+            if spoil: FF[:, idx] = 0.
 
         # Extract F0, Fn and Zn
         F0 = F[:, 0, :]
