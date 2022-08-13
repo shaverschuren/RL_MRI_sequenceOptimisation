@@ -1732,13 +1732,23 @@ class KspaceEnv(object):
         )
 
         # Log Mz (sum all longitudinal states and average all pixels)
-        self.recent_Mz = torch.mean(torch.sum(torch.abs(
-            self.simulator.epg.Zn
-        ), dim=1), dim=0)
+        self.recent_Mz = [
+            torch.mean(torch.sum(torch.abs(
+                self.simulator.epg.Mz
+            ), dim=1)[self.roi[0].flatten()], dim=0),
+            torch.mean(torch.sum(torch.abs(
+                self.simulator.epg.Mz
+            ), dim=1)[self.roi[1].flatten()], dim=0)
+        ]
         # Log F0 (average all pixels)
-        self.recent_F0 = torch.mean(torch.abs(
-            self.simulator.epg.F0
-        ), dim=0)
+        self.recent_F0 = [
+            torch.mean(torch.abs(
+                self.simulator.epg.F0
+            )[self.roi[0].flatten()], dim=0),
+            torch.mean(torch.abs(
+                self.simulator.epg.F0
+            )[self.roi[1].flatten()], dim=0)
+        ]
 
         # # Cast to np array
         # self.recent_img = self.recent_img.detach().numpy()

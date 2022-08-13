@@ -197,6 +197,11 @@ class EPG(torch.nn.Module):
         FF = torch.zeros((im_dim, N, 1), dtype=torch.complex64, device=device)
         FF[:, 2] = 1.  # initial state
 
+        # Define Mz tensor for logging
+        Mz = torch.zeros(
+            (im_dim, N // 3, np2), dtype=torch.complex64, device=device
+        )
+
         # Calculate indexes of transverse states in F
         idx = (
             list(range(4, F.shape[1], 3))[::-1]
@@ -208,6 +213,10 @@ class EPG(torch.nn.Module):
 
         # Main body: loop over the pulse train
         for jj in range(np2):
+
+            # Store Mz (for logging)
+            Mz[:, :, jj] = FF[:, 2::3].squeeze(-1)
+
             # Get the RF rotation matrix
             A = self.RF_rot(
                 device,
@@ -253,7 +262,7 @@ class EPG(torch.nn.Module):
         Fn = F[:, idx, :]
         Zn = F[:, 2::3, :]
 
-        return F0, Fn, Zn
+        return F0, Fn, Zn, Mz
 
     def forward(
         self,
@@ -292,7 +301,8 @@ class EPG(torch.nn.Module):
             theta = torch.tensor(theta, dtype=torch.complex64, device=device)
 
         # Run GRE simulation
-        self.F0, self.Fn, self.Zn = self.EPG_GRE(device, theta, T1, T2, TR)
+        self.F0, self.Fn, self.Zn, self.Mz = \
+            self.EPG_GRE(device, theta, T1, T2, TR)
 
         return torch.abs(self.F0) * PD
 
