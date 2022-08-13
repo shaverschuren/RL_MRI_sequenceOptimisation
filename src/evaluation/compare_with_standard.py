@@ -139,10 +139,10 @@ def main():
         cnr = float(
             torch.abs(
                 torch.mean(img_roi[0]) - torch.mean(img_roi[1])
-            ) /
-            torch.sqrt(
-                torch.var(img_roi[0]) + torch.var(img_roi[1])
-            )
+            )  # /
+            # torch.sqrt(
+            #     torch.var(img_roi[0]) + torch.var(img_roi[1])
+            # )
         )
 
         # Store image in dict
@@ -166,9 +166,6 @@ def main():
     np.save("tmp/figures_for_publication/b_eval/k_space.npy", k_space_array)
     np.save("tmp/figures_for_publication/b_eval/Mz.npy", Mz_array)
     np.save("tmp/figures_for_publication/b_eval/F0.npy", F0_array)
-
-    # Print CNR for testing
-    print(np.mean(np.array(cnr)))
 
 
 if __name__ == "__main__":

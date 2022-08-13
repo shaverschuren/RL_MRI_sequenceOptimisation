@@ -9,6 +9,7 @@ import imutils
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tb2csv
+import compare_with_standard
 
 
 def plot_a_snr_train_loss(dirs):
@@ -304,8 +305,15 @@ def plot_b_test(dirs):
         os.path.join(dirs["to_dir"], "b_test", f"test_episode_{i}.csv")
     ).assign(run=[i] * 11) for i in range(1, 21)]).reset_index()
 
+    # Retrieve "standard" sequence data for comparison
+    with open(os.path.join(dirs["to_dir"], "b_eval", "img.pickle"), "rb") as f:
+        data_standard = pickle.load(f)
+    cnrs_standard = np.array([data_standard[key][1] for key in data_standard.keys()])
+
+    print(np.mean(cnrs_standard))
+
     # Create new columns for plotting
-    df["cnr_normMax"] = df["cnr"] / 1.191788911819458  # 0.7658860063594248  # Normalised by average performance of general sequence
+    df["cnr_normMax"] = df["cnr"] / np.mean(cnrs_standard)  # Normalised by average performance of general sequence
 
     # Create plots
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -486,6 +494,9 @@ if __name__ == '__main__':
 
     # Extract tensorboard event files
     extract_tb_logs(dirs)
+
+    # Generate comparison data
+    # compare_with_standard.main()
 
     # Generate plots
     generate_plots(dirs)
