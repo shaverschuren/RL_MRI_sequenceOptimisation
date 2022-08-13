@@ -1514,7 +1514,7 @@ class KspaceEnv(object):
 
         # Get subjects from data directory
         subject_dirs = glob.glob(
-            os.path.join(self.data_dir, "[0-9][0-9]_[0-999]")
+            os.path.join(self.data_dir, "[0-9][0-9]_*")
         )
 
         # Check all these subjects for the appropriate files
@@ -1771,10 +1771,10 @@ class KspaceEnv(object):
             self.cnr = float(
                 torch.abs(
                     torch.mean(img_roi[0]) - torch.mean(img_roi[1])
-                ) /
-                torch.sqrt(
-                    torch.var(img_roi[0]) + torch.var(img_roi[1])
-                )
+                )  # /
+                # torch.sqrt(
+                #     torch.var(img_roi[0]) + torch.var(img_roi[1])
+                # )
             )
 
     def define_reward(self):

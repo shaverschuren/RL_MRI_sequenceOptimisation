@@ -1343,13 +1343,13 @@ class RDPG(object):
         if train:
             self.env.n_episodes = self.n_episodes
         else:
-            self.env.n_episodes = 20
+            self.env.n_episodes = 72
 
         self.env.homogeneous_initialization = True
         self.env.set_homogeneous_dists()
 
         # Episode loop
-        for self.episode in range(self.n_episodes) if train else range(20):
+        for self.episode in range(self.n_episodes) if train else range(72):
 
             # Reset environment and log start
             self.env.reset()
