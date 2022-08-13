@@ -214,7 +214,8 @@ def main(log_dirs, to_dirs):
 if __name__ == '__main__':
 
     # Add root to path
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root = os.path.dirname(src)
     if root not in sys.path: sys.path.append(root)
 
     # Setup log directory we wish to extract

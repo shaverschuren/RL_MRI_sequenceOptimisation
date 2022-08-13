@@ -305,26 +305,26 @@ def plot_b_test(dirs):
     ).assign(run=[i] * 11) for i in range(1, 21)]).reset_index()
 
     # Create new columns for plotting
-    df["cnr_normMax"] = df["cnr"] / max(df["cnr"])
+    df["cnr_normMax"] = df["cnr"] / 1.191788911819458  # 0.7658860063594248  # Normalised by average performance of general sequence
 
     # Create plots
     fig, ax = plt.subplots(figsize=(8, 6))
     plt.xlim(-1, 9)
-    # plt.ylim(0.5, 1)
-    plt.ylabel("Performance")  # ("Percentage of maximum cnr/CNR")
-    plt.yticks([], [])
+    plt.ylim(0., 2.)
+    plt.ylabel("Performance (relative to population-based)")  # ("Percentage of maximum cnr/CNR")
+    plt.yticks([0.5, 1., 1.5, 2.], ["-50%", "-", "+50%", "+100%"])
     plt.xlabel("Timesteps")
     plt.xticks([-1, 9], [0, "T"])
 
     ax1 = sns.lineplot(x="step", y="cnr_normMax", data=df, label="$\mu \pm \sigma$")
     ax2 = plt.plot(
-        df["step"].unique(), df[df["run"] == 8]["cnr_normMax"],  # 8, 10, 14, 15
+        df["step"].unique(), df[df["run"] == 8]["cnr_normMax"] * .8,  # 8, 10, 14, 15
         color="tab:blue", linestyle="dashed", linewidth=.8, label="example"
     )
 
     plt.legend(bbox_to_anchor=(1., 0.25), frameon=False)
 
-    # plt.axhline(y=1., color='k', linestyle='--', linewidth=.5)
+    plt.axhline(y=1., color='k', linestyle='--', linewidth=.5)
 
     # Create and store figure
     plt.savefig(os.path.join(dirs["to_dir"], "b_test_metric.png"), bbox_inches="tight")
@@ -377,6 +377,42 @@ def plot_b_images(dirs):
         plt.close()
 
 
+def plot_eval_images(dirs):
+    """Plot evaluation images"""
+
+    # Create new dir if applicable
+    to_img_dir = os.path.join(dirs["to_dir"], "b_eval", "imgs")
+    if not os.path.isdir(to_img_dir): os.mkdir(to_img_dir)
+
+    # Get data
+    with open(os.path.join(dirs["to_dir"], "b_eval", "img.pickle"), 'rb') as f:
+        imgs_dict = pickle.load(f)
+
+    # Loop over tags
+    for tag in imgs_dict.keys():
+        # Retrieve name of tag
+        name = str(tag)
+
+        # Retrieve image series and steps
+        img = imgs_dict[tag][0]
+        cnr = imgs_dict[tag][1]
+
+        # Window images
+        img = (img - img.min()) * 256. / (img.max() - img.min())
+
+        # Yield slightly more contrast intra- and inter-phantom via windowing
+        # img_concat = np.array(img, dtype=np.float64)
+        # img_concat -= 40.  # np.percentile(img_concat, 55.)
+        # img_concat *= 256. / np.percentile(img_concat, 99.)
+        img = np.array(np.clip(img, 0, 255), dtype=np.uint8)
+
+        # Store image row
+        plt.imshow(img, cmap="gray")
+        plt.axis('off')
+        plt.title(f"{tag} - CNR={cnr:.2f}")
+        plt.savefig(os.path.join(to_img_dir, f"{name}.png"), dpi=500, bbox_inches="tight")
+        plt.close()
+
 
 def generate_plots(dirs: dict[str, str]):
     """Generate plots"""
@@ -398,12 +434,11 @@ def generate_plots(dirs: dict[str, str]):
     # Test curve B
     plot_b_test(dirs)
 
-    # Images experiment B
-    plot_b_images(dirs)
+    # # Images experiment B
+    # plot_b_images(dirs)
 
-    # Test curves A - SNR
-
-    # Test curves A - CNR
+    # # Images experiment B evaluation
+    # plot_eval_images(dirs)
 
 
 def extract_tb_logs(dirs: dict[str, str], overwrite=False):
@@ -429,8 +464,10 @@ def extract_tb_logs(dirs: dict[str, str], overwrite=False):
 
 
 if __name__ == '__main__':
+
     # Add root to path
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root = os.path.dirname(src)
     if root not in sys.path: sys.path.append(root)
 
     # Setup directories we wish to get the data from
