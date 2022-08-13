@@ -38,7 +38,7 @@ def plot_a_snr_train_loss(dirs):
     reward_CI_min = (df_a_snr_train['reward_ave'] - df_a_snr_train["reward_res"]).rolling(100).mean().shift(-99)
 
     # Create plots
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(4, 3))
     plt.xlim(0, len(df_a_snr_train) - 400)
     plt.ylim(-8, 15)
     plt.ylabel(" ")
@@ -59,7 +59,7 @@ def plot_a_snr_train_loss(dirs):
     plt.legend(frameon=False)
 
     # Create and store figure
-    plt.savefig(os.path.join(dirs["to_dir"], "a_snr_train.png"))
+    plt.savefig(os.path.join(dirs["to_dir"], "a_snr_train.png"), bbox_inches="tight")
     plt.close()
 
 
@@ -90,7 +90,7 @@ def plot_a_cnr_train_loss(dirs):
     reward_CI_min = (df_a_cnr_train['reward_ave'] - df_a_cnr_train["reward_res"]).rolling(100).mean().shift(-99)
 
     # Create plots
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(4, 3))
     plt.xlim(0, len(df_a_cnr_train) - 400)
     plt.ylim(-12, 22.5)
     plt.ylabel(" ")
@@ -112,7 +112,7 @@ def plot_a_cnr_train_loss(dirs):
 
 
     # Create and store figure
-    plt.savefig(os.path.join(dirs["to_dir"], "a_cnr_train.png"))
+    plt.savefig(os.path.join(dirs["to_dir"], "a_cnr_train.png"), bbox_inches="tight")
     plt.close()
 
 
@@ -132,7 +132,7 @@ def plot_a_metrics_test(dirs):
     df_cnr["cnr_normMax"] = df_cnr["cnr"] / max(df_cnr["cnr"])
 
     # Create plots
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(8, 6))
     plt.xlim(-1, 9)
     plt.ylim(0.5, 1)
     plt.ylabel("Performance")  # ("Percentage of maximum SNR/CNR")
@@ -151,12 +151,12 @@ def plot_a_metrics_test(dirs):
         color="tab:orange", linestyle="dashed", linewidth=.8, label="CNR: example"
     )
 
-    plt.legend(bbox_to_anchor=(1., 0.3), frameon=False)
+    plt.legend(bbox_to_anchor=(1., 0.25), frameon=False)
 
     # plt.axhline(y=1., color='k', linestyle='--', linewidth=.5)
 
     # Create and store figure
-    plt.savefig(os.path.join(dirs["to_dir"], "a_test_metric.png"))
+    plt.savefig(os.path.join(dirs["to_dir"], "a_test_metric.png"), bbox_inches="tight")
     plt.close()
 
 
@@ -182,11 +182,12 @@ def plot_a_snr_images(dirs):
 
         # Concatenate images to side-by-side
         if len(imgs) > 1:
-            img_concat = np.concatenate([
-                np.concatenate(imgs[:len(imgs) // 2], axis=1),
-                np.concatenate(imgs[len(imgs) // 2 : -1], axis=1)
-            ], axis=0
-            )
+            # img_concat = np.concatenate([
+            #     np.concatenate(imgs[:len(imgs) // 2], axis=1),
+            #     np.concatenate(imgs[len(imgs) // 2 : -1], axis=1)
+            # ], axis=0
+            # )
+            img_concat = np.concatenate([imgs[i] for i in range(len(imgs)) if i % 2 == 0], axis=1)
         else:
             img_concat = imgs[0]
 
@@ -199,7 +200,7 @@ def plot_a_snr_images(dirs):
         # Store image row
         plt.imshow(img_concat, cmap="gray")
         plt.axis('off')
-        plt.savefig(os.path.join(to_img_dir, f"{name}.png"), dpi=500)
+        plt.savefig(os.path.join(to_img_dir, f"{name}.png"), dpi=500, bbox_inches="tight")
         plt.close()
 
 
@@ -238,7 +239,7 @@ def plot_a_cnr_images(dirs):
         # Store image row
         plt.imshow(img_concat, cmap="gray")
         plt.axis('off')
-        plt.savefig(os.path.join(to_img_dir, f"{name}.png"), dpi=500)
+        plt.savefig(os.path.join(to_img_dir, f"{name}.png"), dpi=500, bbox_inches="tight")
         plt.close()
 
 
@@ -253,7 +254,7 @@ def plot_b_train_loss(dirs):
     # Calculate rolling averages + CI bars
     df_b_train['policy_loss_ave'] = df_b_train.policy_loss.rolling(100).mean().shift(-99)
     df_b_train['critic_loss_ave'] = df_b_train.critic_loss.rolling(100).mean().shift(-99)
-    df_b_train["reward"] = df_b_train["reward"] / 10.  # Average reward per step
+    df_b_train["reward"] = df_b_train["reward"] / 10.
     df_b_train['reward_ave'] = df_b_train.reward.rolling(100).mean().shift(-99)
 
     df_b_train["policy_loss_res"] = abs(df_b_train["policy_loss"] - df_b_train["policy_loss_ave"]).rolling(50).mean().shift(-49)
@@ -269,13 +270,13 @@ def plot_b_train_loss(dirs):
     reward_CI_min = (df_b_train['reward_ave'] - df_b_train["reward_res"]).rolling(100).mean().shift(-99)
 
     # Create plots
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(8, 6))
     plt.xlim(0, len(df_b_train) - 400)
-    plt.ylim(-12, 22.5)
+    plt.ylim(-1, 2)
     plt.ylabel(" ")
     plt.yticks([0], [0])
     plt.xlabel("Episodes")
-    plt.xticks([0, len(df_b_train) - 400], [0, len(df_b_train)])
+    plt.xticks([0, 8800, len(df_b_train) - 400], [0, "Best", "10k"])
 
     ax1 = sns.lineplot(x="step", y="policy_loss_ave", data=df_b_train, label="Policy loss")
     ax2 = sns.lineplot(x="step", y="critic_loss_ave", data=df_b_train, label="Critic loss")
@@ -286,30 +287,119 @@ def plot_b_train_loss(dirs):
     plt.fill_between(df_b_train.step, reward_CI_min, reward_CI_max, alpha=.3)
 
     plt.axhline(y=0., color='k', linestyle='--', linewidth=.5)
+    plt.axvline(x=8800, color='r', linestyle='--', linewidth=.5)
 
-    plt.legend(frameon=False)
+    plt.legend(frameon=False, bbox_to_anchor=(0.9, 1.))
 
     # Create and store figure
-    plt.savefig(os.path.join(dirs["to_dir"], "b_train.png"))
+    plt.savefig(os.path.join(dirs["to_dir"], "b_train.png"), bbox_inches="tight")
     plt.close()
+
+
+def plot_b_test(dirs):
+    """Plot test curve for experiment B"""
+
+    # Retrieve appropriate dataframes
+    df = pd.concat([pd.read_csv(
+        os.path.join(dirs["to_dir"], "b_test", f"test_episode_{i}.csv")
+    ).assign(run=[i] * 11) for i in range(1, 21)]).reset_index()
+
+    # Create new columns for plotting
+    df["cnr_normMax"] = df["cnr"] / max(df["cnr"])
+
+    # Create plots
+    fig, ax = plt.subplots(figsize=(8, 6))
+    plt.xlim(-1, 9)
+    # plt.ylim(0.5, 1)
+    plt.ylabel("Performance")  # ("Percentage of maximum cnr/CNR")
+    plt.yticks([], [])
+    plt.xlabel("Timesteps")
+    plt.xticks([-1, 9], [0, "T"])
+
+    ax1 = sns.lineplot(x="step", y="cnr_normMax", data=df, label="$\mu \pm \sigma$")
+    ax2 = plt.plot(
+        df["step"].unique(), df[df["run"] == 8]["cnr_normMax"],  # 8, 10, 14, 15
+        color="tab:blue", linestyle="dashed", linewidth=.8, label="example"
+    )
+
+    plt.legend(bbox_to_anchor=(1., 0.25), frameon=False)
+
+    # plt.axhline(y=1., color='k', linestyle='--', linewidth=.5)
+
+    # Create and store figure
+    plt.savefig(os.path.join(dirs["to_dir"], "b_test_metric.png"), bbox_inches="tight")
+    plt.close()
+
+
+def plot_b_images(dirs):
+    """Plot series of images for illustrative purposes (experiment B)"""
+
+    # Create new dir if applicable
+    to_img_dir = os.path.join(dirs["to_dir"], "b_test", "imgs")
+    if not os.path.isdir(to_img_dir): os.mkdir(to_img_dir)
+
+    # Get data
+    with open(os.path.join(dirs["to_dir"], "b_test", "img.pickle"), 'rb') as f:
+        imgs_dict = pickle.load(f)
+
+    # Loop over tags
+    for tag in imgs_dict.keys():
+        # Retrieve name of tag
+        name = tag[20:]
+
+        # Retrieve image series and steps
+        imgs = [row[0] for row in imgs_dict[tag]]
+        steps = [row[1] for row in imgs_dict[tag]]
+
+        # Window images
+        imgs = [(img - img.min()) * 256. / (img.max() - img.min()) for img in imgs]
+
+        # Concatenate images to side-by-side
+        if len(imgs) > 1:
+            img_concat = np.concatenate([
+                np.concatenate(imgs[:len(imgs) // 2], axis=1),
+                np.concatenate(imgs[len(imgs) // 2 : -1], axis=1)
+            ], axis=0
+            )
+        else:
+            img_concat = np.concatenate(imgs, axis=1)
+
+        # Yield slightly more contrast intra- and inter-phantom via windowing
+        img_concat = np.array(img_concat, dtype=np.float64)
+        # img_concat -= 40.  # np.percentile(img_concat, 55.)
+        # img_concat *= 256. / np.percentile(img_concat, 99.)
+        img_concat = np.array(np.clip(img_concat, 0, 255), dtype=np.uint8)
+
+        # Store image row
+        plt.imshow(img_concat, cmap="gray")
+        plt.axis('off')
+        plt.savefig(os.path.join(to_img_dir, f"{name}.png"), dpi=500, bbox_inches="tight")
+        plt.close()
+
 
 
 def generate_plots(dirs: dict[str, str]):
     """Generate plots"""
 
-    # Training curves experiment A - SNR & CNR
-    plot_a_snr_train_loss(dirs)
-    plot_a_cnr_train_loss(dirs)
+    # # Training curves experiment A - SNR & CNR
+    # plot_a_snr_train_loss(dirs)
+    # plot_a_cnr_train_loss(dirs)
 
-    # # Test curve experiment A
-    plot_a_metrics_test(dirs)
+    # # # Test curve experiment A
+    # plot_a_metrics_test(dirs)
 
-    # Images experiment A - SNR & CNR
-    plot_a_snr_images(dirs)
-    plot_a_cnr_images(dirs)
+    # # Images experiment A - SNR & CNR
+    # plot_a_snr_images(dirs)
+    # plot_a_cnr_images(dirs)
 
-    # Training curve B
+    # # Training curve B
     # plot_b_train_loss(dirs)
+
+    # Test curve B
+    plot_b_test(dirs)
+
+    # Images experiment B
+    plot_b_images(dirs)
 
     # Test curves A - SNR
 
@@ -349,8 +439,8 @@ if __name__ == '__main__':
         "a_snr_test": "logs/final_a_snr_rdpg_scan",
         "a_cnr_train": "logs/final_a_cnr_rdpg",
         "a_cnr_test": "logs/final_a_cnr_rdpg_scan",
-        "b_train": "logs/final_b_cnr",
-        "b_test": "logs/final_b_cnr",
+        "b_train": "logs/final_b_train",
+        "b_test": "logs/final_b_test1",
         "to_dir": "tmp/figures_for_publication"
     }
 

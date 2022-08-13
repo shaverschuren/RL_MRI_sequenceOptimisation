@@ -77,8 +77,11 @@ def tf_img2np(path: str) -> Union[dict[str, list], None]:
         for tag in tags:
             event_list = event_acc.Tensors(tag)
             imgs_ = list(map(
-                lambda x: np.reshape(tf.image.decode_image(tf.make_ndarray(x.tensor_proto)[2]).numpy(), (288, 288)),
-            event_list))
+                lambda x: np.reshape(
+                    tf.image.decode_image(tf.make_ndarray(x.tensor_proto)[2]).numpy(),
+                    (int(tf.make_ndarray(x.tensor_proto)[0]), int(tf.make_ndarray(x.tensor_proto)[1]))
+                ), event_list
+            ))
             steps_ = list(map(lambda x: x.step, event_list))
 
             imgs.append(imgs_)
