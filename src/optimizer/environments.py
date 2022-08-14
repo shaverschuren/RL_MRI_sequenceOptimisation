@@ -1779,12 +1779,14 @@ class KspaceEnv(object):
 
             # Calculate new CNR (signal difference / variances)
             self.cnr = float(
-                torch.abs(
-                    torch.mean(img_roi[0]) - torch.mean(img_roi[1])
-                ) * 1e2  # /
-                # torch.sqrt(
-                #     torch.var(img_roi[0]) + torch.var(img_roi[1])
-                # )
+                (
+                    torch.abs(
+                        torch.mean(img_roi[0]) - torch.mean(img_roi[1])
+                    ) /
+                    torch.sqrt(
+                        torch.var(img_roi[0]) + torch.var(img_roi[1])
+                    )
+                ) * torch.mean(torch.concat(img_roi)) * 1e2
             )
 
     def define_reward(self):
