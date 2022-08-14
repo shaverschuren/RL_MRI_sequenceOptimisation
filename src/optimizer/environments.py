@@ -1786,7 +1786,7 @@ class KspaceEnv(object):
                     torch.sqrt(
                         torch.var(img_roi[0]) + torch.var(img_roi[1])
                     )
-                ) * torch.mean(torch.concat(img_roi)) * 1e2
+                ) * torch.sqrt(torch.mean(torch.concat(img_roi))) * 10.
             )
 
     def define_reward(self):
