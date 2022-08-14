@@ -1786,7 +1786,7 @@ class KspaceEnv(object):
                     torch.sqrt(
                         torch.var(img_roi[0]) + torch.var(img_roi[1])
                     )
-                ) * torch.sqrt(torch.mean(torch.concat(img_roi))) * 10.
+                ) * torch.sqrt(torch.mean(torch.concat(img_roi)))
             )
 
     def define_reward(self):
@@ -1803,7 +1803,7 @@ class KspaceEnv(object):
             reward_float = -1.0
 
         # Scale reward with signal difference
-        if float(cnr_old) < 1e-2:
+        if float(cnr_old) < 1e-3:
             # If old_state signal is too small, set reward gain to 2
             reward_gain = 2.
         else:
@@ -1812,20 +1812,20 @@ class KspaceEnv(object):
                 abs(cnr_new - cnr_old)
                 / cnr_old
             )
-            reward_gain = cnr_diff * 10.
+            reward_gain = cnr_diff * 6.
 
             # If reward is lower than 0.01, penalise
             # the system for taking steps that are too small.
             if reward_gain < 0.01:
                 reward_float = -1.0
                 reward_gain = 0.005
-            # If reward gain is higher than 2, use 2
+            # If reward gain is higher than 4, use 4
             # We do this to prevent blowing up rewards near the edges
-            if reward_gain > 2.: reward_gain = 2.
+            if reward_gain > 4.: reward_gain = 4.
 
         # If reward is negative, increase gain
         if reward_float < 0.:
-            reward_gain *= 2.0
+            reward_gain *= 1.5
 
         # Define reward
         reward_float *= reward_gain
@@ -1833,7 +1833,7 @@ class KspaceEnv(object):
         # Scale reward with step_i (faster improvement yields bigger rewards)
         # Only scale the positives, though.
         if reward_float > 0.:
-            reward_float *= np.exp(-self.tick / 20.)
+            reward_float *= np.exp(-self.tick / 40.)
 
         # Store reward in tensor
         self.reward = torch.tensor(
