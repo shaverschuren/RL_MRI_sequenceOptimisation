@@ -1781,7 +1781,7 @@ class KspaceEnv(object):
             self.cnr = float(
                 torch.abs(
                     torch.mean(img_roi[0]) - torch.mean(img_roi[1])
-                )  # /
+                ) * 1e2  # /
                 # torch.sqrt(
                 #     torch.var(img_roi[0]) + torch.var(img_roi[1])
                 # )
