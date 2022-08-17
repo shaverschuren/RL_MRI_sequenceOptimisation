@@ -795,7 +795,8 @@ class RDPG(object):
         ]
         if self.single_fa: self.logs_fields.extend(["fa", "fa_norm"])
         else: self.logs_fields.extend([
-            "cnr_loss", "cnr_pred", "theta", "theta_norm", "Mz", "F0",
+            "cnr_loss", "cnr_pred", "theta", "theta_norm",
+            "Mz_a", "Mz_b", "F0_a", "F0_b",
             *[f"theta_param{i}" for i in range(self.env.n_state_vector)]
         ])
 
@@ -1026,22 +1027,40 @@ class RDPG(object):
                         )
                         # Mz
                         self.logger.log_scalar(
-                            field="Mz",
+                            field="Mz_a",
                             tag=(
                                 f"{self.logs_tag}_{run_type}_"
                                 f"Mz_episode_{self.episode + 1}"
                             ),
-                            value=float(self.env.recent_Mz[i]),
+                            value=float(self.env.recent_Mz[0][i]),
+                            step=step
+                        )
+                        self.logger.log_scalar(
+                            field="Mz_b",
+                            tag=(
+                                f"{self.logs_tag}_{run_type}_"
+                                f"Mz_episode_{self.episode + 1}"
+                            ),
+                            value=float(self.env.recent_Mz[1][i]),
                             step=step
                         )
                         # F0
                         self.logger.log_scalar(
-                            field="F0",
+                            field="F0_a",
                             tag=(
                                 f"{self.logs_tag}_{run_type}_"
                                 f"F0_episode_{self.episode + 1}"
                             ),
-                            value=float(self.env.recent_F0[i]),
+                            value=float(self.env.recent_F0[0][i]),
+                            step=step
+                        )
+                        self.logger.log_scalar(
+                            field="F0_b",
+                            tag=(
+                                f"{self.logs_tag}_{run_type}_"
+                                f"F0_episode_{self.episode + 1}"
+                            ),
+                            value=float(self.env.recent_F0[1][i]),
                             step=step
                         )
 
@@ -1343,13 +1362,13 @@ class RDPG(object):
         if train:
             self.env.n_episodes = self.n_episodes
         else:
-            self.env.n_episodes = 20
+            self.env.n_episodes = 72
 
         self.env.homogeneous_initialization = True
         self.env.set_homogeneous_dists()
 
         # Episode loop
-        for self.episode in range(self.n_episodes) if train else range(20):
+        for self.episode in range(self.n_episodes) if train else range(72):
 
             # Reset environment and log start
             self.env.reset()

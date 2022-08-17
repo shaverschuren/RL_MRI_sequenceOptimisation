@@ -88,10 +88,22 @@ def main():
     if not os.path.isdir("tmp/figures_for_publication/b_eval"):
         os.mkdir("tmp/figures_for_publication/b_eval")
 
+    # Get average pulsetrain
+    df_test = pd.concat([pd.read_csv(
+        os.path.join("tmp/figures_for_publication", "b_test", f"test_theta_episode_{i}.csv")
+    ).assign(run=[i] * 69) for i in range(1, 73)]).reset_index()
+
+    theta = []
+    for step in range(-5, 64):
+        df_step = df_test[df_test["step"] == step]
+
+        alpha = df_step["theta"].mean()
+        theta.append(alpha)
+
     # Set hyperparams
     data_dir = "data/processed"
-    n_prep_pulses = 10
-    alpha = 34. * (np.pi / 180.)
+    n_prep_pulses = 5
+    theta = torch.tensor(np.array(theta) * (torch.pi / 180.), dtype=torch.complex64)
 
     # Retrieve subject dirs
     subject_dirs, img_shape = get_subject_dirs(data_dir)
@@ -119,7 +131,7 @@ def main():
         simulator = kspace_sim.SimulatorObject(subject_dir)
 
         # Set pulse train
-        theta = torch.tensor([alpha] * n_pulses, dtype=torch.complex64)
+        # theta = torch.tensor([alpha] * n_pulses, dtype=torch.complex64)
 
         # Run simulation
         img, k_space, _ = simulator.forward(theta, n_prep=n_prep_pulses)
@@ -137,12 +149,14 @@ def main():
         img_roi = [img[roi[0]], img[roi[1]]]
         # Calculate CNR (signal difference / variances)
         cnr = float(
-            torch.abs(
-                torch.mean(img_roi[0]) - torch.mean(img_roi[1])
-            ) /
-            torch.sqrt(
-                torch.var(img_roi[0]) + torch.var(img_roi[1])
-            )
+            (
+                torch.abs(
+                    torch.mean(img_roi[0]) - torch.mean(img_roi[1])
+                ) /
+                torch.sqrt(
+                    torch.var(img_roi[0]) + torch.var(img_roi[1])
+                )
+            ) * torch.sqrt(torch.mean(torch.concat(img_roi))) * 10.
         )
 
         # Store image in dict
@@ -166,9 +180,6 @@ def main():
     np.save("tmp/figures_for_publication/b_eval/k_space.npy", k_space_array)
     np.save("tmp/figures_for_publication/b_eval/Mz.npy", Mz_array)
     np.save("tmp/figures_for_publication/b_eval/F0.npy", F0_array)
-
-    # Print CNR for testing
-    print(np.mean(np.array(cnr)))
 
 
 if __name__ == "__main__":
